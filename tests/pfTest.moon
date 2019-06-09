@@ -1,0 +1,152 @@
+if CLIENT
+    makeCirclePoly = (r) ->
+        circlePoly = {}
+        for i = -180, 180, 10
+            table.insert circlePoly, {
+                x: r * math.cos math.rad i,
+                y: r * math.sin math.rad i
+            }
+        return circlePoly
+
+    polyCache = {}
+
+    render.drawCirclePoly = (x, y, r) ->
+        polyCache[r] = polyCache[r] or makeCirclePoly r
+        
+        matrix = Matrix!
+        matrix\setTranslation Vector x, y, 0
+        render.pushMatrix matrix
+        render.drawPoly polyCache[r]
+        render.popMatrix!
+
+    points = {
+        
+    }
+
+    pointStack = {}
+
+    spacing = 40
+    width = 9
+    height = 9
+
+    offsetX = (512 - (spacing * (width - 1))) / 2
+    offsetY = (512 - (spacing * (width - 1))) / 2
+    
+    for i = 1, 9
+        for j = 1, 9
+            point = {}
+            point.canConnectTo = {}
+            point.x = offsetX + (i - 1) * spacing
+            point.y = offsetY + (j - 1) * spacing
+
+            table.insert points, point
+            if i == 5 and j == 5
+                table.insert pointStack, point
+            
+    hasValue = (t, val) ->
+        for k, v in pairs t
+            if v == val
+                return true
+        return false
+
+    for k, v in pairs points
+        for _k, _v in pairs points
+            dist = math.sqrt (_v.x - v.x)^2 + (_v.y - v.y)^2
+            if (dist <= spacing)
+                if not (hasValue v.canConnectTo, _v) and not (hasValue _v.canConnectTo, v)
+                    table.insert v.canConnectTo, _v
+                    table.insert _v.canConnectTo, v
+
+    mouseX = 256
+    mouseY = 256
+
+    needsRedraw = true
+    render.createRenderTarget "background"
+    hook.add "render", "", () ->
+        if needsRedraw
+            needsRedraw = false
+            render.selectRenderTarget "background"
+            
+            render.setColor Color 32, 32, 32
+            for k, a in pairs points
+                for k, b in pairs a.canConnectTo 
+                    render.drawLine a.x, a.y, b.x, b.y
+
+            render.setColor Color 90, 90, 90
+            for k, v in pairs points
+                render.drawCirclePoly v.x, v.y, 6
+            render.selectRenderTarget nil
+
+        render.clear!
+        render.setColor Color 255, 255, 255
+        render.setRenderTargetTexture "background"
+        render.drawTexturedRect 0, 0, 1024, 1024
+        render.setTexture!
+
+        render.drawText(10, 10, "Pathfinding test")
+        
+        newX, newY = render.cursorPos player!
+        
+        mouseX = newX or mouseX
+        mouseY = newY or mouseY
+
+        while true do
+            deltas = {}
+
+            last = pointStack[#pointStack]
+            localMouseX = mouseX - last.x
+            localMouseY = mouseY - last.y
+            mouseVector = Vector localMouseX, localMouseY, 0
+
+            maxMDot = 0
+            maxDotVector = nil
+            maxPoint = nil
+            for k, to in pairs last.canConnectTo
+
+                vec = Vector to.x - last.x, to.y - last.y, 0
+                vecLength = vec\getLength! 
+                unitVector = vec\getNormalized!
+
+                mDot = unitVector\dot mouseVector
+
+                if mDot > 0
+                    dotVector = (unitVector * mDot)
+                    toMouseVec = mouseVector - dotVector
+                    
+                    if mDot > vecLength / 2
+                        mDot = mDot + toMouseVec\getLength!
+                    else
+                        mDot = mDot - toMouseVec\getLength!
+
+                    mDot = math.min mDot, vecLength
+                    dotVector = (unitVector * mDot)
+                    if mDot > maxMDot
+                        maxMDot = mDot
+                        maxDotVector = dotVector
+                        maxPoint = to
+
+                if mDot >= vecLength
+                    if to == pointStack[#pointStack - 1]
+                        table.remove pointStack, #pointStack
+                        break
+                    elseif not hasValue pointStack, to
+                        table.insert pointStack, to
+                        break
+
+            if maxDotVector
+                if maxPoint == pointStack[#pointStack - 1]
+                    table.remove pointStack, #pointStack
+            break
+
+        last = pointStack[#pointStack]
+
+        render.setColor Color 0, 255, 0
+        for i = 2, #pointStack
+            a = pointStack[i]
+            b = pointStack[i - 1]
+            render.drawLine a.x, a.y, b.x, b.y
+
+        --for k, point in pairs pointStack
+            --if point ~= last
+        render.drawCirclePoly pointStack[1].x, pointStack[1].y, 6
+        render.drawCirclePoly mouseX, mouseY, 2

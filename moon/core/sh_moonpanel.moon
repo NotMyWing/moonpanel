@@ -40,8 +40,6 @@ export class Rect
 
 return class TileShared
     buildPathMap: =>
-        hpaths = {}
-        vpaths = {}
         @pathMap = {}
         width = @tileData.dimensions.width
         height = @tileData.dimensions.height
@@ -52,11 +50,9 @@ return class TileShared
                 translatedY = (j - 1) - (height / 2)
                 intersection = @elements.intersections[i][j]
                 
-                clickable = false
-                for k, v in pairs intersection.objects
-                    if v.type == "Entrance"
-                        clickable = true
-                        break
+                clickable = (intersection.entity and intersection.entity.type == "Entrance") and true or false
+                if clickable
+                    print "Node [#{i}, #{j}] is clickable."
 
                 node = {
                     x: translatedX
@@ -72,15 +68,15 @@ return class TileShared
                 intersection.pathMapNode = node
                 intersection\populatePathMap @pathMap
 
-        if (@tileData.tile.symmetry or 0) == 0
-            for i = 1, width
-                for j = 1, height + 1
-                    hpath = @elements.hpaths[i][j]
-                    hpath\populatePathMap @pathMap
-            for i = 1, width + 1
-                for j = 1, height
-                    vpath = @elements.vpaths[i][j]
-                    vpath\populatePathMap @pathMap
+        for i = 1, width
+            for j = 1, height + 1
+                hpath = @elements.hpaths[i][j]
+                hpath\populatePathMap @pathMap
+
+        for i = 1, width + 1
+            for j = 1, height
+                vpath = @elements.vpaths[i][j]
+                vpath\populatePathMap @pathMap
 
     processElements: =>
         width = @tileData.dimensions.width
@@ -108,11 +104,10 @@ return class TileShared
             if not cell
                 continue
 
-            obj = CELL_OBJECTS[v.type] cell, v.attributes
-            obj.attributes.type = v.type
+            ent = CELL_ENTITIES[v.type] cell, v.attributes
+            ent.attributes.type = v.type
 
-            table.insert cell.objects, obj
-            break
+            cell.entity = ent
 
         @elements.hpaths = {}
         for i = 1, width
@@ -130,11 +125,9 @@ return class TileShared
             if not hpath
                 continue
 
-            obj = HPATH_OBJECTS[v.type] hpath, v.attributes
-            obj.attributes.type = v.type
-
-            table.insert hpath.objects, obj
-            break
+            ent = HPATH_ENTITIES[v.type] hpath, v.attributes
+            ent.attributes.type = v.type
+            hpath.entity = ent
 
         @elements.vpaths = {}
         for i = 1, width + 1
@@ -152,11 +145,10 @@ return class TileShared
             if not vpath
                 continue
 
-            obj = VPATH_OBJECTS[v.type] vpath, v.attributes
-            obj.attributes.type = v.type
+            ent = VPATH_ENTITIES[v.type] vpath, v.attributes
+            ent.attributes.type = v.type
 
-            table.insert vpath.objects, obj
-            break
+            vpath.entity = ent
 
         @elements.intersections = {}
         for i = 1, width + 1
@@ -174,11 +166,10 @@ return class TileShared
             if not intersection
                 continue
 
-            obj = INTERSECTION_OBJECTS[v.type] intersection, v.attributes
-            obj.attributes.type = v.type
+            ent = INTERSECTION_ENTITIES[v.type] intersection, v.attributes
+            ent.attributes.type = v.type
 
-            table.insert intersection.objects, obj
-            break
+            intersection.entity = ent
 
         @buildPathMap!
 

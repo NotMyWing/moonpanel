@@ -1,8 +1,8 @@
-class CellObject
+class CellEntity
     new: (@parent, @attributes = {}) =>
     render: =>
 
-class CellObject_Color extends CellObject
+class CellEntity_Color extends CellEntity
     type: "Color"
     render: =>
         bounds = @parent.bounds
@@ -12,7 +12,7 @@ class CellObject_Color extends CellObject
             shrink = bounds.width * 0.6
             render.drawRoundedBox 8, bounds.x + shrink / 2, bounds.y + shrink / 2, bounds.width - shrink, bounds.height - shrink
 
-class CellObject_Sun extends CellObject
+class CellEntity_Sun extends CellEntity
     type: "Sun"
     buildPoly: (bounds) =>
         shrink = bounds.width * 0.7
@@ -38,7 +38,7 @@ class CellObject_Sun extends CellObject
             render.drawRect bounds.x + shrink / 2, bounds.y + shrink / 2, bounds.width - shrink, bounds.height - shrink
             render.drawPoly @sunPoly
 
-class CellObject_Triangle extends CellObject
+class CellEntity_Triangle extends CellEntity
     type: "Triangle"
     buildPoly: (bounds) =>
         w = (bounds.width * 0.2) / 2
@@ -79,7 +79,7 @@ class CellObject_Triangle extends CellObject
             render.popMatrix!
 
 return {
-    "Color": CellObject_Color
-    "Sun": CellObject_Sun
-    "Triangle": CellObject_Triangle
+    "Color": CellEntity_Color
+    "Sun": CellEntity_Sun
+    "Triangle": CellEntity_Triangle
 }

@@ -1,9 +1,9 @@
-class PathObject
+class PathEntity
     new: (@parent, @attributes = {}) =>
     render: =>
     generatePath: (nodeList) =>
 
-class VPathObject_Broken extends PathObject
+class VPathEntity_Broken extends PathEntity
     type: "Broken"
     populatePathMap: (pathMap) =>
         gap = @parent.bounds.height / 3
@@ -47,7 +47,7 @@ class VPathObject_Broken extends PathObject
 
         return true
 
-class HPathObject_Broken extends PathObject
+class HPathEntity_Broken extends PathEntity
     type: "Broken"
     populatePathMap: (pathMap) =>
         gap = @parent.bounds.width / 3
@@ -92,20 +92,20 @@ class HPathObject_Broken extends PathObject
         
         return true
 
-class HPathObject_BrokenSymmetrical extends HPathObject_Broken
+class HPathEntity_BrokenSymmetrical extends HPathEntity_Broken
     render: =>
 
-class VPathObject_BrokenSymmetrical extends VPathObject_Broken
+class VPathEntity_BrokenSymmetrical extends VPathEntity_Broken
     render: =>
 
-VPATH_OBJECTS = {
-    "Broken": VPathObject_Broken
-    "BrokenSymmetrical": VPathObject_BrokenSymmetrical
+VPATH_ENTITIES = {
+    "Broken": VPathEntity_Broken
+    "BrokenSymmetrical": VPathEntity_BrokenSymmetrical
 }
 
-HPATH_OBJECTS = {
-    "Broken": HPathObject_Broken
-    "BrokenSymmetrical": HPathObject_BrokenSymmetrical
+HPATH_ENTITIES = {
+    "Broken": HPathEntity_Broken
+    "BrokenSymmetrical": HPathEntity_BrokenSymmetrical
 }
 
-return { HPATH_OBJECTS, VPATH_OBJECTS }
+return { HPATH_ENTITIES, VPATH_ENTITIES }

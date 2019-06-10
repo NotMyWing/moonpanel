@@ -27,6 +27,7 @@ render.drawCirclePolySeveralTimesBecauseFuckGarrysMod = (x, y, r, howManyTimes =
 TileShared = require "moonpanel/core/sh_moonpanel.txt"
 
 return class Tile extends TileShared
+    pathFinderData: nil
     renderBackground: () =>
         width = @tileData.dimensions.width
         height = @tileData.dimensions.height
@@ -72,11 +73,11 @@ return class Tile extends TileShared
             
             @renderBackground!
 
-            --for k, v in pairs @pathMap
-            --    render.setColor Color 255, 0, 0
-            --    render.drawCirclePolySeveralTimesBecauseFuckGarrysMod v.screenX, v.screenY, v.clickable and 16 or 4
-            --    for _k, _v in pairs v.neighbors
-            --        render.drawLine v.screenX, v.screenY, _v.screenX, _v.screenY
+            for k, v in pairs @pathMap
+                render.setColor Color 255, 0, 0
+                render.drawCirclePolySeveralTimesBecauseFuckGarrysMod v.screenX, v.screenY, v.clickable and 16 or 4
+                for _k, _v in pairs v.neighbors
+                    render.drawLine v.screenX, v.screenY, _v.screenX, _v.screenY
 
             --render.popMatrix!
             render.selectRenderTarget nil
@@ -84,21 +85,49 @@ return class Tile extends TileShared
         render.clear!
 
         @lastPoweredUpdate or= timer.systime!
-        poweredTimespan = math.min timer.systime! - @lastPoweredUpdate, 2
-        if not @isPowered and poweredTimespan >= 2
+        poweredTimespan = math.min timer.systime! - @lastPoweredUpdate, 1
+        if not @isPowered and poweredTimespan >= 1
             return
 
         render.setColor Color 255, 255, 255
         render.setRenderTargetTexture "background"
-        render.drawTexturedRectFast 0, 0, 512, 512
+        render.drawTexturedRectFast 0, 0, 1024, 1024
         render.setTexture!
 
-        if @isPowered and poweredTimespan <= 2
-            render.setColor Color 0, 0, 0, 255 * (1 - (poweredTimespan / 2))
+        if @pathFinderData
+            barWidth = @tileData.dimensions.barWidth
+            for k, stack in pairs @pathFinderData
+                for k, v in pairs stack
+                    render.drawCirclePoly v.sx, v.sy, (k == 1) and barWidth or barWidth / 2
+
+                    if k > 1
+                        prev = stack[k - 1]
+                        angle = 90 + math.deg math.atan (v.sy - prev.sy), (v.sx - prev.sx)
+                        dist = math.sqrt (v.sy - prev.sy)^2 + (v.sx - prev.sx)^2
+
+                        matrix = Matrix!
+                        matrix\translate Vector v.sx, v.sy
+                        matrix\rotate Angle 0, angle, 0
+                        render.pushMatrix matrix
+
+                        render.drawRectFast -barWidth / 2, -barWidth / 2, barWidth, dist
+                    
+                        render.popMatrix!
+
+        if @isPowered and poweredTimespan <= 1
+            render.setColor Color 0, 0, 0, 255 * (1 - poweredTimespan)
             render.drawRectFast 0, 0, @tileData.dimensions.screenWidth, @tileData.dimensions.screenHeight
         elseif not @isPowered
-            render.setColor Color 0, 0, 0, 255 * (poweredTimespan / 2)
+            render.setColor Color 0, 0, 0, 255 * poweredTimespan
             render.drawRectFast 0, 0, @tileData.dimensions.screenWidth, @tileData.dimensions.screenHeight
+
+    netUpdatePoweredState: (state) =>
+        oldIsPowered = @isPowered
+        @isPowered = state
+        
+        if (oldIsPowered ~= @isPowered)
+            @lastPoweredUpdate = timer.systime!
+            print "IsPowered = " .. tostring(@isPowered) .. "(" .. tostring(val) .. "):"
 
     initNetHooks: () => 
         net.receive "ClearTileData", () ->
@@ -106,17 +135,38 @@ return class Tile extends TileShared
             @lastPoweredUpdate = timer.systime!
 
         net.receive "UpdatePowered", () ->
-            val = net.readInt 2
-            @isPowered = val == 1 and true or false
-            @lastPoweredUpdate = timer.systime!
-            print "IsPowered = " .. tostring(@isPowered) .. "(" .. tostring(val) .. "):"
+            state = net.readUInt 2
+            @netUpdatePoweredState (state == 1 and true or false)
 
         net.receive "UpdateTileData", () ->
-            print "Received data, reading..."
-            length = net.readInt 32
+            state = net.readUInt 2
+            @netUpdatePoweredState (state == 1 and true or false)
+            length = net.readUInt 32
             data = json.decode fastlz.decompress net.readData length
 
             @processTileData data
+
+        net.receive "PathFinderData", (len) ->
+            print len
+            @pathFinderData = {}
+            stackCount = net.readUInt 4
+            for i = 1, stackCount
+                pointCount = net.readUInt 10
+                stack = {}
+                for j = 1, pointCount
+                    table.insert stack, {
+                        sx: net.readUInt 10
+                        sy: net.readUInt 10
+                    }
+
+                table.insert @pathFinderData, stack
+
+        net.receive "PuzzleStart", () ->
+            @pathFinderData = nil
+
+        net.receive "PuzzleEnd", () ->
+            -- length = net.readUInt 32
+            -- data = json.decode fastlz.decompress net.readData length
 
     processTileData: (tileData) =>
         @colors = tileData.colors
@@ -172,3 +222,6 @@ return class Tile extends TileShared
 
         @initNetHooks!
         super!
+
+        net.start "FetchData"
+        net.send!

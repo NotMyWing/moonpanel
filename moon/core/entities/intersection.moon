@@ -1,9 +1,9 @@
-class IntersectionObject
+class IntersectionEntity
     new: (@parent, @attributes = {}) =>
     render: =>
     populatePathMap: (pathMap) =>
 
-class IntersectionObject_Entrance extends IntersectionObject
+class IntersectionEntity_Entrance extends IntersectionEntity
     type: "Entrance"
     new: (@parent, @attributes = {}) =>
         super @parent, @attributes
@@ -22,7 +22,7 @@ class IntersectionObject_Entrance extends IntersectionObject
                 @bounds.y + @bounds.width / 2, @bounds.width
             return true
 
-class IntersectionObject_Exit extends IntersectionObject
+class IntersectionEntity_Exit extends IntersectionEntity
     type: "Exit"
     new: (@parent, @attributes = {}) =>
     getAngle: () =>
@@ -77,6 +77,6 @@ class IntersectionObject_Exit extends IntersectionObject
         render.popMatrix!
 
 return {
-    "Entrance": IntersectionObject_Entrance
-    "Exit": IntersectionObject_Exit
+    "Entrance": IntersectionEntity_Entrance
+    "Exit": IntersectionEntity_Exit
 }

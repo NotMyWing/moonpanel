@@ -1,46 +1,40 @@
---@include moonpanel/core/objects/cell.txt
---@include moonpanel/core/objects/path.txt
---@include moonpanel/core/objects/intersection.txt
+--@include moonpanel/core/entities/cell.txt
+--@include moonpanel/core/entities/path.txt
+--@include moonpanel/core/entities/intersection.txt
 
-export CELL_OBJECTS = require "moonpanel/core/objects/cell.txt"
-{ _HPATH_OBJECTS, _VPATH_OBJECTS } = require "moonpanel/core/objects/path.txt"
-export INTERSECTION_OBJECTS = require "moonpanel/core/objects/intersection.txt"
+export CELL_ENTITIES = require "moonpanel/core/entities/cell.txt"
+{ _HPATH_ENTITIES, _VPATH_ENTITIES } = require "moonpanel/core/entities/path.txt"
+export INTERSECTION_ENTITIES = require "moonpanel/core/entities/intersection.txt"
 
 -- i stg
-export HPATH_OBJECTS = _HPATH_OBJECTS
-export VPATH_OBJECTS = _VPATH_OBJECTS 
+export HPATH_ENTITIES = _HPATH_ENTITIES
+export VPATH_ENTITIES = _VPATH_ENTITIES
 
 EMPTY_TABLE = {}
 
 class Element
-    new: (@tile, @x, @y, @objects = {}) =>
+    new: (@tile, @x, @y, @entity) =>
     canTrace: (_from) =>
         return false
+
     isTraced: =>
         return false
+
     populatePathMap: (pathMap) =>
-        if @objects
-            for k, v in pairs @objects
-                v\populatePathMap pathMap
+        if @entity
+            @entity\populatePathMap pathMap
+
     render: =>
         
 class Path extends Element
     isBroken: =>
-        if type(@cachedBroken) == nil
-            @cachedBroken = false
-            for k, v in pairs @objects
-                if v.type == "Broken"
-                    @cachedBroken = true
-                    break
-
-        return @cachedBroken
+        return @entity and @entity.type == "Broken"
 
 export class VPath extends Path
     type: "VPath"
     populatePathMap: (pathMap) =>
-        for k, v in pairs @objects
-            if (v\populatePathMap pathMap) == true
-                return
+        if @entity and (@entity\populatePathMap pathMap) == true
+            return
 
         topIntersection = @getTop!
         bottomIntersection = @getBottom!
@@ -65,9 +59,8 @@ export class VPath extends Path
         @cachedBottom = @cachedBottom or (@tile.elements.intersections[@x] or EMPTY_TABLE)[@y + 1]
         @cachedBottom 
     render: =>
-        for k, v in pairs @objects
-            if v\render! == true
-                return
+        if @entity and (@entity\render!) == true
+            return
 
         render.setColor @tile.colors.untraced
         render.drawRect @bounds.x, @bounds.y, @bounds.width, @bounds.height
@@ -75,9 +68,8 @@ export class VPath extends Path
 export class HPath extends Element
     type: "HPath"
     populatePathMap: (pathMap) =>
-        for k, v in pairs @objects
-            if (v\populatePathMap pathMap) == true
-                return
+        if @entity and (@entity\populatePathMap pathMap) == true
+            return
 
         leftIntersection = @getLeft!
         rightIntersection = @getRight!
@@ -102,9 +94,8 @@ export class HPath extends Element
         @cachedBottom = @cachedBottom or (@tile.elements.cells[@x] or EMPTY_TABLE)[@y]
         @cachedBottom
     render: =>
-        for k, v in pairs @objects
-            if v\render == true
-                return
+        if @entity and (@entity\render!) == true
+            return
 
         render.setColor @tile.colors.untraced
         render.drawRect @bounds.x, @bounds.y, @bounds.width, @bounds.height
@@ -156,18 +147,14 @@ export class Intersection extends Element
                         @bounds.width / 2, 
                         @bounds.height / 2
 
-        for k, v in pairs @objects
-            render.setColor @tile.colors.untraced
-            v\render
-
         render.setColor @tile.colors.untraced
 
         render.drawCirclePolySeveralTimesBecauseFuckGarrysMod @bounds.x + @bounds.width / 2, 
             @bounds.y + @bounds.width / 2, @bounds.width / 2
 
-        for k, v in pairs @objects
+        if @entity
             render.setColor @tile.colors.untraced
-            v\render!
+            @entity\render!
 
         corners = nil
 
@@ -202,5 +189,5 @@ export class Cell extends Element
         return (@tile.elements.cells[@x + x] or EMPTY_TABLE)[@y + y]
 
     render: =>
-        for k, v in pairs @objects
-            return v\render!
+        if @entity
+            @entity\render!

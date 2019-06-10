@@ -112,6 +112,7 @@ return class TileShared
             obj.attributes.type = v.type
 
             table.insert cell.objects, obj
+            break
 
         @elements.hpaths = {}
         for i = 1, width
@@ -133,6 +134,7 @@ return class TileShared
             obj.attributes.type = v.type
 
             table.insert hpath.objects, obj
+            break
 
         @elements.vpaths = {}
         for i = 1, width + 1
@@ -154,6 +156,7 @@ return class TileShared
             obj.attributes.type = v.type
 
             table.insert vpath.objects, obj
+            break
 
         @elements.intersections = {}
         for i = 1, width + 1
@@ -175,6 +178,7 @@ return class TileShared
             obj.attributes.type = v.type
 
             table.insert intersection.objects, obj
+            break
 
         @buildPathMap!
 

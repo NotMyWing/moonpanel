@@ -65,20 +65,20 @@ return class Tile extends TileShared
             render.selectRenderTarget "background"
             render.setColor @colors.background
 
-            matrix = Matrix!
-            matrix\translate Vector 8, 8
-            render.pushMatrix matrix
+            --matrix = Matrix!
+            --matrix\translate Vector 8, 8
+            --render.pushMatrix matrix
             render.drawRect 0, 0, @tileData.dimensions.screenWidth, @tileData.dimensions.screenHeight
             
             @renderBackground!
 
-            for k, v in pairs @pathMap
-                render.setColor Color 255, 0, 0
-                render.drawCirclePolySeveralTimesBecauseFuckGarrysMod v.screenX, v.screenY, v.clickable and 16 or 4
-                for _k, _v in pairs v.neighbors
-                    render.drawLine v.screenX, v.screenY, _v.screenX, _v.screenY
+            --for k, v in pairs @pathMap
+            --    render.setColor Color 255, 0, 0
+            --    render.drawCirclePolySeveralTimesBecauseFuckGarrysMod v.screenX, v.screenY, v.clickable and 16 or 4
+            --    for _k, _v in pairs v.neighbors
+            --        render.drawLine v.screenX, v.screenY, _v.screenX, _v.screenY
 
-            render.popMatrix!
+            --render.popMatrix!
             render.selectRenderTarget nil
 
         render.clear!

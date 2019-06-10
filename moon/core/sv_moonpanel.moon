@@ -21,27 +21,53 @@ COLOR_UNTRACED = Color 40, 22, 186
 COLOR_TRACED = Color 255, 255, 255, 255
 COLOR_VIGNETTE = Color 0, 0, 0, 92
 
-DEFAULT_SCREEN_TO_INNER_RATIO = (630-250) / 630
-DEFAULT_SCREEN_TO_BAR_WIDTH_RATIO = 0.08
-MINIMUM_BARWIDTH = 10
-MAXIMUM_BARWIDTH = 24
+DEFAULT_RESOLUTIONS = {
+    {
+        innerScreenRatio: 0.4
+        barWidth: 40
+    }
+    {
+        innerScreenRatio: 0.5
+        barWidth: 35
+    }
+    {
+        innerScreenRatio: 0.6
+        barWidth: 30
+    }
+    {
+        innerScreenRatio: 0.7
+        barWidth: 25
+    }
+    {
+        innerScreenRatio: 0.8
+        barWidth: 25
+    }
+    {
+        innerScreenRatio: 0.85
+        barWidth: 22
+    }
+    {
+        innerScreenRatio: 0.875
+        barWidth: 20
+    }
+    {
+        innerScreenRatio: 0.875
+        barWidth: 18
+    }
+    {
+        innerScreenRatio: 0.875
+        barWidth: 17
+    }
+    {
+        innerScreenRatio: 0.875
+        barWidth: 15
+    }
+}
 
-DEFAULT_RESOLUTIONS = [
-    [1]: {
-        innerScreen
-    }
-    [2]: {
-        innerScreen
-    }
-    [3]: {
-        innerScreen
-    }
-    [1]: {
-        innerScreen
-    }
-]
-
-DEFAULTEST_RESOLUTION
+DEFAULTEST_RESOLUTION = {
+    innerScreenRatio: 0.875
+    barWidth: 12
+}
 
 return class Tile extends TileShared
     __internal: {}
@@ -57,8 +83,6 @@ return class Tile extends TileShared
             net.send!
 
     setup: (@tileData) =>
-        printTable @tileData
-
         -- Init coloures
         @tileData.colors            or= {}
         @tileData.colors.background or= COLOR_BG
@@ -78,14 +102,16 @@ return class Tile extends TileShared
         -- it's also good to keep in mind that tileData.dimensions.screenWidth
         -- should only be used for rendering in RT context.
 
-        -- Calculate dimensions
-        innerZoneLength = math.ceil screenWidth * DEFAULT_SCREEN_TO_INNER_RATIO
-        
-        maxDim    = math.max width, height
-        barWidth  = math.floor math.max MINIMUM_BARWIDTH, (innerZoneLength * DEFAULT_SCREEN_TO_BAR_WIDTH_RATIO)
-        barWidth  = math.min barWidth, MAXIMUM_BARWIDTH
+        -- Calculate dimensions        
+        maxDim          = math.max width, height
+        resolution      = DEFAULT_RESOLUTIONS[maxDim] or DEFAULTEST_RESOLUTION
+        print maxDim
+        printTable DEFAULT_RESOLUTIONS
+        barWidth        = resolution.barWidth
 
-        barLength = math.floor (innerZoneLength - (barWidth * (maxDim + 1))) / maxDim
+        innerZoneLength = math.ceil screenWidth * resolution.innerScreenRatio
+
+        barLength       = math.floor (innerZoneLength - (barWidth * (maxDim + 1))) / maxDim
 
         tileData.dimensions = {
             offsetH: math.ceil (screenWidth - (barWidth * (width + 1)) - (barLength * width)) / 2

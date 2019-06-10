@@ -92,12 +92,20 @@ class HPathObject_Broken extends PathObject
         
         return true
 
+class HPathObject_BrokenSymmetrical extends HPathObject_Broken
+    render: =>
+
+class VPathObject_BrokenSymmetrical extends VPathObject_Broken
+    render: =>
+
 VPATH_OBJECTS = {
     "Broken": VPathObject_Broken
+    "BrokenSymmetrical": VPathObject_BrokenSymmetrical
 }
 
 HPATH_OBJECTS = {
     "Broken": HPathObject_Broken
+    "BrokenSymmetrical": HPathObject_BrokenSymmetrical
 }
 
 return { HPATH_OBJECTS, VPATH_OBJECTS }

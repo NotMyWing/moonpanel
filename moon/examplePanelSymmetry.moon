@@ -3,8 +3,8 @@
 tile = require "moonpanel/core/moonpanel.txt"
 
 if SERVER
-    width = 6
-    height = 6
+    width = 20
+    height = 20
 
     cells = {
         {
@@ -51,7 +51,7 @@ if SERVER
             if (math.random 0, 100) > 90
                 table.insert vpaths, {
                     x: i
-                    y: i
+                    y: j
                     type: "Broken"
                 }
 
@@ -70,8 +70,8 @@ if SERVER
         :hpaths
         :intersections
         tile: {
-            width: 6
-            height: 6
+            width: width
+            height: height
             symmetry: HORIZONTAL_SYMMETRY
         }
     }

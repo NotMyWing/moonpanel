@@ -51,8 +51,6 @@ return class TileShared
                 intersection = @elements.intersections[i][j]
                 
                 clickable = (intersection.entity and intersection.entity.type == "Entrance") and true or false
-                if clickable
-                    print "Node [#{i}, #{j}] is clickable."
 
                 node = {
                     x: translatedX

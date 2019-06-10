@@ -2,7 +2,7 @@
 
 makeCirclePoly = (r) ->
     circlePoly = {}
-    for i = -180, 180, 10
+    for i = -180, 180, 15
         table.insert circlePoly, {
             x: r * math.cos math.rad i,
             y: r * math.sin math.rad i
@@ -60,59 +60,63 @@ return class Tile extends TileShared
         if not @tileData and not @elements
             return
 
-        if @backgroundNeedsRendering
-            @backgroundNeedsRendering = false
-            print "Re-rendering the background"
-            render.selectRenderTarget "background"
-            render.setColor @colors.background
-
-            --matrix = Matrix!
-            --matrix\translate Vector 8, 8
-            --render.pushMatrix matrix
-            render.drawRect 0, 0, @tileData.dimensions.screenWidth, @tileData.dimensions.screenHeight
-            
-            @renderBackground!
-
-            for k, v in pairs @pathMap
-                render.setColor Color 255, 0, 0
-                render.drawCirclePolySeveralTimesBecauseFuckGarrysMod v.screenX, v.screenY, v.clickable and 16 or 4
-                for _k, _v in pairs v.neighbors
-                    render.drawLine v.screenX, v.screenY, _v.screenX, _v.screenY
-
-            --render.popMatrix!
-            render.selectRenderTarget nil
-
-        render.clear!
-
         @lastPoweredUpdate or= timer.systime!
         poweredTimespan = math.min timer.systime! - @lastPoweredUpdate, 1
         if not @isPowered and poweredTimespan >= 1
             return
 
+        if @foregroundNeedsRendering
+            @foregroundNeedsRendering = false
+            
+            if @backgroundNeedsRendering
+                @backgroundNeedsRendering = false
+                render.selectRenderTarget "background"
+                render.setColor @colors.background
+
+                render.drawRect 0, 0, @tileData.dimensions.screenWidth, @tileData.dimensions.screenHeight
+                
+                @renderBackground!
+
+                --for k, v in pairs @pathMap
+                --    render.setColor Color 255, 0, 0
+                --    render.drawCirclePolySeveralTimesBecauseFuckGarrysMod v.screenX, v.screenY, v.clickable and 16 or 4
+                --    for _k, _v in pairs v.neighbors
+                --        render.drawLine v.screenX, v.screenY, _v.screenX, _v.screenY
+
+                render.selectRenderTarget nil
+
+            render.clear!
+            render.selectRenderTarget "foreground"
+            render.setColor Color 255, 255, 255
+            render.setRenderTargetTexture "background"
+            render.drawTexturedRect 0, 0, 1024, 1024
+            render.setTexture!
+
+            if @pathFinderData
+                barWidth = @tileData.dimensions.barWidth
+                for k, stack in pairs @pathFinderData
+                    for k, v in pairs stack
+                        render.drawCirclePoly v.sx, v.sy, (k == 1) and barWidth * 1.5 or barWidth / 2
+
+                        if k > 1
+                            prev = stack[k - 1]
+                            angle = math.deg math.atan2 (prev.sy - v.sy), (prev.sx - v.sx)
+                            dist = math.sqrt (v.sy - prev.sy)^2 + (v.sx - prev.sx)^2
+
+                            matrix = Matrix!
+                            matrix\translate Vector prev.sx, prev.sy
+                            matrix\rotate Angle 0, angle + 90, 0
+                            render.pushMatrix matrix
+
+                            render.drawRectFast -barWidth / 2, 0, barWidth, dist
+                        
+                            render.popMatrix!
+            render.selectRenderTarget nil
+
         render.setColor Color 255, 255, 255
-        render.setRenderTargetTexture "background"
-        render.drawTexturedRectFast 0, 0, 1024, 1024
+        render.setRenderTargetTexture "foreground"
+        render.drawTexturedRect 0, 0, 512, 512
         render.setTexture!
-
-        if @pathFinderData
-            barWidth = @tileData.dimensions.barWidth
-            for k, stack in pairs @pathFinderData
-                for k, v in pairs stack
-                    render.drawCirclePoly v.sx, v.sy, (k == 1) and barWidth or barWidth / 2
-
-                    if k > 1
-                        prev = stack[k - 1]
-                        angle = 90 + math.deg math.atan (v.sy - prev.sy), (v.sx - prev.sx)
-                        dist = math.sqrt (v.sy - prev.sy)^2 + (v.sx - prev.sx)^2
-
-                        matrix = Matrix!
-                        matrix\translate Vector v.sx, v.sy
-                        matrix\rotate Angle 0, angle, 0
-                        render.pushMatrix matrix
-
-                        render.drawRectFast -barWidth / 2, -barWidth / 2, barWidth, dist
-                    
-                        render.popMatrix!
 
         if @isPowered and poweredTimespan <= 1
             render.setColor Color 0, 0, 0, 255 * (1 - poweredTimespan)
@@ -127,7 +131,6 @@ return class Tile extends TileShared
         
         if (oldIsPowered ~= @isPowered)
             @lastPoweredUpdate = timer.systime!
-            print "IsPowered = " .. tostring(@isPowered) .. "(" .. tostring(val) .. "):"
 
     initNetHooks: () => 
         net.receive "ClearTileData", () ->
@@ -147,9 +150,10 @@ return class Tile extends TileShared
             @processTileData data
 
         net.receive "PathFinderData", (len) ->
-            print len
+            @foregroundNeedsRendering = true
             @pathFinderData = {}
             stackCount = net.readUInt 4
+
             for i = 1, stackCount
                 pointCount = net.readUInt 10
                 stack = {}
@@ -162,7 +166,6 @@ return class Tile extends TileShared
                 table.insert @pathFinderData, stack
 
         net.receive "PuzzleStart", () ->
-            @pathFinderData = nil
 
         net.receive "PuzzleEnd", () ->
             -- length = net.readUInt 32
@@ -180,6 +183,7 @@ return class Tile extends TileShared
 
         @tileData = tileData
         @processElements!
+        @foregroundNeedsRendering = true
 
     netUpdateCursorIOS: (isOnScreen) =>
         net.start "UpdateCursorIOS"
@@ -188,8 +192,8 @@ return class Tile extends TileShared
 
     netUpdateCursorPos: (x, y) =>
         net.start "UpdateCursorPos"
-        net.writeUInt x, 9
-        net.writeUInt y, 9
+        net.writeUInt x, 10
+        net.writeUInt y, 10
         net.send nil, false
 
     updateCursorData: () =>
@@ -207,11 +211,12 @@ return class Tile extends TileShared
 
         if @cursorData.isOnScreen
             if newX ~= @cursorData.cursorPos.x or newY ~= @cursorData.cursorPos.y
-                @netUpdateCursorPos newX, newY
-                @cursorData.cursorPos.x = newX
-                @cursorData.cursorPos.y = newY
+                @netUpdateCursorPos newX * 2, newY * 2
+                @cursorData.cursorPos.x = newX * 2
+                @cursorData.cursorPos.y = newY * 2
 
     new: () =>
+        render.createRenderTarget "foreground"
         render.createRenderTarget "background"
         hook.add "render", "", () ->
             @render!

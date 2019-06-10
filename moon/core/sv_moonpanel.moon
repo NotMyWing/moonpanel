@@ -112,16 +112,15 @@ class PathFinder
                             table.insert toRemove, #nodeStack
                         else
                             table.remove nodeStack, #nodeStack
-                        
-                        @packAndCallback!
+                            @packAndCallback!
                         break
+
                     elseif not @hasNode to
                         if @symmetry 
                             table.insert toInsert, to
                         else
                             table.insert nodeStack, to
-
-                        @packAndCallback!
+                            @packAndCallback!
                         break
 
             if maxNode ~= nodeStack[1] and maxNode == nodeStack[#nodeStack - 1]
@@ -129,7 +128,7 @@ class PathFinder
                     table.insert toRemove, #nodeStack
                 else
                     table.remove nodeStack, #nodeStack
-                @packAndCallback!
+                    @packAndCallback!
 
         if @symmetry and #toInsert > 1 and toInsert[1] ~= toInsert[2]
             a = toInsert[1]
@@ -368,7 +367,7 @@ return class Tile extends TileShared
 
         @processElements!
         
-        @pathFinder = PathFinder @pathMap, SCREEN_WIDTH, SCREEN_HEIGHT, tileData.tile.symmetry,
+        @pathFinder = PathFinder @pathMap, 1024, 1024, tileData.tile.symmetry,
             @pathFinderCallback
 
         @isPowered = true
@@ -403,8 +402,8 @@ return class Tile extends TileShared
 
         net.receive "UpdateCursorPos", (len, ply) ->
             if @cursors[ply]
-                @cursors[ply].x = net.readUInt 9
-                @cursors[ply].y = net.readUInt 9
+                @cursors[ply].x = net.readUInt 10
+                @cursors[ply].y = net.readUInt 10
 
         net.receive "FetchData", (len, ply) ->
             if @compressedTileData

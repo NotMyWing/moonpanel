@@ -102,7 +102,7 @@ return class TileShared
             if not cell
                 continue
 
-            ent = CELL_ENTITIES[v.type] cell, v.attributes
+            ent = CELL_ENTITIES[v.type] cell, v.attributes or {}
             ent.attributes.type = v.type
 
             cell.entity = ent
@@ -123,7 +123,7 @@ return class TileShared
             if not hpath
                 continue
 
-            ent = HPATH_ENTITIES[v.type] hpath, v.attributes
+            ent = HPATH_ENTITIES[v.type] hpath, v.attributes or {}
             ent.attributes.type = v.type
             hpath.entity = ent
 
@@ -143,7 +143,7 @@ return class TileShared
             if not vpath
                 continue
 
-            ent = VPATH_ENTITIES[v.type] vpath, v.attributes
+            ent = VPATH_ENTITIES[v.type] vpath, v.attributes or {}
             ent.attributes.type = v.type
 
             vpath.entity = ent
@@ -164,7 +164,7 @@ return class TileShared
             if not intersection
                 continue
 
-            ent = INTERSECTION_ENTITIES[v.type] intersection, v.attributes
+            ent = INTERSECTION_ENTITIES[v.type] intersection, v.attributes or {}
             ent.attributes.type = v.type
 
             intersection.entity = ent

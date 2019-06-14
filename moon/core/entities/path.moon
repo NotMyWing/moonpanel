@@ -1,7 +1,37 @@
 class PathEntity
     new: (@parent, @attributes = {}) =>
+    checkSolution: (areaData) =>
     render: =>
-    generatePath: (nodeList) =>
+    populatePathMap: (pathMap) =>
+
+class Hexagon extends PathEntity
+    type: "Hexagon"
+    buildPoly: (bounds) =>
+        shrink = (math.min bounds.width, bounds.height) * 0.9
+
+        poly = {}
+        for i = -180, 180, 360 / 6
+            table.insert poly, {
+                x: bounds.x + bounds.width / 2 + (math.cos math.rad i) * shrink / 2
+                y: bounds.y + bounds.height / 2 + (math.sin math.rad i) * shrink / 2
+            }
+
+        return poly
+        
+    checkSolution: (areaData) =>
+        return @parent.solutionData.traced
+
+    render: =>
+        bounds = @parent.bounds
+        if bounds
+            @colorCache = @colorCache or COLORS[COLOR_BLACK]
+            @poly = @poly or @buildPoly bounds
+            render.setColor @colorCache
+            for i = 1, 10
+                render.drawPoly @poly
+
+class HPathEntity_Hexagon extends Hexagon
+class VPathEntity_Hexagon extends Hexagon
 
 class VPathEntity_Broken extends PathEntity
     type: "Broken"
@@ -21,6 +51,7 @@ class VPathEntity_Broken extends PathEntity
                 y: topNode.y + 0.25
                 screenX: topNode.screenX
                 screenY: topNode.screenY + height
+                lowPriority: true
                 neighbors: { topNode }
             }
             table.insert topNode.neighbors, nodeA
@@ -31,6 +62,7 @@ class VPathEntity_Broken extends PathEntity
                 y: bottomNode.y - 0.25
                 screenX: bottomNode.screenX
                 screenY: bottomNode.screenY - height
+                lowPriority: true
                 neighbors: { bottomNode }
             }
             table.insert bottomNode.neighbors, nodeB
@@ -65,6 +97,7 @@ class HPathEntity_Broken extends PathEntity
                 y: leftNode.y
                 screenX: leftNode.screenX + width
                 screenY: leftNode.screenY
+                lowPriority: true
                 neighbors: { leftNode }
             }
             table.insert leftNode.neighbors, nodeA
@@ -75,6 +108,7 @@ class HPathEntity_Broken extends PathEntity
                 y: rightNode.y
                 screenX: rightNode.screenX - width
                 screenY: rightNode.screenY
+                lowPriority: true
                 neighbors: { rightNode }
             }
             table.insert rightNode.neighbors, nodeB
@@ -92,20 +126,18 @@ class HPathEntity_Broken extends PathEntity
         
         return true
 
-class HPathEntity_BrokenSymmetrical extends HPathEntity_Broken
-    render: =>
-
-class VPathEntity_BrokenSymmetrical extends VPathEntity_Broken
-    render: =>
-
 VPATH_ENTITIES = {
     "Broken": VPathEntity_Broken
-    "BrokenSymmetrical": VPathEntity_BrokenSymmetrical
+    "Disjoint": VPathEntity_Broken
+    "Hexagon": VPathEntity_Hexagon
+    "Dot": VPathEntity_Hexagon
 }
 
 HPATH_ENTITIES = {
+    "Disjoint": HPathEntity_Broken
     "Broken": HPathEntity_Broken
-    "BrokenSymmetrical": HPathEntity_BrokenSymmetrical
+    "Hexagon": VPathEntity_Hexagon
+    "Dot": VPathEntity_Hexagon
 }
 
 return { HPATH_ENTITIES, VPATH_ENTITIES }

@@ -50,8 +50,21 @@ class PathFinder
             if node.clickable and @checkSymmetry node, firstNode
                 return node
 
+    runCursorCallback: (cursorData) =>
+        if @cursorCallback
+            @cursorCallback cursorData
+
+    compareCursorData: (data, otherData) =>
+        if not otherData or not data
+            return false
+
+        return data.id == otherData.id and
+            data.pointId == otherData.pointId and
+            data.dx == otherData.dx and
+            data.dy == otherData.dy
+
     packAndCallback: () =>
-        if @callback
+        if @updateCallback
             packed = {}
             for k, nodeStack in pairs @nodeStacks
                 nodeTable = {}
@@ -63,7 +76,7 @@ class PathFinder
 
                 table.insert packed, nodeTable
         
-            @callback packed
+            @updateCallback packed
 
     think: (mouseX, mouseY) =>
         if not @nodeStacks or not mouseX or not mouseY
@@ -71,9 +84,15 @@ class PathFinder
 
         toInsert = {}
         toRemove = {}
-        for _, nodeStack in pairs @nodeStacks
-            last = nodeStack[#nodeStack]
 
+        shouldUpdateCursor = true
+        pendingCursorUpdates = {}
+
+        for _, nodeStack in pairs @nodeStacks
+            nodeCursor = {}
+
+            last = nodeStack[#nodeStack]
+            
             if nodeStack == @nodeStacks[2]
                 if @symmetry == VERTICAL_SYMMETRY
                     mouseX = @screenHeight - mouseX
@@ -100,19 +119,30 @@ class PathFinder
 
                 if mDot > 0
                     mDot = math.min mDot, vecLength
+            
+                    dotVector = (unitVector * mDot)
+                    toMouseVec = mouseVector - dotVector
                     
+                    if mDot > vecLength / 2
+                        mDot = mDot + toMouseVec\getLength!
+                    else
+                        mDot = mDot - toMouseVec\getLength!
+                    
+                    mDot = math.min mDot, vecLength
                     dotVector = (unitVector * mDot)
                     if mDot > maxMDot
                         maxMDot = mDot
+                        maxDotVector = dotVector
                         maxNode = to
 
-                if mDot >= vecLength
+                if not to.lowPriority and mDot >= vecLength
                     if to ~= nodeStack[1] and to == nodeStack[#nodeStack - 1]
                         if @symmetry
                             table.insert toRemove, #nodeStack
                         else
                             table.remove nodeStack, #nodeStack
                             @packAndCallback!
+                        shouldUpdateCursor = false
                         break
 
                     elseif not @hasNode to
@@ -121,48 +151,69 @@ class PathFinder
                         else
                             table.insert nodeStack, to
                             @packAndCallback!
+                        shouldUpdateCursor = false
                         break
+                        
+            if shouldUpdateCursor and maxNode 
+                cursorData = {
+                    id: _
+                    dx: maxDotVector.x
+                    dy: maxDotVector.y
+                    pointId: #nodeStack
+                }
 
-            if maxNode ~= nodeStack[1] and maxNode == nodeStack[#nodeStack - 1]
+                if not (@compareCursorData cursorData, @cursorDatas[_])
+                    @cursorDatas[_] = cursorData
+                    table.insert pendingCursorUpdates, cursorData
+
+            if maxNode and not maxNode.lowPriority and maxNode == nodeStack[#nodeStack - 1]
                 if @symmetry
                     table.insert toRemove, #nodeStack
                 else
                     table.remove nodeStack, #nodeStack
                     @packAndCallback!
+                shouldUpdateCursor = false
 
         if @symmetry and #toInsert > 1 and toInsert[1] ~= toInsert[2]
             a = toInsert[1]
             b = toInsert[2]               
 
-            if a == @nodeStacks[1][1] or b == @nodeStacks[1][1] or
-                b == @nodeStacks[2][1] or a == @nodeStacks[2][1]
-                return
+            if not (a == @nodeStacks[1][1] or b == @nodeStacks[1][1] or
+                b == @nodeStacks[2][1] or a == @nodeStacks[2][1]) and @checkSymmetry a, b
 
-            if @checkSymmetry a, b
                 table.insert @nodeStacks[1], toInsert[1]
                 table.insert @nodeStacks[2], toInsert[2]
+                shouldUpdateCursor = false
                 @packAndCallback!
 
         if @symmetry and #toRemove > 1 and toRemove[1] == toRemove[2]
             a = @nodeStacks[1][toRemove[1]]
             b = @nodeStacks[2][toRemove[2]]                 
 
-            if a == @nodeStacks[1][1] or b == @nodeStacks[1][1] or
-                b == @nodeStacks[2][1] or a == @nodeStacks[2][1]
-                return
+            if not (a == @nodeStacks[1][1] or b == @nodeStacks[1][1] or
+                b == @nodeStacks[2][1] or a == @nodeStacks[2][1]) and @checkSymmetry a, b
 
-            if @checkSymmetry a, b
                 table.remove @nodeStacks[1], toRemove[1]
                 table.remove @nodeStacks[2], toRemove[2]
+                shouldUpdateCursor = false
                 @packAndCallback!
 
+        if shouldUpdateCursor
+            for k, data in pairs pendingCursorUpdates
+                @runCursorCallback data
+
     restart: (firstNode, secondNode) =>
+        @cursorDatas = {{},{}}
         @nodeStacks = { {firstNode} }
         if secondNode 
             table.insert @nodeStacks, { secondNode }
         @packAndCallback!
 
-    new: (@nodeMap, @screenWidth, @screenHeight, @symmetry, @callback) =>
+    new: (@nodeMap, @data, @updateCallback, @cursorCallback) =>
+        with @data
+            @screenWidth = .screenWidth
+            @screenHeight = .screenHeight
+            @symmetry = .symmetry
 
 TileShared = require "moonpanel/core/sh_moonpanel.txt"
 
@@ -224,6 +275,12 @@ DEFAULTEST_RESOLUTION = {
     barWidth: 12
 }
 
+hasValue = (t, val) ->
+    for k, v in pairs t
+        if v == val
+            return true
+    return false
+
 return class Tile extends TileShared
     __internal: {}
     getters @,
@@ -265,6 +322,14 @@ return class Tile extends TileShared
                 net.writeUInt point.sx, 10
                 net.writeUInt point.sy, 10
 
+        net.send nil, true
+
+    cursorCallback: (data) =>
+        net.start "PathFinderCursor"
+        net.writeUInt data.id, 8
+        net.writeUInt data.pointId, 8
+        net.writeFloat data.dx
+        net.writeFloat data.dy      
         net.send!
 
     playSound: (sound) =>
@@ -272,8 +337,150 @@ return class Tile extends TileShared
         timer.simple 0.15, () ->
             sound\play!
 
+    traverse: (current, area) =>
+        current.solutionData.area = area
+        table.insert area, current
+
+        toTraverse = {
+            current\getLeft!
+            current\getRight!
+            current\getTop!
+            current\getBottom!
+        }
+
+        for k, v in pairs toTraverse
+            if not v or v.solutionData.area or v.solutionData.traced
+                continue
+
+            @traverse v, area
+
+    checkSolution: (errors) =>
+        paths = {}
+        cells = {}
+        intersections = {}
+        everything = {}
+        width = @tileData.dimensions.width
+        height = @tileData.dimensions.height
+
+        for i = 1, width
+            for j = 1, height + 1
+                hpath = @elements.hpaths[i][j]
+                hpath.solutionData = {}
+                table.insert everything, hpath
+                table.insert paths, hpath
+
+        for i = 1, width + 1
+            for j = 1, height
+                vpath = @elements.vpaths[i][j]
+                vpath.solutionData = {}
+                table.insert everything, vpath
+                table.insert paths, vpath
+
+        for i = 1, width
+            for j = 1, height
+                cell = @elements.cells[i][j]
+                cell.solutionData = {}
+                table.insert cells, cell
+                table.insert everything, cell
+
+        for i = 1, width + 1
+            for j = 1, height + 1
+                intersection = @elements.intersections[i][j]
+                intersection.solutionData = {}
+                table.insert intersections, intersection
+                table.insert everything, intersection
+
+        for i, stack in pairs @pathFinder.nodeStacks
+            for j = 2, #stack - 1
+                a = stack[j - 1]
+                b = stack[j]
+
+                found = false
+                for _, path in pairs paths
+                    if not a.intersection or not b.intersection
+                        return true
+
+                    if path.type == "HPath" and 
+                        (a.intersection == path\getLeft! and b.intersection == path\getRight!) or
+                        (b.intersection == path\getLeft! and a.intersection == path\getRight!)
+
+                        path.solutionData.traced = true
+                        a.intersection.solutionData.traced = true
+                        b.intersection.solutionData.traced = true
+
+                        found = true
+                        break
+                    elseif path.type == "VPath" and
+                        (a.intersection == path\getTop! and b.intersection == path\getBottom!) or
+                        (b.intersection == path\getTop! and a.intersection == path\getBottom!)
+
+                        path.solutionData.traced = true
+                        a.intersection.solutionData.traced = true
+                        b.intersection.solutionData.traced = true
+
+                        found = true
+                        break
+
+                if not found
+                    return true
+
+        areas = {}
+        while true do
+            unmarked = {}
+            area = {}
+            for k, v in pairs everything
+                if not v.solutionData.area and not v.solutionData.traced
+                    table.insert unmarked, v
+
+            if #unmarked == 0
+                break                
+
+            @traverse unmarked[1], area
+            
+            table.insert areas, area
+
+        totalErrors = {}
+        for _, area in pairs areas
+            areaErrors = {}
+            areaData = {}
+            for _, element in pairs area
+                if element.entity and element.entity.checkSolution and not element.entity\checkSolution areaData
+                    table.insert areaErrors, element
+
+            if #areaErrors > 0
+                table.insert totalErrors, areaErrors
+
+        if #totalErrors > 0
+            return true
+
+        return false
+
     puzzleEnd: () =>
         @panelUser = nil
+        
+        success = true
+        errors = {}
+
+        for i, nodeStack in pairs @pathFinder.nodeStacks
+            last = nodeStack[#nodeStack]
+            if not last.exit
+                success = false
+                break
+
+        if success
+            errors.errored = @checkSolution errors
+
+            if not errors.errored
+                @playSound SOUND_GOOD
+            else
+                @playSound SOUND_ERROR
+        else
+            @playSound SOUND_BLIP
+
+        net.start "PuzzleEnd"
+        net.writeUInt success and 1 or 0, 2
+        net.writeTable errors
+        net.send!
 
     puzzleStart: (ply, node, symmNode) =>
         @panelUser = ply
@@ -310,7 +517,7 @@ return class Tile extends TileShared
                         nodeB = @pathFinder\getSymmetricalNode nodeA
                         if not nodeB
                             return
-
+                            
                     @puzzleStart ply, nodeA, nodeB
                     @nextUse = timer.systime! + 0.5
 
@@ -342,6 +549,11 @@ return class Tile extends TileShared
         -- it's also good to keep in mind that tileData.dimensions.screenWidth
         -- should only be used for rendering in RT context.
 
+        -- actually this is no longer true.
+        -- it's easier to treat everything as 1024x1024,
+        -- translating [0-512] mouse coordinates to [0-1024].
+        -- why screens were defined as 512x512 will remain a mystery.
+
         -- Calculate dimensions        
         maxDim          = math.max width, height
         resolution      = DEFAULT_RESOLUTIONS[maxDim] or DEFAULTEST_RESOLUTION
@@ -367,8 +579,13 @@ return class Tile extends TileShared
 
         @processElements!
         
-        @pathFinder = PathFinder @pathMap, 1024, 1024, tileData.tile.symmetry,
-            @pathFinderCallback
+        pfData = {
+            screenWidth: 1024
+            screenHeight: 1024
+            symmetry: tileData.tile.symmetry
+        }
+
+        @pathFinder = PathFinder @pathMap, pfData, @pathFinderCallback, @cursorCallback
 
         @isPowered = true
 
@@ -382,7 +599,7 @@ return class Tile extends TileShared
         hook.add "PlayerUse", "", (ply, ent) ->
             @use ply, ent
 
-        timer.create "think", 0.05, 0, () ->
+        timer.create "think", 0.04, 0, () ->
             @think!
 
         hook.add "input", "", (name, value) ->

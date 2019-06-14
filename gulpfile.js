@@ -7,6 +7,7 @@ const del = require('del');
 function clean() {
 	return del(['lua/**/*']);
 }
+
 const _compileMoonScript = () => through2.obj((file, _, cb) => {
 	if (file.isBuffer()) {
 		const moonc = spawn('moonc', ['--']);

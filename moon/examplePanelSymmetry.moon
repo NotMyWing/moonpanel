@@ -3,8 +3,8 @@
 tile = require "moonpanel/core/moonpanel.txt"
 
 if SERVER
-    width = 20
-    height = 20
+    width = 8
+    height = 8
 
     cells = {
         {
@@ -60,7 +60,7 @@ if SERVER
             if (math.random 0, 100) > 90
                 table.insert hpaths, {
                     x: i
-                    y: i
+                    y: j
                     type: "Broken"
                 }
 

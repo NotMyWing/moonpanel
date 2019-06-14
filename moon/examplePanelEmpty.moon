@@ -6,17 +6,6 @@ if SERVER
     cells = {
     }
 
-    for i = 1, 2
-        for j = 1, 2
-            table.insert cells, {
-                x: i
-                y: j
-                type: "Triangle"
-                attributes: {
-                    count: math.ceil math.random 1, 3
-                }
-            }
-
     vpaths = {
     }
 

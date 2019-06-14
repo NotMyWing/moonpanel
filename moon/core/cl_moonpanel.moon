@@ -24,11 +24,51 @@ render.drawCirclePolySeveralTimesBecauseFuckGarrysMod = (x, y, r, howManyTimes =
     for i = 1, howManyTimes
         render.drawCirclePoly x, y, r
 
+render.thiccLine = (a, b, width) ->
+    angle = math.deg math.atan2 (b.y - a.y), (b.x - a.x)
+    dist = math.sqrt (b.y - a.y)^2 + (b.x - a.x)^2
+
+    matrix = Matrix!
+    matrix\translate Vector b.x, b.y
+    matrix\rotate Angle 0, angle + 90, 0
+    render.pushMatrix matrix
+
+    render.drawRectFast -width / 2, 0, width, dist
+
+    render.popMatrix!
+
 TileShared = require "moonpanel/core/sh_moonpanel.txt"
+
+MATERIAL_VIGNETTE = material.load "gmod/scope"
+
+colorGradient = (perc, ...) ->
+    if perc >= 1
+        r, g, b = select (select '#', ...) - 2, (...)
+        return r, g, b
+    elseif perc <= 0
+        r, g, b = (...)
+        return r, g, b
+    
+    num = select('#', ...) / 3
+
+    segment, relperc = math.modf perc* (num-1)
+    r1, g1, b1, r2, g2, b2 = select (segment*3)+1, ...
+
+    return r1 + (r2-r1)*relperc, g1 + (g2-g1)*relperc, b1 + (b2-b1)*relperc
 
 return class Tile extends TileShared
     pathFinderData: nil
     renderBackground: () =>
+        screenWidth = @tileData.dimensions.screenWidth
+        screenHeight = @tileData.dimensions.screenHeight
+
+        vignetteStretch = 200
+        render.setColor @tileData.colors.vignette
+        render.setMaterial MATERIAL_VIGNETTE
+        render.drawTexturedRect -vignetteStretch * 2, -vignetteStretch, 
+            screenWidth + vignetteStretch * 4, screenHeight + vignetteStretch * 1.8
+        render.setMaterial!
+
         width = @tileData.dimensions.width
         height = @tileData.dimensions.height
 
@@ -77,12 +117,6 @@ return class Tile extends TileShared
                 
                 @renderBackground!
 
-                --for k, v in pairs @pathMap
-                --    render.setColor Color 255, 0, 0
-                --    render.drawCirclePolySeveralTimesBecauseFuckGarrysMod v.screenX, v.screenY, v.clickable and 16 or 4
-                --    for _k, _v in pairs v.neighbors
-                --        render.drawLine v.screenX, v.screenY, _v.screenX, _v.screenY
-
                 render.selectRenderTarget nil
 
             render.clear!
@@ -92,25 +126,44 @@ return class Tile extends TileShared
             render.drawTexturedRect 0, 0, 1024, 1024
             render.setTexture!
 
+            render.setColor @penColor
             if @pathFinderData
                 barWidth = @tileData.dimensions.barWidth
-                for k, stack in pairs @pathFinderData
+                barLength = @tileData.dimensions.barLength
+                symmVector = nil
+                cursors = {}
+
+                for stackId, stack in pairs @pathFinderData
                     for k, v in pairs stack
-                        render.drawCirclePoly v.sx, v.sy, (k == 1) and barWidth * 1.5 or barWidth / 2
+                        render.drawCirclePoly v.x, v.y, (k == 1) and barWidth * 1.5 or barWidth / 2
 
                         if k > 1
                             prev = stack[k - 1]
-                            angle = math.deg math.atan2 (prev.sy - v.sy), (prev.sx - v.sx)
-                            dist = math.sqrt (v.sy - prev.sy)^2 + (v.sx - prev.sx)^2
-
-                            matrix = Matrix!
-                            matrix\translate Vector prev.sx, prev.sy
-                            matrix\rotate Angle 0, angle + 90, 0
-                            render.pushMatrix matrix
-
-                            render.drawRectFast -barWidth / 2, 0, barWidth, dist
+                            render.thiccLine prev, v, barWidth
                         
-                            render.popMatrix!
+                        if @pathFinderCursors and 
+                            k == #stack and @pathFinderCursors[stackId] and @pathFinderCursors[stackId][k]
+                            
+                            cur = @pathFinderCursors[stackId][k]
+
+                            vec = (Vector cur.dx, cur.dy, 0)
+                            table.insert cursors, {
+                                vec: vec\getNormalized!
+                                prev: v
+                                length: vec\getLength!
+                            }
+
+                if #cursors > 0
+                    minLength = nil
+                    for k, v in pairs cursors
+                        if (minLength or v.length + 1) > v.length
+                            minLength = v.length
+
+                    for k, v in pairs cursors
+                        target = (v.vec * minLength) + (Vector v.prev.x, v.prev.y, 0)
+                        render.thiccLine v.prev, target, barWidth
+                        render.drawCirclePoly target.x, target.y, barWidth / 2                
+
             render.selectRenderTarget nil
 
         render.setColor Color 255, 255, 255
@@ -142,12 +195,26 @@ return class Tile extends TileShared
             @netUpdatePoweredState (state == 1 and true or false)
 
         net.receive "UpdateTileData", () ->
+            @pathFinderCursors = {}
+
             state = net.readUInt 2
             @netUpdatePoweredState (state == 1 and true or false)
             length = net.readUInt 32
             data = json.decode fastlz.decompress net.readData length
 
             @processTileData data
+
+        net.receive "PathFinderCursor", (len) ->
+            @foregroundNeedsRendering = true
+            stack = net.readUInt 8
+            
+            @pathFinderCursors = @pathFinderCursors or {}
+            @pathFinderCursors[stack] = @pathFinderCursors[stack] or {}
+            pointId = net.readUInt 8
+
+            @pathFinderCursors[stack][pointId] or= {}
+            @pathFinderCursors[stack][pointId].dx = net.readFloat!
+            @pathFinderCursors[stack][pointId].dy = net.readFloat!
 
         net.receive "PathFinderData", (len) ->
             @foregroundNeedsRendering = true
@@ -159,26 +226,93 @@ return class Tile extends TileShared
                 stack = {}
                 for j = 1, pointCount
                     table.insert stack, {
-                        sx: net.readUInt 10
-                        sy: net.readUInt 10
+                        x: net.readUInt 10
+                        y: net.readUInt 10
                     }
 
                 table.insert @pathFinderData, stack
 
         net.receive "PuzzleStart", () ->
+            @penColor = Color @colors.traced[1], @colors.traced[2], @colors.traced[3]
+            @pathFinderCursors = {}
+            timer.remove "penFade"
 
         net.receive "PuzzleEnd", () ->
-            -- length = net.readUInt 32
-            -- data = json.decode fastlz.decompress net.readData length
+            timer.remove "penFade"
+            success = (net.readUInt 2) == 1 and true or false
+            errors = net.readTable!
+            printTable errors
+
+            colors = @tileData.colors
+
+            if success and not errors.errored
+                @penColor[1] = 0
+                @penColor[2] = 255
+                @penColor[3] = 0
+                @foregroundNeedsRendering = true
+
+            elseif success and errors.errored
+                @penColor[1] = 255
+                @penColor[2] = 0
+                @penColor[3] = 0
+
+                @foregroundNeedsRendering = true
+
+                fadePct = 1
+                timer.create "penFade", 0.02, 100, () ->
+                    r1, g1, b1 = 255, 0, 0
+                    r2, g2, b2 = colors.untraced[1], colors.untraced[2], colors.untraced[3]
+
+                    r, g, b = colorGradient fadePct, r2, g2, b2, r1, g1, b1
+
+                    @penColor[1] = r
+                    @penColor[2] = g
+                    @penColor[3] = b
+
+                    fadePct -= 0.01
+                    @foregroundNeedsRendering = true
+                    if fadePct <= 0
+                        @pathFinderData = {}
+                        @foregroundNeedsRendering = true
+
+                        timer.remove "penFade"
+
+            elseif not success
+                @penColor[1] = colors.untraced[1]
+                @penColor[2] = colors.untraced[2]
+                @penColor[3] = colors.untraced[3]
+
+                @foregroundNeedsRendering = true
+
+                fadePct = 1
+                timer.create "penFade", 0.01, 100, () ->
+                    r1, g1, b1 = colors.traced[1], colors.traced[2], colors.traced[3]
+                    r2, g2, b2 = colors.untraced[1], colors.untraced[2], colors.untraced[3]
+
+                    r, g, b = colorGradient fadePct, r2, g2, b2, r1, g1, b1
+
+                    @penColor[1] = r
+                    @penColor[2] = g
+                    @penColor[3] = b
+
+                    @foregroundNeedsRendering = true
+                    fadePct -= 0.025
+                    if fadePct <= 0
+                        @pathFinderData = {}
+                        @foregroundNeedsRendering = true
+
+                        timer.remove "penFade"
 
     processTileData: (tileData) =>
+        timer.remove "penFade"
+
         @colors = tileData.colors
-        
+        @penColor = Color @colors.traced[1], @colors.traced[2], @colors.traced[3]
+
         -- Hackity hack
         for k, v in pairs @colors
             @colors[k] = Color v.r, v.g, v.b, v.a
 
-        @penColor = @colors.traced
         @backgroundNeedsRendering = true
 
         @tileData = tileData

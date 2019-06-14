@@ -47,23 +47,30 @@ export class VPath extends Path
             table.insert bottomNode.neighbors, topNode
 
     getLeft: =>
-        @cachedLeft = @cachedLeft or (@tile.elements.cells[@x] or EMPTY_TABLE)[@y - 1]
+        @cachedLeft = @cachedLeft or (@tile.elements.cells[@x - 1] or EMPTY_TABLE)[@y]
         @cachedLeft
+
     getRight: =>
         @cachedRight = @cachedRight or (@tile.elements.cells[@x] or EMPTY_TABLE)[@y]
         @cachedRight
+
     getTop: =>
         @cachedTop = @cachedTop or (@tile.elements.intersections[@x] or EMPTY_TABLE)[@y]
         @cachedTop
+
     getBottom: =>
         @cachedBottom = @cachedBottom or (@tile.elements.intersections[@x] or EMPTY_TABLE)[@y + 1]
         @cachedBottom 
+
     render: =>
         if @entity and (@entity\render!) == true
             return
 
         render.setColor @tile.colors.untraced
         render.drawRect @bounds.x, @bounds.y, @bounds.width, @bounds.height
+
+        if @entity
+            @entity\render!
 
 export class HPath extends Element
     type: "HPath"
@@ -84,21 +91,28 @@ export class HPath extends Element
     getLeft: =>
         @cachedLeft = @cachedLeft or (@tile.elements.intersections[@x] or EMPTY_TABLE)[@y]
         @cachedLeft
+
     getRight: =>
         @cachedRight = @cachedRight or (@tile.elements.intersections[@x + 1] or EMPTY_TABLE)[@y]
         @cachedRight
+
     getTop: =>
         @cachedTop = @cachedTop or (@tile.elements.cells[@x] or EMPTY_TABLE)[@y - 1]
         @cachedTop
+
     getBottom: =>
         @cachedBottom = @cachedBottom or (@tile.elements.cells[@x] or EMPTY_TABLE)[@y]
         @cachedBottom
+
     render: =>
         if @entity and (@entity\render!) == true
             return
 
         render.setColor @tile.colors.untraced
         render.drawRect @bounds.x, @bounds.y, @bounds.width, @bounds.height
+
+        if @entity
+            @entity\render!
     
 export class Intersection extends Element
     type: "Intersection"
@@ -163,15 +177,19 @@ export class Cell extends Element
     getLeft: =>
         @cachedLeft = @cachedLeft or (@tile.elements.vpaths[@x] or EMPTY_TABLE)[@y]
         @cachedLeft
+        
     getRight: =>
         @cachedRight = @cachedRight or (@tile.elements.vpaths[@x + 1] or EMPTY_TABLE)[@y]
         @cachedRight
+
     getTop: =>
         @cachedTop = @cachedTop or (@tile.elements.hpaths[@x] or EMPTY_TABLE)[@y]
         @cachedTop
+
     getBottom: =>
         @cachedBottom = @cachedBottom or (@tile.elements.hpaths[@x] or EMPTY_TABLE)[@y + 1]
         @cachedBottom
+
     traverse: (x, y) =>
         pathToCheck = nil
         if x == -1

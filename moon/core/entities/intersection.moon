@@ -56,6 +56,7 @@ class IntersectionEntity_Exit extends IntersectionEntity
             screenX: parentNode.screenX + (dir.x) * w
             screenY: parentNode.screenY + (dir.y) * w
             neighbors: { parentNode }
+            exit: true
         }
         parentNode.neighbors = parentNode.neighbors or {}
         

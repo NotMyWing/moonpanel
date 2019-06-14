@@ -7,7 +7,7 @@ Right now it doesn't understand neither the Polyomino rule, nor the Y-symbol rul
 
 ![hi](https://media.discordapp.net/attachments/439029143078830081/587952524376408080/unknown.png)
 
-To install, run `npm install`.
+To install, get Node.js, and run `npm install` in this directory.
 Make sure you have gulp-cli installed globally.
 
 To build, run `gulp moon`.

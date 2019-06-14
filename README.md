@@ -1,6 +1,10 @@
 # StarfallEX-Moonpanel
 It's a panel, written in moon language. As inspired by The Witness, a game by Thekla Inc.
 
+Currently supports suns, colors, triangles, hexagons and disjoints. Allows for symmetry puzzles. 
+
+Right now it doesn't understand neither the Polyomino rule, nor the Y-symbol rule. This is yet to be implemented in future!
+
 ![hi](https://media.discordapp.net/attachments/439029143078830081/587952524376408080/unknown.png)
 
 To install, run `npm install`.

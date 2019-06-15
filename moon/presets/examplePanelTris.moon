@@ -32,12 +32,12 @@ if SERVER
         }
     }
 
-    tile\setup {
-        tile: {
-            :width
-            :height
-        }
-        :cells
-        :vpaths
-        :intersections
+tile\setup {
+    tile: {
+        :width
+        :height
     }
+    :cells
+    :vpaths
+    :intersections
+}

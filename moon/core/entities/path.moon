@@ -66,9 +66,10 @@ class Entrance extends PathEntity
         
         intA, intB = nil, nil
         if angle == 90 or angle == 270
-            intA, intB = @parent\getLeft!, @parent\getRight!
-        else
             intA, intB = @parent\getTop!, @parent\getBottom!
+        else
+            intA, intB = @parent\getLeft!, @parent\getRight!
+        print intB.type
 
         nodeA, nodeB = intA.pathMapNode, intB.pathMapNode
         if not nodeA or not nodeB
@@ -144,9 +145,11 @@ class Exit extends PathEntity
         
         intA, intB = nil, nil
         if angle == 90 or angle == 270
-            intA, intB = @parent\getLeft!, @parent\getRight!
-        else
             intA, intB = @parent\getTop!, @parent\getBottom!
+        else
+            intA, intB = @parent\getLeft!, @parent\getRight!
+
+        print intB.type
 
         nodeA, nodeB = intA.pathMapNode, intB.pathMapNode
         if not nodeA or not nodeB

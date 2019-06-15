@@ -120,11 +120,11 @@ return class Tile extends TileShared
                 
                 @renderBackground!
 
-                for k, v in pairs @pathMap
-                    render.setColor Color 255, 0, 0
-                    render.drawCirclePolySeveralTimesBecauseFuckGarrysMod v.screenX, v.screenY, v.clickable and 16 or 4
-                    for _k, _v in pairs v.neighbors
-                        render.drawLine v.screenX, v.screenY, _v.screenX, _v.screenY
+                --for k, v in pairs @pathMap
+                --    render.setColor Color 255, 0, 0
+                --    render.drawCirclePolySeveralTimesBecauseFuckGarrysMod v.screenX, v.screenY, v.clickable and 16 or 4
+                --    for _k, _v in pairs v.neighbors
+                --        render.drawLine v.screenX, v.screenY, _v.screenX, _v.screenY
 
                 render.selectRenderTarget nil
 

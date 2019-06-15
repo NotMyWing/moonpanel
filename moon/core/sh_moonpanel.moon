@@ -25,7 +25,7 @@ export COLORS = {
     Color 255, 0, 0
     Color 0, 128, 0
     Color 0, 0, 255
-    Color 255, 160, 0
+    Color 200, 120, 0
 }
 
 require "moonpanel/core/elements.txt"

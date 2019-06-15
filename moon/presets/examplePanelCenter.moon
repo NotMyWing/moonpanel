@@ -3,8 +3,8 @@
 tile = require "moonpanel/core/moonpanel.txt"
 
 if SERVER
-    width = 1
-    height = 1
+    width = 3
+    height = 3
 
     cells = {
     }
@@ -18,13 +18,13 @@ if SERVER
     
     hpaths = {
         {
-            x: 1
-            y: 1
+            x: 2
+            y: 4
             type: "Entrance"
         }
         {
-            x: 1
-            y: 2
+            x: 2
+            y: 1
             type: "Exit"
         }
     }

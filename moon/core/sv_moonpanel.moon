@@ -416,9 +416,8 @@ return class Tile extends TileShared
                 found = false
                 for _, path in pairs paths
                     if not a.intersection or not b.intersection
-                        return true
-
-                    if path.type == "HPath" and 
+                        return
+                    elseif path.type == "HPath" and 
                         (a.intersection == path\getLeft! and b.intersection == path\getRight!) or
                         (b.intersection == path\getLeft! and a.intersection == path\getRight!)
 
@@ -440,7 +439,7 @@ return class Tile extends TileShared
                         break
 
                 if not found
-                    return true
+                    return
 
         areas = {}
         while true do
@@ -568,15 +567,12 @@ return class Tile extends TileShared
                 success = false
                 break
 
-        printTable lastInts
-
         if success
             grayOut, redOut = @checkSolution!
 
             if not redOut or not redOut.errored
                 @playSound SOUND_GOOD
                 for k, v in pairs @wirePortsNames
-                    print v
                     wire.ports[v] = (hasValue lastInts, v) and 1 or 0
             else
                 @playSound SOUND_ERROR
@@ -669,8 +665,8 @@ return class Tile extends TileShared
         -- Calculate dimensions        
         maxDim          = math.max width, height
         resolution      = DEFAULT_RESOLUTIONS[maxDim] or DEFAULTEST_RESOLUTION
-        barWidth        = resolution.barWidth
-        innerZoneLength = math.ceil screenWidth * resolution.innerScreenRatio
+        barWidth        = @tileData.tile.barWidth or resolution.barWidth
+        innerZoneLength = math.ceil screenWidth * (@tileData.tile.innerScreenRatio or resolution.innerScreenRatio)
         barLength       = math.floor (innerZoneLength - (barWidth * (maxDim + 1))) / maxDim
 
         tileData.dimensions = {

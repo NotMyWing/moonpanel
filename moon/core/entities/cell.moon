@@ -7,14 +7,6 @@ class CellEntity
 
 class CellEntity_Color extends CellEntity
     type: "Color"
-    checkSolution: (@areaData) =>
-        for k, v in pairs @parent.solutionData.area
-            if v.type == "Cell" and v.entity and v.entity.attributes.color ~= @attributes.color and
-                not v.entity.attributes.disabled
-                
-                return false
-        return true
-
     render: =>
         bounds = @parent.bounds
         if bounds
@@ -25,18 +17,6 @@ class CellEntity_Color extends CellEntity
 
 class CellEntity_Sun extends CellEntity
     type: "Sun"
-    checkSolution: (@areaData) =>
-        sum = 0
-        for k, v in pairs @parent.solutionData.area
-            if v.type == "Cell" and v.entity and
-                v.entity.attributes.color == @attributes.color and not v.entity.attributes.disabled
-
-                sum +=1
-                if sum > 2
-                    return false
-
-        return sum == 2
-
     buildPoly: (bounds) =>
         shrink = bounds.width * 0.7
         newBounds = Rect bounds.x + shrink / 2, bounds.y + shrink / 2, bounds.width - shrink, bounds.height - shrink     
@@ -64,10 +44,12 @@ class CellEntity_Sun extends CellEntity
 
 class CellEntity_Y extends CellEntity
     type: "Y"
+    new: (@parent, @attributes = {}) =>
+        @attributes.color or= COLOR_WHITE
     render: =>
         bounds = @parent.bounds
         if bounds
-            render.setColor COLORS[COLOR_WHITE]
+            render.setColor COLORS[@attributes.color]
             shrink = bounds.width * 0.25
 
             width = shrink * 0.45

@@ -2,6 +2,8 @@ class IntersectionEntity
     new: (@parent, @attributes = {}) =>
     render: =>
     populatePathMap: (pathMap) =>
+    checkSolution: =>
+        true
 
 class IntersectionEntity_Entrance extends IntersectionEntity
     type: "Entrance"
@@ -21,6 +23,32 @@ class IntersectionEntity_Entrance extends IntersectionEntity
             render.drawCirclePolySeveralTimesBecauseFuckGarrysMod @bounds.x + @bounds.width / 2, 
                 @bounds.y + @bounds.width / 2, @bounds.width
             return true
+
+class IntersectionEntity_Hexagon extends IntersectionEntity
+    type: "Hexagon"
+    buildPoly: (bounds) =>
+        shrink = (math.min bounds.width, bounds.height) * 0.9
+
+        poly = {}
+        for i = -180, 180, 360 / 6
+            table.insert poly, {
+                x: bounds.x + bounds.width / 2 + (math.cos math.rad i) * shrink / 2
+                y: bounds.y + bounds.height / 2 + (math.sin math.rad i) * shrink / 2
+            }
+
+        return poly
+        
+    checkSolution: (areaData) =>
+        return @parent.solutionData.traced
+
+    render: =>
+        bounds = @parent.bounds
+        if bounds
+            @colorCache = @colorCache or COLORS[COLOR_BLACK]
+            @poly = @poly or @buildPoly bounds
+            render.setColor @colorCache
+            for i = 1, 10
+                render.drawPoly @poly
 
 class IntersectionEntity_Exit extends IntersectionEntity
     type: "Exit"
@@ -56,6 +84,7 @@ class IntersectionEntity_Exit extends IntersectionEntity
             screenX: parentNode.screenX + (dir.x) * w
             screenY: parentNode.screenY + (dir.y) * w
             neighbors: { parentNode }
+            intersection: @parent
             exit: true
         }
         parentNode.neighbors = parentNode.neighbors or {}
@@ -80,4 +109,6 @@ class IntersectionEntity_Exit extends IntersectionEntity
 return {
     "Entrance": IntersectionEntity_Entrance
     "Exit": IntersectionEntity_Exit
+    "Hexagon": IntersectionEntity_Hexagon
+    "Dot": IntersectionEntity_Hexagon
 }

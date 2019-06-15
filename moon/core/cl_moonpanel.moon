@@ -20,7 +20,7 @@ render.drawCirclePoly = (x, y, r) ->
     render.drawPoly polyCache[r]
     render.popMatrix!
 
-render.drawCirclePolySeveralTimesBecauseFuckGarrysMod = (x, y, r, howManyTimes = 10) ->
+render.drawCirclePolySeveralTimesBecauseFuckGarrysMod = (x, y, r, howManyTimes = 3) ->
     for i = 1, howManyTimes
         render.drawCirclePoly x, y, r
 
@@ -77,6 +77,9 @@ return class Tile extends TileShared
                 cell = @elements.cells[i][j]
                 if cell
                     cell\render!
+                    if @grayOut.Cell and @grayOut.Cell[j] and @grayOut.Cell[j][i]
+                        render.setColor Color 0, 0, 0, @fade
+                        render.drawRect cell.bounds.x, cell.bounds.y, cell.bounds.width, cell.bounds.height
 
         for j = 1, height + 1
             for i = 1, width
@@ -116,6 +119,12 @@ return class Tile extends TileShared
                 render.drawRect 0, 0, @tileData.dimensions.screenWidth, @tileData.dimensions.screenHeight
                 
                 @renderBackground!
+
+                for k, v in pairs @pathMap
+                    render.setColor Color 255, 0, 0
+                    render.drawCirclePolySeveralTimesBecauseFuckGarrysMod v.screenX, v.screenY, v.clickable and 16 or 4
+                    for _k, _v in pairs v.neighbors
+                        render.drawLine v.screenX, v.screenY, _v.screenX, _v.screenY
 
                 render.selectRenderTarget nil
 
@@ -164,6 +173,14 @@ return class Tile extends TileShared
                         render.thiccLine v.prev, target, barWidth
                         render.drawCirclePoly target.x, target.y, barWidth / 2                
 
+            width = @tileData.dimensions.width
+            height = @tileData.dimensions.height
+            for j = 1, height
+                for i = 1, width
+                    cell = @elements.cells[i][j]
+                    if cell and @redOut.Cell and @redOut.Cell[j] and @redOut.Cell[j][i]
+                        render.setColor Color 160, 0, 0, math.abs(190 * (math.sin math.rad (@red)))
+                        render.drawRectFast cell.bounds.x, cell.bounds.y, cell.bounds.width, cell.bounds.height
             render.selectRenderTarget nil
 
         render.setColor Color 255, 255, 255
@@ -235,23 +252,43 @@ return class Tile extends TileShared
         net.receive "PuzzleStart", () ->
             @penColor = Color @colors.traced[1], @colors.traced[2], @colors.traced[3]
             @pathFinderCursors = {}
+            @grayOut = {}
+            @redOut = {}
+            @fade = 0
+            @red = 0
+
+            @backgroundNeedsRendering = true
+
             timer.remove "penFade"
+            timer.remove "grayOut"
 
         net.receive "PuzzleEnd", () ->
             timer.remove "penFade"
+            timer.remove "grayOut"
             success = (net.readUInt 2) == 1 and true or false
-            errors = net.readTable!
-            printTable errors
+            @redOut = net.readTable!
+            @grayOut = net.readTable!
 
             colors = @tileData.colors
 
-            if success and not errors.errored
+            if @grayOut
+                -- This is intentionally slow.
+                -- Background renderer is quite expensive.
+                @fade = 0
+                timer.create "grayOut", 0.16, 0, () ->
+                    @fade += 16
+                    @backgroundNeedsRendering = true
+                    @foregroundNeedsRendering = true
+                    if @fade >= 160
+                        timer.remove "grayOut"
+                        
+            if success and not @redOut.errored
                 @penColor[1] = 0
                 @penColor[2] = 255
                 @penColor[3] = 0
                 @foregroundNeedsRendering = true
 
-            elseif success and errors.errored
+            elseif success and @redOut.errored
                 @penColor[1] = 255
                 @penColor[2] = 0
                 @penColor[3] = 0
@@ -276,6 +313,11 @@ return class Tile extends TileShared
                         @foregroundNeedsRendering = true
 
                         timer.remove "penFade"
+
+                @red = 0
+                timer.create "redOut", 0.05, (360/15) * 3, () ->
+                    @red += 15
+                    @foregroundNeedsRendering = true
 
             elseif not success
                 @penColor[1] = colors.untraced[1]
@@ -305,9 +347,15 @@ return class Tile extends TileShared
 
     processTileData: (tileData) =>
         timer.remove "penFade"
+        timer.remove "grayOut"
+        timer.remove "redOut"
 
         @colors = tileData.colors
         @penColor = Color @colors.traced[1], @colors.traced[2], @colors.traced[3]
+        @grayOut = {}
+        @redOut = {}
+        @fade = 0
+        @red = 0
 
         -- Hackity hack
         for k, v in pairs @colors

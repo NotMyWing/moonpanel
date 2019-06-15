@@ -57,17 +57,6 @@ if SERVER
         }
         {
             x: 3
-            y: 2
-            type: "Blue Polyomino"
-            attributes: {
-                shape: {
-                    {1}
-                }
-                fixed: false
-            }
-        }
-        {
-            x: 3
             y: 3
             type: "Blue Polyomino"
             attributes: {
@@ -109,7 +98,7 @@ if SERVER
         {
             x: width + 1
             y: 1
-            type: "Exit"
+            type: "Exit"    
         }
     }
 

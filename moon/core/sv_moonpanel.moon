@@ -354,6 +354,9 @@ return class Tile extends TileShared
 
             @traverse v, area
 
+    _checkSolution: (path, cells, intersections, everything, areas) =>
+        
+
     checkSolution: (errors) =>
         paths = {}
         cells = {}
@@ -361,6 +364,21 @@ return class Tile extends TileShared
         everything = {}
         width = @tileData.dimensions.width
         height = @tileData.dimensions.height
+
+        grayOut = {
+            Cell: {}
+            Intersection: {}
+            VPath: {}
+            HPath: {}
+        }
+
+        redOut = {
+            errored: false
+            Cell: {}
+            Intersection: {}
+            VPath: {}
+            HPath: {}
+        }
 
         for i = 1, width
             for j = 1, height + 1
@@ -443,43 +461,136 @@ return class Tile extends TileShared
         for _, area in pairs areas
             areaErrors = {}
             areaData = {}
-            for _, element in pairs area
-                if element.entity and element.entity.checkSolution and not element.entity\checkSolution areaData
-                    table.insert areaErrors, element
+            ySymbols = {}
 
-            if #areaErrors > 0
+            for _, element in pairs area
+                if element.entity
+                    if element.entity.type == "Y"
+                        table.insert ySymbols, element
+
+            for _, element in pairs area
+                if element.entity
+                    if not element.entity\checkSolution areaData
+                        if #ySymbols > 0
+                            grayOut[element.type][element.y] or= {}
+                            grayOut[element.type][element.y][element.x] = true
+                            grayOut["Cell"][ySymbols[1].y] or= {}
+                            grayOut["Cell"][ySymbols[1].y][ySymbols[1].x] = true
+
+                            element.solutionData.inactive = true
+                            ySymbols[1].solutionData.inactive = true
+                            table.remove ySymbols, 1
+                        else
+                            redOut.errored = true
+                            redOut[element.type][element.y] or= {}
+                            redOut[element.type][element.y][element.x] = true
+                            table.insert areaErrors, element
+                            
+            -- Check colors! The plain old functional way.
+            groups = {}
+            for i = 1, #COLORS
+                groups[i] = {}
+
+            for _, element in pairs area
+                if element.entity
+                    if element.entity.type == "Color"
+                        table.insert groups[element.entity.attributes.color], element
+
+            table.sort groups, (a, b) ->
+                #a > #b
+
+            if #groups[2] > 0               
+                for i = 2, #groups
+                    for _, element in pairs groups[i]
+                        if #ySymbols > 0
+                            grayOut[element.type][element.y] or= {}
+                            grayOut[element.type][element.y][element.x] = true
+                            grayOut["Cell"][ySymbols[1].y] or= {}
+                            grayOut["Cell"][ySymbols[1].y][ySymbols[1].x] = true
+
+                            element.solutionData.inactive = true
+                            ySymbols[1].solutionData.inactive = true
+                            table.remove ySymbols, 1
+                        else
+                            redOut.errored = true
+                            redOut[element.type][element.y] or= {}
+                            redOut[element.type][element.y][element.x] = true
+                            table.insert areaErrors, element
+
+            -- It could've been great if I could just handle suns the OO way as well,
+            -- but... well, this is just easier overall.
+            for _, element in pairs area
+                if element.entity and element.entity.type == "Sun"
+                    count = 1
+                    for _, otherElement in pairs area
+                        if element ~= otherElement and otherElement.entity and
+                            not otherElement.solutionData.inactive and
+                            otherElement.entity.attributes.color == element.entity.attributes.color
+
+                            count += 1
+                            if count > 2
+                                break
+                    if count ~= 2
+                        if #ySymbols > 0
+                            grayOut[element.type][element.y] or= {}
+                            grayOut[element.type][element.y][element.x] = true
+                            grayOut["Cell"][ySymbols[1].y] or= {}
+                            grayOut["Cell"][ySymbols[1].y][ySymbols[1].x] = true
+
+                            element.solutionData.inactive = true
+                            ySymbols[1].solutionData.inactive = true
+                            table.remove ySymbols, 1
+                        else
+                            redOut.errored = true
+                            redOut[element.type][element.y] or= {}
+                            redOut[element.type][element.y][element.x] = true
+                            table.insert areaErrors, element
+
+            if #ySymbols > 0 or #areaErrors > 0
+                redOut.errored = true
                 table.insert totalErrors, areaErrors
 
-        if #totalErrors > 0
-            return true
-
-        return false
+        return grayOut, redOut
 
     puzzleEnd: () =>
         @panelUser = nil
         
         success = true
-        errors = {}
+        grayOut = {}
+        redOut = {}
 
+        lastInts = {}
         for i, nodeStack in pairs @pathFinder.nodeStacks
             last = nodeStack[#nodeStack]
+            if last.intersection and last.intersection.wireOutput
+                table.insert lastInts, last.intersection.wireOutput
             if not last.exit
                 success = false
                 break
 
-        if success
-            errors.errored = @checkSolution errors
+        printTable lastInts
 
-            if not errors.errored
+        if success
+            grayOut, redOut = @checkSolution!
+
+            if not redOut or not redOut.errored
                 @playSound SOUND_GOOD
+                for k, v in pairs @wirePortsNames
+                    print v
+                    wire.ports[v] = (hasValue lastInts, v) and 1 or 0
             else
                 @playSound SOUND_ERROR
+                for k, v in pairs @wirePortsNames
+                    wire.ports[v] = 0
         else
             @playSound SOUND_BLIP
+            for k, v in pairs @wirePortsNames
+                wire.ports[v] = 0
 
         net.start "PuzzleEnd"
         net.writeUInt success and 1 or 0, 2
-        net.writeTable errors
+        net.writeTable redOut or {}
+        net.writeTable grayOut or {}
         net.send!
 
     puzzleStart: (ply, node, symmNode) =>
@@ -491,6 +602,7 @@ return class Tile extends TileShared
         @playSound SOUND_UICLICK
 
         net.start "PuzzleStart"
+
         net.send!
 
     use: (ply, ent) =>
@@ -584,6 +696,24 @@ return class Tile extends TileShared
             screenHeight: 1024
             symmetry: tileData.tile.symmetry
         }
+
+        @wirePortsNames = {}
+        @wirePortsTypes = {}
+
+        for j = 1, height + 1
+            for i = 1, width + 1
+                int = @elements.intersections[j][i]
+                if int and int.entity and int.entity.type == "Exit"                     
+                    x = string.char string.byte("A") + int.x - 1
+                    y = string.char string.byte("A") + int.y - 1
+
+                    output = "Exit" .. x .. "x" .. y
+
+                    int.wireOutput = "Exit" .. x .. "x" .. y
+                    table.insert @wirePortsNames, output
+                    table.insert @wirePortsTypes, "Number"
+
+        wire.adjustOutputs @wirePortsNames, @wirePortsTypes
 
         @pathFinder = PathFinder @pathMap, pfData, @pathFinderCallback, @cursorCallback
 

@@ -3,16 +3,16 @@
 tile = require "moonpanel/core/moonpanel.txt"
 
 if SERVER
-    width = 8
-    height = 8
+    width = 3
+    height = 3
 
     cells = {
         {
-            x: 1
-            y: 1
+            x: 2
+            y: 2
             type: "Triangle"
             attributes: {
-                count: 1
+                count: 2
             }
         }
     }

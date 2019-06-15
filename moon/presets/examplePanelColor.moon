@@ -36,8 +36,13 @@ if SERVER
             y: 3
             type: "Sun"
             attributes: {
-                color: COLOR_CYAN
+                color: COLOR_WHITE
             }
+        }
+        {
+            x: 2
+            y: 2
+            type: "Y"
         }
     }
 

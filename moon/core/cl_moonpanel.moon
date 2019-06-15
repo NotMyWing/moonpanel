@@ -262,7 +262,7 @@ return class Tile extends TileShared
             timer.remove "penFade"
             timer.remove "grayOut"
 
-        net.receive "PuzzleEnd", () ->
+        net.receive "PuzzleEnd", (len) ->
             timer.remove "penFade"
             timer.remove "grayOut"
             success = (net.readUInt 2) == 1 and true or false
@@ -274,13 +274,9 @@ return class Tile extends TileShared
             if @grayOut
                 -- This is intentionally slow.
                 -- Background renderer is quite expensive.
-                @fade = 0
-                timer.create "grayOut", 0.16, 0, () ->
-                    @fade += 16
-                    @backgroundNeedsRendering = true
-                    @foregroundNeedsRendering = true
-                    if @fade >= 160
-                        timer.remove "grayOut"
+                @fade = 140
+                @backgroundNeedsRendering = true
+                @foregroundNeedsRendering = true
                         
             if success and not @redOut.errored
                 @penColor[1] = 0

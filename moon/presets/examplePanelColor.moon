@@ -34,7 +34,7 @@ if SERVER
         {
             x: 3
             y: 3
-            type: "Sun"
+            type: "Color"
             attributes: {
                 color: COLOR_WHITE
             }

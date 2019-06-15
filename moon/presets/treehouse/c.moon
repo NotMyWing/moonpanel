@@ -71,7 +71,7 @@ if SERVER
         tile: {
             :width
             :height
-            innerScreenRatio: 0.85
+            innerScreenRatio: 0.8
             barWidth: 45
         }
         colors: {

@@ -43,8 +43,6 @@ class Entrance extends PathEntity
         else
             angle = @parent\getLeft! and 0 or 180
 
-        print angle
-
         if not angle
             error "Invalid exit placement"
 
@@ -69,7 +67,6 @@ class Entrance extends PathEntity
             intA, intB = @parent\getTop!, @parent\getBottom!
         else
             intA, intB = @parent\getLeft!, @parent\getRight!
-        print intB.type
 
         nodeA, nodeB = intA.pathMapNode, intB.pathMapNode
         if not nodeA or not nodeB
@@ -122,8 +119,6 @@ class Exit extends PathEntity
         else
             angle = @parent\getLeft! and 0 or 180
 
-        print angle
-
         if not angle
             error "Invalid exit placement"
 
@@ -148,8 +143,6 @@ class Exit extends PathEntity
             intA, intB = @parent\getTop!, @parent\getBottom!
         else
             intA, intB = @parent\getLeft!, @parent\getRight!
-
-        print intB.type
 
         nodeA, nodeB = intA.pathMapNode, intB.pathMapNode
         if not nodeA or not nodeB

@@ -3,6 +3,9 @@
 tile = require "moonpanel/core/moonpanel.txt"
 
 if SERVER
+    width = 2
+    height = 2
+
     cells = {
         {
             x: 1
@@ -10,46 +13,50 @@ if SERVER
             type: "Polyomino"
             attributes: {
                 shape: {
-                    {1, 1}
-                    {0, 0}
-                    {1, 0}
+                    {1}
+                }
+                rotational: false
+            }
+        }
+        {
+            x: 2
+            y: 1
+            type: "Polyomino"
+            attributes: {
+                shape: {
+                    {1,1}
+                    {0,1}
                 }
                 rotational: true
             }
         }
         {
-            x: 2
-            y: 2
-            type: "Polyomino"
-            attributes: {
-                shape: {
-                    {1}
-                }
-            }
+            x: 1
+            y: 2 
+            type: "Y"
         }
-    }
-
-    vpaths = {
     }
 
     intersections = {
         {
             x: 1
-            y: 4
+            y: height + 1
             type: "Entrance"
         }
         {
-            x: 4
+            x: width + 1
             y: 1
-            type: "Exit"
+            type: "Exit"    
         }
     }
 
     tile\setup {
-        :intersections
         :cells
+        :vpaths
+        :hpaths
+        :intersections
         tile: {
-            width: 3
-            height: 3
+            width: width
+            height: height
         }
     }

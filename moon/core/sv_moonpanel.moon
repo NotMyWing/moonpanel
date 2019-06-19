@@ -84,7 +84,7 @@ hasValue = (t, val) ->
     return false
 
 findPolySolutions = (polyos, maxArea, result, currentPoly = 1, solution = {}, currentArea = 0) ->
-    if currentPoly == #polyos
+    if currentPoly == #polyos + 1
         sol = { unpack(solution) }
         sol[#sol + 1] = currentArea
         table.insert result, sol
@@ -628,7 +628,13 @@ return class Tile extends TileShared
                     if #positivePolyos == 1
                         if not @checkPolySolution positivePolyos, areaMatrix  
                             markAsError positivePolyos[1].element
-                    else
+                    shouldDepthTest = true
+
+                    if countPositives == countNegatives
+                        if @checkPolySolution positivePolyos, areaMatrix
+                            shouldDepthTest = false
+
+                    if shouldDepthTest
                         polyCombinations = {} 
                         findPolySolutions positivePolyos, countNegatives, polyCombinations
 

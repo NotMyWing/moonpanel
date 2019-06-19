@@ -66,7 +66,9 @@ class CellEntity_Y extends CellEntity
 class CellEntity_Polyomino extends CellEntity
     type: "Polyomino"
     new: (@parent, @attributes = {}) =>
+        @attributes.shape = BitMatrix.fromNested @attributes.shape
         @attributes.color = COLOR_YELLOW
+        @attributes.shape.rotational = @attributes.rotational
 
     render: =>
         bounds = @parent.bounds
@@ -75,18 +77,13 @@ class CellEntity_Polyomino extends CellEntity
 
             render.setColor @colorCache
 
-            @polyheight = #@attributes.shape
-            @polywidth = @polywidth or nil
-            if not @polywidth
-                max = 0
-                for k, row in pairs @attributes.shape
-                    max = math.max #row
-                @polywidth = max
+            @polyheight = @attributes.shape.h
+            @polywidth = @attributes.shape.w
 
             maxDim = math.max @polyheight, @polywidth
             shrink = bounds.width * 0.7
 
-            if not @attributes.fixed
+            if @attributes.rotational
                 shrink *= 0.7
 
             squareWidth = math.min shrink / maxDim, bounds.width * 0.2
@@ -97,22 +94,22 @@ class CellEntity_Polyomino extends CellEntity
 
             v = Vector bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0
 
-            if not @attributes.fixed
+            if @attributes.rotational
                 matrix = Matrix!
                 matrix\translate v
                 matrix\rotate Angle 0, -15, 0
                 matrix\translate -v
 
                 render.pushMatrix matrix
-
+                
             for j = 1, @polyheight
                 for i = 1, @polywidth
-                    if @attributes.shape[j][i] == 1
+                    if (@attributes.shape\get i, j)
                         x = offsetX + bounds.x + (i - 1) * spacing + (i - 1) * squareWidth 
                         y = offsetY + bounds.y + (j - 1) * spacing + (j - 1) * squareWidth 
                         render.drawRoundedBox 4, x, y, squareWidth, squareWidth
             
-            if not @attributes.fixed
+            if @attributes.rotational
                 render.popMatrix!
 
 class CellEntity_BluePolyomino extends CellEntity
@@ -129,7 +126,7 @@ class CellEntity_BluePolyomino extends CellEntity
 
             @polyheight = #@attributes.shape
             @polywidth = @polywidth or nil
-            if not @polywidth
+            if @polywidth
                 max = 0
                 for k, row in pairs @attributes.shape
                     max = math.max #row
@@ -138,7 +135,7 @@ class CellEntity_BluePolyomino extends CellEntity
             maxDim = math.max @polyheight, @polywidth
             shrink = bounds.width * 0.7
 
-            if not @attributes.fixed
+            if @attributes.rotational
                 shrink *= 0.7
 
             squareWidth = math.min shrink / maxDim, bounds.width * 0.2
@@ -149,7 +146,7 @@ class CellEntity_BluePolyomino extends CellEntity
 
             v = Vector bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0
 
-            if not @attributes.fixed
+            if @attributes.rotational
                 matrix = Matrix!
                 matrix\translate v
                 matrix\rotate Angle 0, -15, 0
@@ -171,7 +168,7 @@ class CellEntity_BluePolyomino extends CellEntity
                         render.drawRect x + squareWidth - cutout, y + cutout * 0.5, cutout, squareWidth - cutout * 1.5
                         
             
-            if not @attributes.fixed
+            if @attributes.rotational
                 render.popMatrix!
 
 class CellEntity_Triangle extends CellEntity

@@ -40,8 +40,28 @@ const _compileMoonScript = () => through2.obj((file, _, cb) => {
 	}
 });
 
+const _moveLuaFiles = () => through2.obj((file, _, cb) => {
+	if (file.isBuffer()) {
+		const code = file.contents.toString();
+		const lines = code.split(/\r?\n/);
+		let header = '';
+		for (const line of lines) {
+			if (line != '' && !line.startsWith('--')) break;
+			header += line + '\n';
+		}
+
+		file.contents = Buffer.from(header + luamin.minify(file.contents.toString()));
+		file.path = file.path.substr(0, file.path.lastIndexOf('.')) + '.txt';
+		cb(null, file);
+	}
+});
+
 function moon() {
-	del(['moonpanel/**/*'])
+	del(['moonpanel/**/*']).then(() => {
+		src('moon/**/*.lua')
+			.pipe(_moveLuaFiles())
+			.pipe(dest('moonpanel'));
+	});
 	return src('moon/**/*.moon')
 		.pipe(_compileMoonScript())
 		.pipe(dest('moonpanel'));

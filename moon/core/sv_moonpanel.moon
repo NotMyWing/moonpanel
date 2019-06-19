@@ -1,4 +1,67 @@
 --@include moonpanel/core/sh_moonpanel.txt
+--@include moonpanel/core/dlx.txt
+
+DLX = require "moonpanel/core/dlx.txt"
+
+COLOR_BG = Color 80, 77, 255, 255
+COLOR_UNTRACED = Color 40, 22, 186
+COLOR_TRACED = Color 255, 255, 255, 255
+COLOR_VIGNETTE = Color 0, 0, 0, 92
+
+SOUND_UICLICK = sounds.create chip!, "garrysmod/ui_click.wav"
+SOUND_BLIP    = sounds.create chip!, "buttons/blip1.wav"
+SOUND_ERROR   = sounds.create chip!, "buttons/button11.wav"
+SOUND_GOOD    = sounds.create chip!, "buttons/button17.wav"
+
+DEFAULT_RESOLUTIONS = {
+    {
+        innerScreenRatio: 0.4
+        barWidth: 40
+    }
+    {
+        innerScreenRatio: 0.5
+        barWidth: 35
+    }
+    {
+        innerScreenRatio: 0.6
+        barWidth: 30
+    }
+    {
+        innerScreenRatio: 0.7
+        barWidth: 25
+    }
+    {
+        innerScreenRatio: 0.8
+        barWidth: 25
+    }
+    {
+        innerScreenRatio: 0.85
+        barWidth: 22
+    }
+    {
+        innerScreenRatio: 0.875
+        barWidth: 20
+    }
+    {
+        innerScreenRatio: 0.875
+        barWidth: 18
+    }
+    {
+        innerScreenRatio: 0.875
+        barWidth: 17
+    }
+    {
+        innerScreenRatio: 0.875
+        barWidth: 15
+    }
+}
+
+DEFAULTEST_RESOLUTION = {
+    innerScreenRatio: 0.875
+    barWidth: 12
+}
+
+import rshift, lshift, band, bor, bnot from (bit or bit32 or require "bit")
 
 getters = (cls, getters) ->
   cls.__base.__index = (key) =>
@@ -19,6 +82,21 @@ hasValue = (t, val) ->
         if v == val
             return true
     return false
+
+findPolySolutions = (polyos, maxArea, result, currentPoly = 1, solution = {}, currentArea = 0) ->
+    if currentPoly == #polyos
+        sol = { unpack(solution) }
+        sol[#sol + 1] = currentArea
+        table.insert result, sol
+        return
+
+    findPolySolutions polyos, maxArea, result, currentPoly + 1, { unpack (solution) }, currentArea
+
+    if currentArea + polyos[currentPoly]\countOnes! <= maxArea
+        currentArea += polyos[currentPoly]\countOnes!
+
+        table.insert solution, polyos[currentPoly]
+        findPolySolutions polyos, maxArea, result, currentPoly + 1, solution, currentArea
 
 class PathFinder
     nodeStacks: {}
@@ -217,70 +295,6 @@ class PathFinder
 
 TileShared = require "moonpanel/core/sh_moonpanel.txt"
 
-COLOR_BG = Color 80, 77, 255, 255
-COLOR_UNTRACED = Color 40, 22, 186
-COLOR_TRACED = Color 255, 255, 255, 255
-COLOR_VIGNETTE = Color 0, 0, 0, 92
-
-SOUND_UICLICK = sounds.create chip!, "garrysmod/ui_click.wav"
-SOUND_BLIP    = sounds.create chip!, "buttons/blip1.wav"
-SOUND_ERROR   = sounds.create chip!, "buttons/button11.wav"
-SOUND_GOOD    = sounds.create chip!, "buttons/button17.wav"
-
-DEFAULT_RESOLUTIONS = {
-    {
-        innerScreenRatio: 0.4
-        barWidth: 40
-    }
-    {
-        innerScreenRatio: 0.5
-        barWidth: 35
-    }
-    {
-        innerScreenRatio: 0.6
-        barWidth: 30
-    }
-    {
-        innerScreenRatio: 0.7
-        barWidth: 25
-    }
-    {
-        innerScreenRatio: 0.8
-        barWidth: 25
-    }
-    {
-        innerScreenRatio: 0.85
-        barWidth: 22
-    }
-    {
-        innerScreenRatio: 0.875
-        barWidth: 20
-    }
-    {
-        innerScreenRatio: 0.875
-        barWidth: 18
-    }
-    {
-        innerScreenRatio: 0.875
-        barWidth: 17
-    }
-    {
-        innerScreenRatio: 0.875
-        barWidth: 15
-    }
-}
-
-DEFAULTEST_RESOLUTION = {
-    innerScreenRatio: 0.875
-    barWidth: 12
-}
-
-hasValue = (t, val) ->
-    for k, v in pairs t
-        if v == val
-            return true
-    return false
-
 return class Tile extends TileShared
     __internal: {}
     getters @,
@@ -354,8 +368,64 @@ return class Tile extends TileShared
 
             @traverse v, area
 
-    _checkSolution: (path, cells, intersections, everything, areas) =>
-        
+    populateWithPositions: (positions, id, poly, area) =>
+        -- Bit matrices are right-to-left.
+        -- Exact cover is normal Cartesian.
+        -- Nested matrices are Cartesian, but Y is reversed.
+        -- ...good god.
+        for rotation = 0, poly.rotational and 3 or 0
+            rotatedPoly = poly\rotate rotation
+
+            if rotatedPoly.w > area.w or rotatedPoly.h > area.h
+                continue
+
+            for j = 0, area.h - rotatedPoly.h
+                for i = 0, area.w - rotatedPoly.w
+                    fits = true
+                    for polyj = 1, rotatedPoly.h
+                        row = area.rows[j + polyj]
+                        polyRow = lshift rotatedPoly.rows[polyj], i
+
+                        if row ~= bor polyRow, row
+                            fits = false
+                            break
+                    
+                    if fits
+                        pos = { id }
+                        for polyj = 1, rotatedPoly.h
+                            polyRow = rotatedPoly.rows[polyj]
+                            for polyi = 1, rotatedPoly.w
+                                if band(polyRow, (lshift 1, polyi - 1)) ~= 0
+                                    table.insert pos, tostring(polyi + i - 1) .. "x" .. tostring(polyj + j - 1)
+                        table.insert positions, pos
+
+    checkPolySolution: (polys, area) =>
+        names = {}
+        for i = 1, area.w
+            for j = 1, area.h
+                row = area.rows[j]
+                if band(row, lshift 1, i - 1) ~= 0
+                    names[#names + 1] = tostring(i - 1) .. "x" .. tostring(j - 1)
+
+        for i = 1, #polys
+            names[#names + 1] = i
+
+        data = { names }
+
+        for i = 1, #polys
+            @populateWithPositions data, i, polys[i], area
+
+        numRows = area.h
+        numColumns = area.w
+
+        xcc, err = DLX\new data
+        if not xcc
+            return false
+
+        for sol in xcc\dance()
+            return true
+
+        return false
 
     checkSolution: (errors) =>
         paths = {}
@@ -427,6 +497,7 @@ return class Tile extends TileShared
 
                         found = true
                         break
+
                     elseif path.type == "VPath" and
                         (a.intersection == path\getTop! and b.intersection == path\getBottom!) or
                         (b.intersection == path\getTop! and a.intersection == path\getBottom!)
@@ -462,6 +533,22 @@ return class Tile extends TileShared
             areaData = {}
             ySymbols = {}
 
+            markAsError = (element) ->
+                if #ySymbols > 0
+                    grayOut[element.type][element.y] or= {}
+                    grayOut[element.type][element.y][element.x] = true
+                    grayOut["Cell"][ySymbols[1].y] or= {}
+                    grayOut["Cell"][ySymbols[1].y][ySymbols[1].x] = true
+
+                    element.solutionData.inactive = true
+                    ySymbols[1].solutionData.inactive = true
+                    table.remove ySymbols, 1
+                else
+                    redOut.errored = true
+                    redOut[element.type][element.y] or= {}
+                    redOut[element.type][element.y][element.x] = true
+                    table.insert areaErrors, element
+
             for _, element in pairs area
                 if element.entity
                     if element.entity.type == "Y"
@@ -470,20 +557,7 @@ return class Tile extends TileShared
             for _, element in pairs area
                 if element.entity
                     if not element.entity\checkSolution areaData
-                        if #ySymbols > 0
-                            grayOut[element.type][element.y] or= {}
-                            grayOut[element.type][element.y][element.x] = true
-                            grayOut["Cell"][ySymbols[1].y] or= {}
-                            grayOut["Cell"][ySymbols[1].y][ySymbols[1].x] = true
-
-                            element.solutionData.inactive = true
-                            ySymbols[1].solutionData.inactive = true
-                            table.remove ySymbols, 1
-                        else
-                            redOut.errored = true
-                            redOut[element.type][element.y] or= {}
-                            redOut[element.type][element.y][element.x] = true
-                            table.insert areaErrors, element
+                        markAsError element
                             
             -- Check colors! The plain old functional way.
             groups = {}
@@ -501,20 +575,86 @@ return class Tile extends TileShared
             if #groups[2] > 0               
                 for i = 2, #groups
                     for _, element in pairs groups[i]
-                        if #ySymbols > 0
-                            grayOut[element.type][element.y] or= {}
-                            grayOut[element.type][element.y][element.x] = true
-                            grayOut["Cell"][ySymbols[1].y] or= {}
-                            grayOut["Cell"][ySymbols[1].y][ySymbols[1].x] = true
+                        markAsError element
 
-                            element.solutionData.inactive = true
-                            ySymbols[1].solutionData.inactive = true
-                            table.remove ySymbols, 1
+            -- pepehands
+            positivePolyos = {}
+            negativePolyos = {}
+            for _, element in pairs area
+                if element.entity and element.entity.type == "Polyomino"
+                    table.insert positivePolyos, element.entity.attributes.shape
+                    element.entity.attributes.shape.element = element
+
+                if element.entity and element.entity.type == "Blue Polyomino"
+                    table.insert negativePolyos, element.entity.attributes.shape
+                    element.entity.attributes.shape.element = element
+
+            if #positivePolyos == 0 and #negativePolyos > 0
+                for _, element in pairs negativePolyos
+                    markAsError element
+                    
+            if #positivePolyos > 0
+                minx, miny, maxx, maxy = nil, nil, nil, nil
+                countPositives = 0
+                for _, v in pairs area
+                    if v.type == "Cell"
+                        if not maxx or v.x > maxx
+                            maxx = v.x
+                        if not minx or v.x < minx
+                            minx = v.x
+                        if not maxy or v.y > maxy
+                            maxy = v.y
+                        if not miny or v.y < miny
+                            miny = v.y
+                        
+                        if v.entity and v.entity.type == "Polyomino"
+                            countPositives += v.entity.attributes.shape\countOnes!
+
+                areaMatrix = BitMatrix maxx-minx + 1, maxy-miny + 1
+
+                for _, v in pairs area
+                    if v.type == "Cell"
+                        areaMatrix\set v.x - minx + 1, v.y - miny + 1, 1
+
+                negativePolyos = { areaMatrix }
+                countNegatives = areaMatrix\countOnes!
+                
+                if countPositives < countNegatives
+                    for _, v in pairs area
+                        if v.type == "Cell" and v.entity and v.entity.type == "Polyomino"
+                            markAsError v
+
+                elseif countPositives >= countNegatives
+                    if #positivePolyos == 1
+                        if not @checkPolySolution positivePolyos, areaMatrix  
+                            markAsError positivePolyos[1].element
+                    else
+                        polyCombinations = {} 
+                        findPolySolutions positivePolyos, countNegatives, polyCombinations
+
+                        if #polyCombinations == 0
+                            for k, v in pairs positivePolyos
+                                markAsError v.element
                         else
-                            redOut.errored = true
-                            redOut[element.type][element.y] or= {}
-                            redOut[element.type][element.y][element.x] = true
-                            table.insert areaErrors, element
+                            successfulSolutions = {}
+                            for k, v in pairs polyCombinations
+                                if v[#v] == countNegatives
+                                    table.remove v, #v
+                                    success = @checkPolySolution v, areaMatrix
+                                    if success
+                                        table.insert successfulSolutions, v
+
+                            if #successfulSolutions > 0
+                                table.sort successfulSolutions, (a, b) ->
+                                    #a > #b
+                                for k, v in pairs positivePolyos
+                                    if not hasValue successfulSolutions[1], v
+                                        markAsError v.element
+                            else
+                                for k, v in pairs positivePolyos
+                                    markAsError v.element
+
+            -- Let's convert the entire area into a polyomino
 
             -- It could've been great if I could just handle suns the OO way as well,
             -- but... well, this is just easier overall.
@@ -530,22 +670,12 @@ return class Tile extends TileShared
                             if count > 2
                                 break
                     if count ~= 2
-                        if #ySymbols > 0
-                            grayOut[element.type][element.y] or= {}
-                            grayOut[element.type][element.y][element.x] = true
-                            grayOut["Cell"][ySymbols[1].y] or= {}
-                            grayOut["Cell"][ySymbols[1].y][ySymbols[1].x] = true
-
-                            element.solutionData.inactive = true
-                            ySymbols[1].solutionData.inactive = true
-                            table.remove ySymbols, 1
-                        else
-                            redOut.errored = true
-                            redOut[element.type][element.y] or= {}
-                            redOut[element.type][element.y][element.x] = true
-                            table.insert areaErrors, element
+                        markAsError element
 
             if #ySymbols > 0 or #areaErrors > 0
+                for k, v in pairs ySymbols
+                    redOut["Cell"][v.y] or= {}
+                    redOut["Cell"][v.y][v.x] = true
                 redOut.errored = true
                 table.insert totalErrors, areaErrors
 
@@ -612,7 +742,8 @@ return class Tile extends TileShared
 
             if timer.systime! > @nextUse
                 if ply == @panelUser
-                    @puzzleEnd!
+                    @nextUse = timer.systime! + 0.5
+                    return @puzzleEnd!
 
                 if not @panelUser and ply and @cursors[ply]
                     cur = @cursors[ply]
@@ -698,7 +829,7 @@ return class Tile extends TileShared
 
         for j = 1, height + 1
             for i = 1, width + 1
-                int = @elements.intersections[j][i]
+                int = (@elements.intersections[j] or {})[i]
                 if int and int.entity and int.entity.type == "Exit"                     
                     x = string.char string.byte("A") + int.x - 1
                     y = string.char string.byte("A") + int.y - 1

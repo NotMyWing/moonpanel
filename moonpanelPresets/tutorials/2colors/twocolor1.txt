@@ -1,0 +1,58 @@
+--@name twocolor1
+--@include moonpanel/core/moonpanel.txt
+--
+-- AUTOMATICALLY DOWNLOADED & TRANSPILED BY MOONPANEL DOWNLOADER
+--
+
+tile = require "moonpanel/core/moonpanel.txt"
+
+if SERVER then
+	cells = {
+		{
+			type = "Color",
+			x = 1,
+			y = 1,
+			attributes = {
+				color = 1,
+			}
+		},
+		{
+			type = "Color",
+			x = 1,
+			y = 2,
+			attributes = {
+				color = 2,
+			}
+		},
+	}
+
+	intersections = {
+		{
+			type = "Entrance",
+			x = 1,
+			y = 2,
+		},
+		{
+			type = "Exit",
+			x = 2,
+			y = 2,
+		},
+	}
+
+	vpaths = {
+	}
+
+	hpaths = {
+	}
+
+	tile:setup({
+		cells = cells,
+		vpaths = vpaths,
+		hpaths = hpaths,
+		intersections = intersections,
+		tile = {
+			width = 1,
+			height = 2
+		}
+	})
+end

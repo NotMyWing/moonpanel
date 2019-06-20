@@ -1,0 +1,63 @@
+--@name triangles3
+--@include moonpanel/core/moonpanel.txt
+--
+-- AUTOMATICALLY DOWNLOADED & TRANSPILED BY MOONPANEL DOWNLOADER
+--
+
+tile = require "moonpanel/core/moonpanel.txt"
+
+if SERVER then
+	cells = {
+		{
+			type = "Triangle",
+			x = 1,
+			y = 1,
+			attributes = {
+				count = 3,
+			}
+		},
+	}
+
+	intersections = {
+		{
+			type = "Entrance",
+			x = 1,
+			y = 3,
+		},
+		{
+			type = "Exit",
+			x = 2,
+			y = 1,
+		},
+	}
+
+	vpaths = {
+		{
+			type = "Disjoint",
+			x = 2,
+			y = 1,
+		},
+	}
+
+	hpaths = {
+	}
+
+	tile:setup({
+		cells = cells,
+		vpaths = vpaths,
+		hpaths = hpaths,
+		intersections = intersections,
+		tile = {
+			width = 1,
+			height = 2,
+			innerScreenRatio = 0.775,
+			barWidth = 40
+		},
+		colors = {
+			background = Color(0, 0, 0),
+			vignette = Color(0, 0, 0),
+			untraced = Color(120, 100, 45),
+			traced = Color(220, 220, 220)
+		}
+	})
+end

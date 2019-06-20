@@ -8,10 +8,11 @@ COLOR_UNTRACED = Color 40, 22, 186
 COLOR_TRACED = Color 255, 255, 255, 255
 COLOR_VIGNETTE = Color 0, 0, 0, 92
 
-SOUND_UICLICK = sounds.create chip!, "garrysmod/ui_click.wav"
-SOUND_BLIP    = sounds.create chip!, "buttons/blip1.wav"
-SOUND_ERROR   = sounds.create chip!, "buttons/button11.wav"
-SOUND_GOOD    = sounds.create chip!, "buttons/button17.wav"
+if sounds.soundsLeft! >= 4
+    export SOUND_UICLICK = sounds.create chip!, "garrysmod/ui_click.wav"
+    export SOUND_BLIP    = sounds.create chip!, "buttons/blip1.wav"
+    export SOUND_ERROR   = sounds.create chip!, "buttons/button11.wav"
+    export SOUND_GOOD    = sounds.create chip!, "buttons/button17.wav"
 
 DEFAULT_RESOLUTIONS = {
     {
@@ -347,9 +348,10 @@ return class Tile extends TileShared
         net.send!
 
     playSound: (sound) =>
-        sound\stop!
-        timer.simple 0.15, () ->
-            sound\play!
+        if sound
+            sound\stop!
+            timer.simple 0.15, () ->
+                sound\play!
 
     traverse: (current, area) =>
         current.solutionData.area = area
@@ -697,11 +699,41 @@ return class Tile extends TileShared
         lastInts = {}
         for i, nodeStack in pairs @pathFinder.nodeStacks
             last = nodeStack[#nodeStack]
+            -- This is legit hacky as hell.
+            -- But if this works, why should you complain?
+            if not last.exit
+                exits = {}
+                for k, v in pairs last.neighbors
+                    if v.exit
+                        exits[#exits + 1] = v
+                    for _, _v in pairs v.neighbors
+                        if _v.exit
+                            exits[#exits + 1] = _v
+
+                if #exits == 0
+                    success = false
+                    break
+
+                table.sort exits, (a, b) ->
+                    dst1 = math.sqrt((a.screenX - @activeCursor.x)^2 + (a.screenY - @activeCursor.y)^2)
+                    dst2 = math.sqrt((b.screenX - @activeCursor.x)^2 + (b.screenY - @activeCursor.y)^2)
+                    dst1 < dst2
+                
+                nearest = exits[1]
+                dst = math.sqrt((nearest.screenX - @activeCursor.x)^2 + (nearest.screenY - @activeCursor.y)^2)
+                if (dst > @tileData.dimensions.barLength)
+                    success = false
+                    break
+                    
+                for i = 1, 2
+                    @pathFinder\think nearest.screenX, nearest.screenY
+                last = nearest
+
+            if not success
+                break
+
             if last.intersection and last.intersection.wireOutput
                 table.insert lastInts, last.intersection.wireOutput
-            if not last.exit
-                success = false
-                break
 
         if success
             grayOut, redOut = @checkSolution!

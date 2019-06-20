@@ -1,0 +1,95 @@
+--@name midwalk8
+--@include moonpanel/core/moonpanel.txt
+--
+-- AUTOMATICALLY DOWNLOADED & TRANSPILED BY MOONPANEL DOWNLOADER
+--
+
+tile = require "moonpanel/core/moonpanel.txt"
+
+if SERVER then
+	cells = {
+		{
+			type = "Polyomino",
+			x = 3,
+			y = 3,
+			attributes = {
+				rotational = true,
+				shape = {
+					{1, 1},
+					{1, 0},
+					{1, 0},
+				}
+			}
+		},
+	}
+
+	intersections = {
+		{
+			type = "Entrance",
+			x = 1,
+			y = 6,
+		},
+		{
+			type = "Exit",
+			x = 6,
+			y = 1,
+		},
+	}
+
+	vpaths = {
+		{
+			type = "Disjoint",
+			x = 1,
+			y = 2,
+		},
+		{
+			type = "Disjoint",
+			x = 2,
+			y = 4,
+		},
+		{
+			type = "Disjoint",
+			x = 3,
+			y = 1,
+		},
+		{
+			type = "Disjoint",
+			x = 5,
+			y = 1,
+		},
+		{
+			type = "Disjoint",
+			x = 6,
+			y = 1,
+		},
+	}
+
+	hpaths = {
+		{
+			type = "Disjoint",
+			x = 4,
+			y = 6,
+		},
+	}
+
+	tile:setup({
+		cells = cells,
+		vpaths = vpaths,
+		hpaths = hpaths,
+		intersections = intersections,
+		tile = {
+			width = 5,
+			height = 5,
+			innerScreenRatio = 0.85,
+			barWidth = 30
+		},
+		colors = {
+			solved = Color(170, 170, 30),
+			cell = Color(100, 120, 0),
+			background = Color(60, 70, 0),
+			vignette = Color(0, 0, 0, 32),
+			untraced = Color(120, 130, 70),
+			traced = Color(220, 220, 220)
+		}
+	})
+end

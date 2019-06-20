@@ -207,5 +207,9 @@ export class Cell extends Element
         return (@tile.elements.cells[@x + x] or EMPTY_TABLE)[@y + y]
 
     render: =>
+        if @tile.colors.cell
+            barw = @tile.tileData.dimensions.barWidth
+            render.setColor @tile.colors.cell
+            render.drawRectFast @bounds.x - barw / 2, @bounds.y - barw / 2, @bounds.width + barw, @bounds.height + barw
         if @entity
             @entity\render!

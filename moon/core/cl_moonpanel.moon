@@ -72,14 +72,15 @@ return class Tile extends TileShared
         width = @tileData.dimensions.width
         height = @tileData.dimensions.height
 
+        grayOut = @tileData.colors.cell or @tileData.colors.background
         for j = 1, height
             for i = 1, width
                 cell = @elements.cells[i][j]
                 if cell
                     cell\render!
                     if @grayOut.Cell and @grayOut.Cell[j] and @grayOut.Cell[j][i]
-                        render.setColor Color 0, 0, 0, @fade
-                        render.drawRect cell.bounds.x, cell.bounds.y, cell.bounds.width, cell.bounds.height
+                        render.setColor Color grayOut[1], grayOut[2], grayOut[3], @fade
+                        render.drawRectFast cell.bounds.x, cell.bounds.y, cell.bounds.width, cell.bounds.height
 
         for j = 1, height + 1
             for i = 1, width
@@ -100,7 +101,7 @@ return class Tile extends TileShared
                     intersection\render!
 
     render: () =>
-        if not @tileData and not @elements
+        if not @tileData and not @elements and not @colors
             return
 
         @lastPoweredUpdate or= timer.systime!
@@ -272,16 +273,15 @@ return class Tile extends TileShared
             colors = @tileData.colors
 
             if @grayOut
-                -- This is intentionally slow.
-                -- Background renderer is quite expensive.
-                @fade = 140
+                @fade = 200
                 @backgroundNeedsRendering = true
                 @foregroundNeedsRendering = true
                         
             if success and not @redOut.errored
-                @penColor[1] = 0
-                @penColor[2] = 255
-                @penColor[3] = 0
+                if @colors.solved
+                    @penColor[1] = @colors.solved[1]
+                    @penColor[2] = @colors.solved[2]
+                    @penColor[3] = @colors.solved[3]
                 @foregroundNeedsRendering = true
 
             elseif success and @redOut.errored

@@ -229,10 +229,15 @@ new Promise((resolve, reject) => {
         message: 'Please enter the filename:',
         initial: initial
     }).then((response) => {
+        if (!response || !response.value) {
+            throw new Error("invalid filename")
+        }
+
         if (!fs.existsSync("./downloaded/")) {
             fs.mkdirSync("./downloaded/");
         }
         var filename = "./downloaded/" + sanitize(response.value) + ".txt";
+        code = "--@name " + response.value + "\n" + code;
         fs.writeFileSync(filename, code);
         console.log('\x1b[37m\x1b[1m%s\x1b[0m', '> Saved to ' + filename);
 

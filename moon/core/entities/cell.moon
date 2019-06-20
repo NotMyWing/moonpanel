@@ -173,7 +173,11 @@ class CellEntity_BluePolyomino extends CellEntity
 
 class CellEntity_Triangle extends CellEntity
     type: "Triangle"
+    new: (@parent, @attributes = {}) =>
+        @attributes.color = @attributes.color or COLOR_ORANGE
+
     buildPoly: (bounds) =>
+        
         w = (bounds.width * 0.2) / 2
         poly = {
             { x: 0, y: -w }
@@ -194,9 +198,8 @@ class CellEntity_Triangle extends CellEntity
     render: =>
         bounds = @parent.bounds
         if bounds
-            @colorCache = @colorCache or COLORS[COLOR_ORANGE]
             @trianglePoly = @trianglePoly or @buildPoly bounds
-            render.setColor @colorCache
+            render.setColor COLORS[@attributes.color]
             shrink = bounds.width * 0.8
 
             triangleWidth = bounds.width * 0.2

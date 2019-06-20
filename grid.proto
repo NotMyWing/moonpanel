@@ -1,0 +1,82 @@
+syntax = "proto3";
+package GridProto;
+message Entity {
+  Type type = 1;
+  // Currently for Type.SQUARE and Type.STAR only
+  Color color = 2;
+  // For Type.END only
+  Orientation orientation = 3;
+  // For Type.TETRIS only
+  Shape shape = 4;
+  // Enables run length encoding of entities.
+  int32 count = 5;
+  // For Type.TRIANGLE only
+  int32 triangle_count = 6;
+}
+message Shape {
+  int32 width = 1;
+  repeated bool grid = 2 [packed=true];
+  bool free = 3;
+  bool negative = 4;
+}
+message Orientation {
+  // Range: -1 to 1.
+  sint32 horizontal = 1;
+  sint32 vertical = 2;
+}
+enum Type {
+  UNKNOWN = 0;
+  // Multi-type
+  NONE = 1;
+  BASIC = 2;
+  START = 3;
+  END = 4;
+  // Lines
+  DISJOINT = 5;
+  // Lines and point
+  HEXAGON = 6;
+  // Cell
+  SQUARE = 7;
+  STAR = 8;
+  TETRIS = 9;
+  ERROR = 10;
+  TRIANGLE = 11;
+}
+enum Color {
+  UNKNOWN = 0;
+  BLACK = 1;
+  WHITE = 2;
+  CYAN = 3;
+  MAGENTA = 4;
+  YELLOW = 5;
+  RED = 6;
+  GREEN = 7;
+  BLUE = 8;
+  ORANGE = 9;
+}
+enum SymmetryType {
+  UNKNOWN = 0;
+  NONE = 1;
+  HORIZONTAL = 2;
+  VERTICAL = 3;
+  ROTATIONAL = 4;
+}
+message Storage {
+  int32 width = 1;
+  repeated Entity entity = 2;
+  optional SymmetryType symmetry = 3;
+}
+// Non-wire enums.
+enum DrawType {
+  UNKNOWN = 0;
+  CELL = 1;
+  POINT = 2;
+  HLINE = 3;
+  VLINE = 4;
+}
+enum SegmentType {
+  UNKNOWN = 0;
+  START = 1;
+  MIDDLE = 2;
+  END = 3;
+}

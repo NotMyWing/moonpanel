@@ -833,9 +833,8 @@ return class Tile extends TileShared
         @wirePortsNames = {}
         @wirePortsTypes = {}
 
-        for j = 1, height + 1
-            for i = 1, width + 1
-                int = (@elements.intersections[j] or {})[i]
+        for _, row in pairs @elements.intersections
+            for _, int in pairs row
                 if int and int.entity and int.entity.type == "Exit"                     
                     x = string.char string.byte("A") + int.x - 1
                     y = string.char string.byte("A") + int.y - 1

@@ -202,6 +202,9 @@ new Promise((resolve, reject) => {
     code += "\t}\n"
 
     code += "\n\ttile:setup({\n"
+    if (data.id) {
+        code += "\t\ttitle = \"\\\"" + headers.title.replace("\"", "'") + "\\\" by " + headers.creator.replace("\"", "'") + "\",\n";
+    }
     code += "\t\tcells = cells,\n"
     code += "\t\tvpaths = vpaths,\n"
     code += "\t\thpaths = hpaths,\n"

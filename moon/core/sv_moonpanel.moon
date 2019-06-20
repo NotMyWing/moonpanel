@@ -835,7 +835,12 @@ return class Tile extends TileShared
         maxDim          = math.max width, height
         resolution      = DEFAULT_RESOLUTIONS[maxDim] or DEFAULTEST_RESOLUTION
         barWidth        = @tileData.tile.barWidth or resolution.barWidth
-        innerZoneLength = math.ceil screenWidth * (@tileData.tile.innerScreenRatio or resolution.innerScreenRatio)
+
+        isr             = @tileData.tile.innerScreenRatio or resolution.innerScreenRatio
+        if (tileData.title)
+            isr         = math.min isr, 0.9
+
+        innerZoneLength = math.ceil screenWidth * (isr)
         barLength       = math.floor (innerZoneLength - (barWidth * (maxDim + 1))) / maxDim
 
         tileData.dimensions = {

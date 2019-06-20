@@ -72,6 +72,13 @@ return class Tile extends TileShared
         width = @tileData.dimensions.width
         height = @tileData.dimensions.height
 
+        if @tileData.title
+            bg = @colors.background
+            render.setColor Color 255 - bg[1], 255 - bg[2], 255 - bg[3]
+            render.setFont @titleFont
+            render.drawSimpleText @tileData.dimensions.screenWidth / 2, 
+                (@tileData.dimensions.offsetV) / 2, @tileData.title, 1, 1
+
         grayOut = @tileData.colors.cell or @tileData.colors.background
         for j = 1, height
             for i = 1, width
@@ -394,6 +401,8 @@ return class Tile extends TileShared
                 @cursorData.cursorPos.y = newY * 2
 
     new: () =>
+        @titleFont = render.createFont "Roboto", 70, 500, true, false, false, false, false, false
+
         render.createRenderTarget "foreground"
         render.createRenderTarget "background"
         hook.add "render", "", () ->

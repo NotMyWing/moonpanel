@@ -1,0 +1,116 @@
+--@name sun9
+--@include moonpanel/core/moonpanel.txt
+--
+-- AUTOMATICALLY DOWNLOADED & TRANSPILED BY MOONPANEL DOWNLOADER
+--
+
+tile = require "moonpanel/core/moonpanel.txt"
+
+if SERVER then
+	cells = {
+		{
+			type = "Sun",
+			x = 1,
+			y = 1,
+			attributes = {
+				color = 9,
+			}
+		},
+		{
+			type = "Sun",
+			x = 1,
+			y = 2,
+			attributes = {
+				color = 9,
+			}
+		},
+		{
+			type = "Sun",
+			x = 1,
+			y = 3,
+			attributes = {
+				color = 9,
+			}
+		},
+		{
+			type = "Sun",
+			x = 2,
+			y = 3,
+			attributes = {
+				color = 9,
+			}
+		},
+		{
+			type = "Sun",
+			x = 4,
+			y = 1,
+			attributes = {
+				color = 9,
+			}
+		},
+		{
+			type = "Sun",
+			x = 4,
+			y = 2,
+			attributes = {
+				color = 9,
+			}
+		},
+		{
+			type = "Sun",
+			x = 4,
+			y = 3,
+			attributes = {
+				color = 9,
+			}
+		},
+		{
+			type = "Sun",
+			x = 4,
+			y = 4,
+			attributes = {
+				color = 9,
+			}
+		},
+	}
+
+	intersections = {
+		{
+			type = "Exit",
+			x = 3,
+			y = 1,
+		},
+		{
+			type = "Entrance",
+			x = 3,
+			y = 5,
+		},
+	}
+
+	vpaths = {
+	}
+
+	hpaths = {
+	}
+
+	tile:setup({
+		cells = cells,
+		vpaths = vpaths,
+		hpaths = hpaths,
+		intersections = intersections,
+		tile = {
+			width = 4,
+			height = 4,
+			innerScreenRatio = 0.825,
+			barWidth = 45
+		},
+		colors = {
+			solved = Color(220, 160, 0),
+			cell = Color(75, 80, 100),
+			background = Color(70, 70, 100),
+			vignette = Color(0, 0, 0, 16),
+			untraced = Color(10, 10, 40),
+			traced = Color(220, 220, 220)
+		}
+	})
+end

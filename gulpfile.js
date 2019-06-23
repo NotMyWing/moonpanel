@@ -31,7 +31,7 @@ const _compileMoonScript = () => through2.obj((file, _, cb) => {
 		moonc.on('close', () => {
 			if (stderr) cb(stderr);
 			else {
-				file.path = file.path.substr(0, file.path.lastIndexOf('.')) + '.txt';
+				file.path = file.path.substr(0, file.path.lastIndexOf('.')) + '.lua';
 				// file.contents = Buffer.from(header + luamin.minify(stdout));
 				file.contents = Buffer.from(header + stdout);
 				cb(null, file);
@@ -51,20 +51,20 @@ const _moveLuaFiles = () => through2.obj((file, _, cb) => {
 		}
 
 		file.contents = Buffer.from(header + luamin.minify(file.contents.toString()));
-		file.path = file.path.substr(0, file.path.lastIndexOf('.')) + '.txt';
+		file.path = file.path.substr(0, file.path.lastIndexOf('.')) + '.lua';
 		cb(null, file);
 	}
 });
 
 function moon() {
-	del(['moonpanel/**/*']).then(() => {
+	del(['lu/**/*']).then(() => {
 		src('moon/**/*.lua')
 			.pipe(_moveLuaFiles())
-			.pipe(dest('moonpanel'));
+			.pipe(dest('lua'));
 	});
 	return src('moon/**/*.moon')
 		.pipe(_compileMoonScript())
-		.pipe(dest('moonpanel'));
+		.pipe(dest('lua'));
 }
 
 function _watch() {

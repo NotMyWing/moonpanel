@@ -10,8 +10,15 @@ SOUND_FOCUS_OFF = Sound "moonpanel/focus_off.ogg"
 
 FOCUSING_TIME = 0.6
 
-Moonpanel = Moonpanel or {}
-export Moonpanel
+export MOONPANEL_ENTITY_GRAPHICS = {
+    [MOONPANEL_ENTITY_TYPES.HEXAGON]: (Material "moonpanel/hexagon.png", "noclamp smooth")
+    [MOONPANEL_ENTITY_TYPES.SUN]: (Material "moonpanel/sun.png", "noclamp smooth")
+    [MOONPANEL_ENTITY_TYPES.TRIANGLE]: (Material "moonpanel/triangle.png", "noclamp smooth")
+    [MOONPANEL_ENTITY_TYPES.COLOR]: (Material "moonpanel/color.png", "noclamp smooth") 
+    [MOONPANEL_ENTITY_TYPES.ERASER]: (Material "moonpanel/eraser.png", "noclamp smooth")
+}
+
+export Moonpanel = Moonpanel or {}
 
 Moonpanel.sendMouseDeltas = (x, y) =>
     net.Start "TheMP Mouse Deltas"
@@ -32,6 +39,12 @@ Moonpanel.getControlledPanel = () =>
 Moonpanel.init = () =>
     @__initialized = true
 
+    if Moonpanel.editor
+        Moonpanel.editor\Remove!
+        Moonpanel.editor = nil
+
+    Moonpanel.editor or= vgui.CreateFromTable (include "moonpanel/editor/cl_editor.lua")
+
     LocalPlayer!\SetNW2VarProxy "TheMP Controlled Panel", (_, _, _, new) ->
         if @isFocused!
             gui.EnableScreenClicker not IsValid new
@@ -44,10 +57,15 @@ Moonpanel.init = () =>
 
         @__focustime = CurTime!
 
+    file.CreateDir "moonpanel"
+
 Moonpanel.isFocused = () =>
     return LocalPlayer!\GetNW2Bool "TheMP Focused"
 
 hook.Add "CreateMove", "TheMP Control", (cmd) ->
+    if Moonpanel.editor and Moonpanel.editor\IsVisible!
+        cmd\ClearButtons!
+
     if Moonpanel\isFocused!
         lastclick = Moonpanel.__nextclick or 0
         if CurTime! >= lastclick and input.WasMousePressed MOUSE_LEFT
@@ -65,9 +83,11 @@ hook.Add "CreateMove", "TheMP Control", (cmd) ->
 
 hook.Add "InputMouseApply", "TheMP FocusMode", (cmd, x, y) ->
     if Moonpanel\isFocused! 
-        if Moonpanel\getControlledPanel!
+        panel = Moonpanel\getControlledPanel!
+        if panel
             if x ~= 0 or y ~= 0
                 Moonpanel\sendMouseDeltas x, y
+                panel\ApplyDeltas x, y
             cmd\SetMouseX 0
             cmd\SetMouseY 0
             return true
@@ -79,7 +99,8 @@ hook.Add "HUDPaint", "TheMP Focus Draw", () ->
     scrh, scrw = ScrH!, ScrW!
 
     width = math.min scrw, scrh
-    width *= 0.03
+    width *= 0.035
+    width = math.floor width
 
     focus = Moonpanel\isFocused!
     alpha = clamp ((CurTime! - Moonpanel.__focustime) / FOCUSING_TIME), 0, 1
@@ -99,8 +120,23 @@ hook.Add "HUDPaint", "TheMP Focus Draw", () ->
 
     setAlpha 1
 
-hook.Add "Initialize", "TheMP Init", () ->
+hook.Add "InitPostEntity", "TheMP Init", () ->
     Moonpanel\init!
 
-if Moonpanel.__initialized
+net.Receive "TheMP Editor", () ->
+    Moonpanel.editor\Show! 
+    Moonpanel.editor\MakePopup!
+
+net.Receive "TheMP EditorData", () ->
+    data = "{}"
+
+    if Moonpanel.editor
+        data = util.Compress util.TableToJSON Moonpanel.editor\Serialize!
+
+    net.Start "TheMP EditorData"
+    net.WriteUInt #data, 32
+    net.WriteData data, #data
+    net.SendToServer!
+ 
+if Moonpanel.__initialized or true
     Moonpanel\init!

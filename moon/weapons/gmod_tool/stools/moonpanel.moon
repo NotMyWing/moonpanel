@@ -91,9 +91,21 @@ TOOL.LeftClick = (trace) =>
     undo.SetPlayer(ply)
     undo.Finish()
 
+	success = (data) ->
+		PrintTable data
+		sf\SetupData data
+
+	err = () ->
+		print "err"
+
+	Moonpanel\requestEditorConfig @GetOwner!, success, err
+
     return true
 
 TOOL.RightClick = (trace) =>
+	if SERVER
+		net.Start "TheMP Editor"
+		net.Send @GetOwner!
 
 TOOL.Reload = (trace) =>
 

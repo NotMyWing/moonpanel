@@ -47,7 +47,10 @@ ENT.Initialize = () =>
 
 	@SetBackgroundColor 80, 77, 255, 255
 
+import SetDrawColor, DrawRect from surface
+
 ENT.RenderScreen = () =>
+	SetDrawColor 0, 128, 255, 255
 
 ENT.Draw = () =>
 	@DrawModel!
@@ -57,6 +60,11 @@ ENT.SetBackgroundColor = (r, g, b, a) =>
 	@ScreenQuad[5] = Color r, g, b, (math.max a, 1)
 
 writez = Material("engine/writez")
+
+fn = (self) ->
+	self.RenderScreen!
+
+ENT.DrawBackground = () =>
 
 ENT.DrawTranslucent = () =>
 	@DrawModel()
@@ -93,7 +101,7 @@ ENT.DrawTranslucent = () =>
     render.PushFilterMag TEXFILTER.ANISOTROPIC
     render.PushFilterMin TEXFILTER.ANISOTROPIC
 
-    @RenderScreen!
+    xpcall fn, print, @
 
     render.PopFilterMag!
     render.PopFilterMin!
@@ -140,6 +148,10 @@ ENT.GetCursorPos = () =>
 
 ENT.GetResolution = () =>
 	return 512 / @Aspect, 512
+
+ENT.ClientThink = () =>
+
+ENT.ClientTickrateThink = () =>
 
 ENT.Monitor_Offsets = {
 	["models//cheeze/pcb/pcb4.mdl"]: {

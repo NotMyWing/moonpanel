@@ -1,5 +1,3 @@
-AddCSLuaFile "cl_init.lua"
-AddCSLuaFile "shared.lua"
 include "shared.lua"
 
 SOUND_PANEL_ABORT = Sound "moonpanel/panel_abort_tracing.ogg"
@@ -20,6 +18,9 @@ ENT.PreEntityCopy = () =>
 
 ENT.PostEntityPaste = (ply, ent, CreatedEntities) =>
 
+ENT.SetupData = (data) =>
+	PrintTable data
+
 ENT.StartPuzzle = (ply, x, y) =>
 	if IsValid @activeUser
 		return false
@@ -27,7 +28,8 @@ ENT.StartPuzzle = (ply, x, y) =>
 	@activeUser = ply
 
 	@EmitSound SOUND_PANEL_START
-	@__nextscint = CurTime! + 2
+	@__scintPower = 1
+	@__nextscint = CurTime! + 0.75
 	return true
 
 ENT.FinishPuzzle = () =>
@@ -37,12 +39,15 @@ ENT.FinishPuzzle = () =>
 	@activeUser = nil
 	@EmitSound SOUND_PANEL_ABORT
 
-ENT.Think = () =>
+ENT.ServerThink = () =>
 	if @activeUser
-		if CurTime! >= @__nextscint
-			@EmitSound SOUND_PANEL_SCINT
+		if @__scintPower >= 0.15 and CurTime! >= @__nextscint
+			@EmitSound SOUND_PANEL_SCINT, 75, 100, @__scintPower
 			@__nextscint = CurTime! + 2
+			@__scintPower *= 0.75
 		
 	if @activeUser
 		if @activeUser\GetNW2Entity("TheMP Controlled Panel") ~= @
 			@FinishPuzzle!
+
+ENT.ServerTickrateThink = () =>

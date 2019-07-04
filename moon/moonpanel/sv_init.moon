@@ -1,3 +1,26 @@
+AddCSLuaFile "moonpanel/cl_init.lua"
+AddCSLuaFile "moonpanel/shared.lua"
+
+AddCSLuaFile "moonpanel/editor/cl_editor.lua"
+AddCSLuaFile "moonpanel/editor/vgui_panel.lua"
+AddCSLuaFile "moonpanel/editor/vgui_cell.lua"
+AddCSLuaFile "moonpanel/editor/vgui_vpath.lua"
+AddCSLuaFile "moonpanel/editor/vgui_hpath.lua"
+AddCSLuaFile "moonpanel/editor/vgui_intersection.lua"
+AddCSLuaFile "moonpanel/editor/vgui_polyoeditor.lua"
+AddCSLuaFile "moonpanel/editor/vgui_polyorenderer.lua"
+AddCSLuaFile "moonpanel/editor/vgui_circlyslider.lua"
+
+AddCSLuaFile "entities/moonpanel/shared.lua"
+AddCSLuaFile "entities/moonpanel/cl_init.lua"
+
+util.AddNetworkString "TheMP EditorData"
+
+util.AddNetworkString "TheMP Editor"
+util.AddNetworkString "TheMP Focus"
+util.AddNetworkString "TheMP Mouse Deltas"
+util.AddNetworkString "TheMP Request Control"
+
 export Moonpanel = {}
 
 Moonpanel.setFocused = (player, state, force) =>
@@ -16,24 +39,37 @@ Moonpanel.setFocused = (player, state, force) =>
                 player\SetNW2Entity "TheMP Controlled Panel", nil
                 player\SelectWeapon player.themp_oldweapon or "none"
                 if player.themp_givenhands
-                    player.themp_givenhands = false
+                    player.themp_givenhands = nil
                     player\StripWeapon "none"
 
         player\SetNW2Bool "TheMP Focused", state
 
         player.themp_lastfocuschange = CurTime! + 0.75
 
-Moonpanel.requestControl = (ply, ent, x, y) =>
+Moonpanel.isFocused = (ply) =>
+    return ply\GetNW2Bool "TheMP Focused"
+
+Moonpanel.getControlledPanel = (ply) =>
+    return ply\GetNW2Entity "TheMP Controlled Panel" 
+
+Moonpanel.requestControl = (ply, ent, x, y, force) =>
+    if (ply.themp_nextrequest or 0) > CurTime!
+        return
+
     if ply\GetNW2Entity("TheMP Controlled Panel") == ent
+        ply.themp_nextrequest = CurTime! + 0.25
         ent\FinishPuzzle x, y
         ply\SetNW2Entity "TheMP Controlled Panel", nil
     else
+        ply.themp_nextrequest = CurTime! + 0.25
         if ent\StartPuzzle ply, x, y
             ply\SetNW2Entity "TheMP Controlled Panel", ent
 
 hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
     if key == IN_USE
         Moonpanel\setFocused ply, false
+    if key == IN_ATTACK and (Moonpanel\isFocused ply) and IsValid Moonpanel\getControlledPanel ply
+        Moonpanel\requestControl ply, (Moonpanel\getControlledPanel ply), x, y
 
 hook.Add "Think", "TheMP Think", () ->
     for k, v in pairs player.GetAll!
@@ -54,8 +90,57 @@ net.Receive "TheMP Request Control", (len, ply) ->
     Moonpanel\requestControl ply, ent, x, y
 
 net.Receive "TheMP Mouse Deltas", (len, ply) ->
-    if IsValid ply\GetNW2Entity("TheMP Controlled Panel")
+    panel = ply\GetNW2Entity("TheMP Controlled Panel")
+    if IsValid panel
         x = net.ReadFloat!
         y = net.ReadFloat!
 
-        print x, y
+        panel\ApplyDeltas x, y
+
+pendingEditorData = {}
+
+counter = 1
+Moonpanel.requestEditorConfig = (ply, callback, errorcallback) =>
+    pending = {
+        player: ply
+        callback: callback
+        timer: "TheMP RemovePending #{tostring counter}"
+    }
+    pendingEditorData[#pendingEditorData + 1] = pending
+
+    counter = (counter % 10000) + 1
+
+    net.Start "TheMP EditorData"
+    net.Send ply
+    
+    timer.Create pending.timer, 4, 1, () ->
+        errorcallback!
+        for i = 1, #pendingEditorData
+            if pendingEditorData[i] == pending
+                table.remove pendingEditorData, i
+                break
+
+net.Receive "TheMP EditorData", (len, ply) ->
+    pending = nil
+    for k, v in pairs pendingEditorData
+        if v.player == ply
+            pending = v
+            break
+
+    if not pending
+        return
+
+    for i = 1, #pendingEditorData
+        if pendingEditorData[i] == pending
+            table.remove pendingEditorData, i
+            break
+
+    timer.Remove pending.timer
+
+    length = net.ReadUInt 32
+    data = net.ReadData length
+
+    data = util.JSONToTable((util.Decompress data) or "{}") or {}
+
+    pending.callback data
+    

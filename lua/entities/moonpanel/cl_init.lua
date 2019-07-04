@@ -40,7 +40,14 @@ ENT.Initialize = function(self)
   }
   return self:SetBackgroundColor(80, 77, 255, 255)
 end
-ENT.RenderScreen = function(self) end
+local SetDrawColor, DrawRect
+do
+  local _obj_0 = surface
+  SetDrawColor, DrawRect = _obj_0.SetDrawColor, _obj_0.DrawRect
+end
+ENT.RenderScreen = function(self)
+  return SetDrawColor(0, 128, 255, 255)
+end
 ENT.Draw = function(self)
   return self:DrawModel()
 end
@@ -48,6 +55,11 @@ ENT.SetBackgroundColor = function(self, r, g, b, a)
   self.ScreenQuad[5] = Color(r, g, b, (math.max(a, 1)))
 end
 local writez = Material("engine/writez")
+local fn
+fn = function(self)
+  return self.RenderScreen()
+end
+ENT.DrawBackground = function(self) end
 ENT.DrawTranslucent = function(self)
   self:DrawModel()
   if not self.ScreenMatrix or halo.RenderedEntity() == self then
@@ -74,7 +86,7 @@ ENT.DrawTranslucent = function(self)
   end
   render.PushFilterMag(TEXFILTER.ANISOTROPIC)
   render.PushFilterMin(TEXFILTER.ANISOTROPIC)
-  self:RenderScreen()
+  xpcall(fn, print, self)
   render.PopFilterMag()
   render.PopFilterMin()
   render.SetStencilEnable(false)
@@ -110,6 +122,8 @@ end
 ENT.GetResolution = function(self)
   return 512 / self.Aspect, 512
 end
+ENT.ClientThink = function(self) end
+ENT.ClientTickrateThink = function(self) end
 ENT.Monitor_Offsets = {
   ["models//cheeze/pcb/pcb4.mdl"] = {
     Name = "pcb4.mdl",

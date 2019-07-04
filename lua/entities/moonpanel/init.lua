@@ -1,5 +1,3 @@
-AddCSLuaFile("cl_init.lua")
-AddCSLuaFile("shared.lua")
 include("shared.lua")
 local SOUND_PANEL_ABORT = Sound("moonpanel/panel_abort_tracing.ogg")
 local SOUND_PANEL_START = Sound("moonpanel/panel_start_tracing.ogg")
@@ -16,13 +14,17 @@ ENT.Use = function(self, activator)
 end
 ENT.PreEntityCopy = function(self) end
 ENT.PostEntityPaste = function(self, ply, ent, CreatedEntities) end
+ENT.SetupData = function(self, data)
+  return PrintTable(data)
+end
 ENT.StartPuzzle = function(self, ply, x, y)
   if IsValid(self.activeUser) then
     return false
   end
   self.activeUser = ply
   self:EmitSound(SOUND_PANEL_START)
-  self.__nextscint = CurTime() + 2
+  self.__scintPower = 1
+  self.__nextscint = CurTime() + 0.75
   return true
 end
 ENT.FinishPuzzle = function(self)
@@ -32,11 +34,12 @@ ENT.FinishPuzzle = function(self)
   self.activeUser = nil
   return self:EmitSound(SOUND_PANEL_ABORT)
 end
-ENT.Think = function(self)
+ENT.ServerThink = function(self)
   if self.activeUser then
-    if CurTime() >= self.__nextscint then
-      self:EmitSound(SOUND_PANEL_SCINT)
+    if self.__scintPower >= 0.15 and CurTime() >= self.__nextscint then
+      self:EmitSound(SOUND_PANEL_SCINT, 75, 100, self.__scintPower)
       self.__nextscint = CurTime() + 2
+      self.__scintPower = self.__scintPower * 0.75
     end
   end
   if self.activeUser then
@@ -45,3 +48,4 @@ ENT.Think = function(self)
     end
   end
 end
+ENT.ServerTickrateThink = function(self) end

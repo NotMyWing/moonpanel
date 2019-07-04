@@ -99,9 +99,24 @@ TOOL.LeftClick = function(self, trace)
   end
   undo.SetPlayer(ply)
   undo.Finish()
+  local success
+  success = function(data)
+    PrintTable(data)
+    return sf:SetupData(data)
+  end
+  local err
+  err = function()
+    return print("err")
+  end
+  Moonpanel:requestEditorConfig(self:GetOwner(), success, err)
   return true
 end
-TOOL.RightClick = function(self, trace) end
+TOOL.RightClick = function(self, trace)
+  if SERVER then
+    net.Start("TheMP Editor")
+    return net.Send(self:GetOwner())
+  end
+end
 TOOL.Reload = function(self, trace) end
 TOOL.DrawHUD = function(self) end
 TOOL.Think = function(self)

@@ -1,3 +1,6 @@
+_moonpanel = Moonpanel or {}
+export Moonpanel = _moonpanel
+
 export MOONPANEL_COLOR_BLACK   = 1
 export MOONPANEL_COLOR_WHITE   = 2
 export MOONPANEL_COLOR_CYAN    = 3
@@ -88,3 +91,69 @@ export MOONPANEL_DEFAULTEST_RESOLUTION = {
     innerScreenRatio: 0.875
     barWidth: 0.025
 }
+
+net.Receive "TheMP EditorData", (len, ply) ->
+    pending = nil
+    if SERVER
+        pendingEditorData = Moonpanel.pendingEditorData
+
+        for k, v in pairs pendingEditorData
+            if v.player == ply
+                pending = v
+                break
+
+        if not pending
+            return
+
+        for i = 1, #pendingEditorData
+            if pendingEditorData[i] == pending
+                table.remove pendingEditorData, i
+                break
+
+        timer.Remove pending.timer
+
+    length = net.ReadUInt 32
+    raw = net.ReadData length
+
+    if SERVER
+        pending.callback raw, length
+    else
+        data = util.JSONToTable((util.Decompress raw) or "{}") or {}
+
+        ent = net.ReadEntity!
+
+        if (IsValid ent) and ent.SetupData
+            ent\SetupData data
+
+---------------------------
+-- Moonpanel definitions --
+---------------------------
+
+Moonpanel.calculateDimensionsShared = (data) =>
+    cellsW = data.cellsW or 2
+    cellsH = data.cellsH or 2
+
+    w, h = data.screenW, data.screenH
+
+    maxCellDimension = math.max cellsW, cellsH
+    minCellDimension = math.min cellsW, cellsH
+
+    resolution = MOONPANEL_DEFAULT_RESOLUTIONS[maxCellDimension] or MOONPANEL_DEFAULTEST_RESOLUTION
+
+    minPanelDimension = (math.min w, h) * (data.innerScreenRatio or resolution.innerScreenRatio)
+
+    barWidth = (data.barWidth or resolution.barWidth) * minPanelDimension
+
+    barLength = math.ceil (minPanelDimension - (barWidth * (maxCellDimension + 1))) / maxCellDimension
+    barLength = math.ceil barLength - (barWidth / (math.max cellsW, cellsH))
+    barLength = math.min barLength, minPanelDimension * (data.maxBarLength or 0.25)
+
+    innerHeight = barWidth * (cellsW + 1) + barLength * (cellsW)
+    innerWidth = barWidth * (cellsH + 1) + barLength * (cellsH)
+
+    return {
+        barWidth: math.floor barWidth
+        barLength: math.floor barLength
+        innerWidth: math.floor innerWidth
+        innerHeight: math.floor innerHeight
+    }

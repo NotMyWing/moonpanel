@@ -12,7 +12,7 @@ ENT.Initialize = () =>
 		size = maxs-mins
 		info = {
             Name: ""
-            RS: (size.y-1) / 512
+            RS: (size.y-1) / @ScreenSize
             RatioX: size.y / size.x
             offset: @OBBCenter! + Vector 0, 0, maxs.z - 0.24
             rot: Angle 0, 0, 180
@@ -28,7 +28,7 @@ ENT.Initialize = () =>
 	rotation\SetAngles          info.rot
 	translation\SetTranslation  info.offset
 	translation2\SetTranslation Vector -256 / info.RatioX,  -256,       0
-	scale\SetScale              Vector info.RS,             info.RS,    info.RS
+	scale\SetScale              Vector info.RS,             info.RS ,    info.RS
 
 	@ScreenMatrix = translation * rotation * scale * translation2
 	@ScreenInfo = info
@@ -36,7 +36,7 @@ ENT.Initialize = () =>
 	@Scale = info.RS
 	@Origin = info.offset
 
-	w, h = 512 / @Aspect, 512
+	w, h = @ScreenSize / @Aspect, @ScreenSize
 	@ScreenQuad = {
         Vector(0,0,0)
         Vector(w,0,0)
@@ -47,14 +47,20 @@ ENT.Initialize = () =>
 
 	@SetBackgroundColor 80, 77, 255, 255
 
-import SetDrawColor, DrawRect from surface
-
-ENT.RenderScreen = () =>
-	SetDrawColor 0, 128, 255, 255
+	index = tostring @EntIndex!
+	@rendertargets = {
+		foreground: {
+			rt: GetRenderTarget "TheMPFG#{index}", @ScreenSize, @ScreenSize, true
+			render: @DrawForeground
+		}
+		background: {
+			rt: GetRenderTarget "TheMPBG#{index}", @ScreenSize, @ScreenSize, false
+			render: @DrawBackground
+		}
+	}
 
 ENT.Draw = () =>
 	@DrawModel!
-	--print @GetCursorPos!
 
 ENT.SetBackgroundColor = (r, g, b, a) =>
 	@ScreenQuad[5] = Color r, g, b, (math.max a, 1)
@@ -62,11 +68,10 @@ ENT.SetBackgroundColor = (r, g, b, a) =>
 writez = Material("engine/writez")
 
 fn = (self) ->
-	self.RenderScreen!
-
-ENT.DrawBackground = () =>
+	self\RenderPanel!
 
 ENT.DrawTranslucent = () =>
+ENT.Draw = () =>
 	@DrawModel()
 
 	if not @ScreenMatrix or halo.RenderedEntity() == @
@@ -136,22 +141,77 @@ ENT.GetCursorPos = () =>
 
 	B = Normal\Dot(Pos-Start) / A
 	if (B >= 0)
-		w = 512 / screen.Aspect
+		w = @ScreenSize / screen.Aspect
 		HitPos = screen.Transform\GetInverseTR! * (Start + Dir * B)
 		x = HitPos.x / screen.Scale^2
 		y = HitPos.y / screen.Scale^2
-		if x < 0 or x > w or y < 0 or y > 512
+		if x < 0 or x > w or y < 0 or y > @ScreenSize
 			return nil
 		return x, y
 
 	return nil
 
 ENT.GetResolution = () =>
-	return 512 / @Aspect, 512
+	return @ScreenSize / @Aspect, @ScreenSize
 
 ENT.ClientThink = () =>
 
 ENT.ClientTickrateThink = () =>
+
+import SetDrawColor, DrawRect from surface
+import Clear, OverrideAlphaWriteEnable from render
+
+RT_Material = CreateMaterial "TheMP_RT", "UnlitGeneric", {
+	["$nolod"]: 1,
+	["$ignorez"]: 1,
+	["$vertexcolor"]: 1,
+	["$vertexalpha"]: 1
+}
+
+ENT.DrawBackground = () =>
+	Clear 0, 128, 255, 255, true, true
+	SetDrawColor 0, 255, 0, 255
+	DrawRect 64, 64, 256, 256
+
+ENT.DrawForeground = () =>
+	OverrideAlphaWriteEnable true, true
+	Clear 0, 0, 0, 0
+	SetDrawColor 255, 0, 0, 127
+	DrawRect 256 - 64, 256 - 64, 256, 256
+	OverrideAlphaWriteEnable false
+
+setRTTexture = (rt) ->
+	RT_Material\SetTexture "$basetexture", rt
+	surface.SetMaterial RT_Material
+	render.SetMaterial RT_Material
+
+ENT.RenderPanel = () =>
+	if not @rendertargets or not @calculatedDimensions
+		return
+
+	oldw, oldh = ScrW!, ScrH!
+	for k, v in pairs @rendertargets
+		if v.dirty ~= false and v.render
+			v.dirty = false
+
+			render.SetStencilEnable false
+			render.SetViewPort 0, 0, @ScreenSize, @ScreenSize
+			cam.Start2D!
+
+			render.PushRenderTarget v.rt
+			v.render @
+			render.PopRenderTarget!
+
+			cam.End2D!
+			render.SetViewPort 0, 0, oldw, oldh
+			render.SetStencilEnable true
+
+	SetDrawColor 255, 255, 255, 255
+	setRTTexture @rendertargets.background.rt
+	surface.DrawTexturedRect 0, 0, @ScreenSize, @ScreenSize
+
+	setRTTexture @rendertargets.foreground.rt
+	surface.DrawTexturedRect 0, 0, @ScreenSize, @ScreenSize
 
 ENT.Monitor_Offsets = {
 	["models//cheeze/pcb/pcb4.mdl"]: {

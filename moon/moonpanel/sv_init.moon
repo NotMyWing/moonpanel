@@ -8,20 +8,18 @@ AddCSLuaFile "moonpanel/editor/vgui_vpath.lua"
 AddCSLuaFile "moonpanel/editor/vgui_hpath.lua"
 AddCSLuaFile "moonpanel/editor/vgui_intersection.lua"
 AddCSLuaFile "moonpanel/editor/vgui_polyoeditor.lua"
-AddCSLuaFile "moonpanel/editor/vgui_polyorenderer.lua"
 AddCSLuaFile "moonpanel/editor/vgui_circlyslider.lua"
 
 AddCSLuaFile "entities/moonpanel/shared.lua"
 AddCSLuaFile "entities/moonpanel/cl_init.lua"
 
+util.AddNetworkString "TheMP EditorData Req"
 util.AddNetworkString "TheMP EditorData"
 
 util.AddNetworkString "TheMP Editor"
 util.AddNetworkString "TheMP Focus"
 util.AddNetworkString "TheMP Mouse Deltas"
 util.AddNetworkString "TheMP Request Control"
-
-export Moonpanel = {}
 
 Moonpanel.setFocused = (player, state, force) =>
     time = player.themp_lastfocuschange or 0
@@ -65,6 +63,13 @@ Moonpanel.requestControl = (ply, ent, x, y, force) =>
         if ent\StartPuzzle ply, x, y
             ply\SetNW2Entity "TheMP Controlled Panel", ent
 
+Moonpanel.broadcastData = (raw, length, ent) =>
+    net.Start "TheMP EditorData"
+    net.WriteUInt length, 32
+    net.WriteData raw, length
+    net.WriteEntity ent
+    net.Broadcast!
+
 hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
     if key == IN_USE
         Moonpanel\setFocused ply, false
@@ -97,7 +102,8 @@ net.Receive "TheMP Mouse Deltas", (len, ply) ->
 
         panel\ApplyDeltas x, y
 
-pendingEditorData = {}
+Moonpanel.pendingEditorData = {}
+pendingEditorData = Moonpanel.pendingEditorData
 
 counter = 1
 Moonpanel.requestEditorConfig = (ply, callback, errorcallback) =>
@@ -110,7 +116,7 @@ Moonpanel.requestEditorConfig = (ply, callback, errorcallback) =>
 
     counter = (counter % 10000) + 1
 
-    net.Start "TheMP EditorData"
+    net.Start "TheMP EditorData Req"
     net.Send ply
     
     timer.Create pending.timer, 4, 1, () ->
@@ -120,27 +126,3 @@ Moonpanel.requestEditorConfig = (ply, callback, errorcallback) =>
                 table.remove pendingEditorData, i
                 break
 
-net.Receive "TheMP EditorData", (len, ply) ->
-    pending = nil
-    for k, v in pairs pendingEditorData
-        if v.player == ply
-            pending = v
-            break
-
-    if not pending
-        return
-
-    for i = 1, #pendingEditorData
-        if pendingEditorData[i] == pending
-            table.remove pendingEditorData, i
-            break
-
-    timer.Remove pending.timer
-
-    length = net.ReadUInt 32
-    data = net.ReadData length
-
-    data = util.JSONToTable((util.Decompress data) or "{}") or {}
-
-    pending.callback data
-    

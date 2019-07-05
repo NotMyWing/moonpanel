@@ -20,34 +20,31 @@ panel.Init = () =>
         if not w or not h or not @background or not @data or not @rows or not @puzzlePanel
             return
 
-        maxCellDimension = math.max @data.w, @data.h
-        minCellDimension = math.min @data.w, @data.h 
+        dims = Moonpanel\calculateDimensionsShared {
+            screenW: w
+            screenH: h
+            cellsW: @data.w
+            cellsH: @data.h
+            innerScreenRatio: @data.innerScreenRatio
+            maxBarLength: @data.maxBarLength
+            barWidth: @data.barWidth
+        }
 
-        resolution = MOONPANEL_DEFAULT_RESOLUTIONS[maxCellDimension] or MOONPANEL_DEFAULTEST_RESOLUTION
-
-        minPanelDimension = (math.min w, h) * (@data.innerScreenRatio or resolution.innerScreenRatio)
-
-        barWidth = (@data.barWidth or resolution.barWidth) * minPanelDimension
-
-        barLength = math.ceil (minPanelDimension - (barWidth * (maxCellDimension + 1))) / maxCellDimension
-        barLength = math.ceil barLength - (barWidth / (math.max @data.w, @data.h))
-        barLength = math.min barLength, minPanelDimension * (@data.maxBarLength or 0.25)
-
-        @puzzlePanel\SetWide barWidth * (@data.w + 1) + barLength * (@data.w)
-        @puzzlePanel\SetTall barWidth * (@data.h + 1) + barLength * (@data.h)
+        @puzzlePanel\SetWide dims.innerWidth
+        @puzzlePanel\SetTall dims.innerHeight
 
         @puzzlePanel\Center!
 
         for j, row in pairs @rows
             if j % 2 == 0
-                row\SetTall barLength
+                row\SetTall dims.barLength
             else
-                row\SetTall barWidth
+                row\SetTall dims.barWidth
             for i, child in pairs row\GetChildren!
                 if i % 2 == 0
-                    child\SetWide barLength
+                    child\SetWide dims.barLength
                 else
-                    child\SetWide barWidth
+                    child\SetWide dims.barWidth
 
         for j, row in pairs @rows
             row\InvalidateLayout!

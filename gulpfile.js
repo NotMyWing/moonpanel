@@ -3,10 +3,7 @@ const { spawn } = require('child_process');
 const through2 = require('through2');
 const luamin = require('luamin');
 const del = require('del');
-
-function clean() {
-	return del(['lua/**/*']);
-}
+const gulp = require('gulp');
 
 const _compileMoonScript = () => through2.obj((file, _, cb) => {
 	if (file.isBuffer()) {
@@ -56,19 +53,26 @@ const _moveLuaFiles = () => through2.obj((file, _, cb) => {
 	}
 });
 
-function moon() {
-	del(['lu/**/*']).then(() => {
-		src('moon/**/*.lua')
-			.pipe(_moveLuaFiles())
-			.pipe(dest('lua'));
+function rmrf(cb) {
+	del(['lua/**/*']).then(() => {
+		cb();
 	});
+}
+
+function lua() {
+	return src('moon/**/*.lua')
+		.pipe(_moveLuaFiles())
+		.pipe(dest('lua'));
+}
+
+function moon() {
 	return src('moon/**/*.moon')
 		.pipe(_compileMoonScript())
 		.pipe(dest('lua'));
 }
 
 function _watch() {
-	watch(['moon/**/*.moon'], moon);
+	return watch(['moon/**/*.lua', 'moon/**/*.moon'], gulp.series(lua, moon));
 }
 
 exports.moon = moon;

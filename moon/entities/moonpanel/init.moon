@@ -18,9 +18,6 @@ ENT.PreEntityCopy = () =>
 
 ENT.PostEntityPaste = (ply, ent, CreatedEntities) =>
 
-ENT.SetupData = (data) =>
-	PrintTable data
-
 ENT.StartPuzzle = (ply, x, y) =>
 	if IsValid @activeUser
 		return false

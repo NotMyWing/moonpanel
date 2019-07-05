@@ -5,8 +5,10 @@ if SERVER
 
     include "moonpanel/shared.lua"
     include "moonpanel/sv_init.lua"
+
+    return
 else
     include "moonpanel/shared.lua"
     include "moonpanel/cl_init.lua"
-    a=a
-    
+
+    return

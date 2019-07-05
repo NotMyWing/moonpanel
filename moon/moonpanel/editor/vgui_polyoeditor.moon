@@ -45,8 +45,7 @@ polyoeditor.Init = () =>
                 if @data
                     @data[j] or= {}
                     @data[j][i] = _self.checked
-                    print @data[j][i]
-            
+
             button.Paint = (w, h) =>
                 if not @checked
                     surface.SetAlphaMultiplier 0.1

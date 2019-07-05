@@ -91,9 +91,12 @@ TOOL.LeftClick = (trace) =>
     undo.SetPlayer(ply)
     undo.Finish()
 
-	success = (data) ->
-		PrintTable data
-		sf\SetupData data
+	success = (raw, length) ->
+		if IsValid sf
+			data = util.JSONToTable((util.Decompress raw) or "{}") or {}
+			sf\SetupData data
+			
+			Moonpanel\broadcastData raw, length, sf
 
 	err = () ->
 		print "err"
@@ -103,7 +106,7 @@ TOOL.LeftClick = (trace) =>
     return true
 
 TOOL.RightClick = (trace) =>
-	if SERVER
+	if SERVER 
 		net.Start "TheMP Editor"
 		net.Send @GetOwner!
 

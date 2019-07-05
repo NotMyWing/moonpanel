@@ -49,7 +49,7 @@ polyoeditor.Init = () =>
             button.Paint = (w, h) =>
                 if not @checked
                     surface.SetAlphaMultiplier 0.1
-                surface.SetDrawColor MOONPANEL_COLORS[MOONPANEL_COLOR_YELLOW]
+                surface.SetDrawColor Moonpanel.Colors[Moonpanel.Color.Yellow]
                 innerw = w * 0.85
                 innerh = h * 0.85
                 surface.DrawRect (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh

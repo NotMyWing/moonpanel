@@ -27,8 +27,8 @@ ENT.Initialize = () =>
 
 	rotation\SetAngles          info.rot
 	translation\SetTranslation  info.offset
-	translation2\SetTranslation Vector -256 / info.RatioX,  -256,       0
-	scale\SetScale              Vector info.RS,             info.RS ,    info.RS
+	translation2\SetTranslation Vector -512 / info.RatioX,  -512,       0
+	scale\SetScale              Vector info.RS / 2,             info.RS / 2,    info.RS / 2
 
 	@ScreenMatrix = translation * rotation * scale * translation2
 	@ScreenInfo = info
@@ -50,12 +50,16 @@ ENT.Initialize = () =>
 	index = tostring @EntIndex!
 	@rendertargets = {
 		foreground: {
-			rt: GetRenderTarget "TheMPFG#{index}", @ScreenSize, @ScreenSize, true
+			rt: GetRenderTarget "TheMPFG#{index}", @ScreenSize, @ScreenSize
 			render: @DrawForeground
 		}
 		background: {
-			rt: GetRenderTarget "TheMPBG#{index}", @ScreenSize, @ScreenSize, false
+			rt: GetRenderTarget "TheMPBG#{index}", @ScreenSize, @ScreenSize
 			render: @DrawBackground
+		}
+		trace: {
+			rt: GetRenderTarget "TheMPTrace#{index}", @ScreenSize, @ScreenSize
+			render: @DrawTrace
 		}
 	}
 
@@ -70,8 +74,8 @@ writez = Material("engine/writez")
 fn = (self) ->
 	self\RenderPanel!
 
-ENT.DrawTranslucent = () =>
 ENT.Draw = () =>
+ENT.DrawTranslucent = () =>
 	@DrawModel()
 
 	if not @ScreenMatrix or halo.RenderedEntity() == @
@@ -185,29 +189,71 @@ ENT.DrawBackground = () =>
 
 	for j = 1, cellsH
 		for i = 1, cellsW
-			cell = @elements.cells[i][j]
-			if cell
-				cell\render!
+			obj = @elements.cells[i][j]
+			if obj and not (obj.entity and obj.entity.overridesRender)
+				obj\render!
+			if obj and obj.entity and obj.entity.background
+				obj\renderEntity!
 
 	for j = 1, cellsH + 1
 		for i = 1, cellsW
-			hpath = @elements.hpaths[i][j]
-			if hpath
-				hpath\render!
+			obj = @elements.hpaths[i][j]
+			if obj and not (obj.entity and obj.entity.overridesRender)
+				obj\render!
+			if obj and obj.entity and obj.entity.background
+				obj\renderEntity!
 
 	for j = 1, cellsH
 		for i = 1, cellsW + 1
-			vpath = @elements.vpaths[i][j]
-			if vpath
-				vpath\render!
+			obj = @elements.vpaths[i][j]
+			if obj and not (obj.entity and obj.entity.overridesRender)
+				obj\render!
+			if obj and obj.entity and obj.entity.background
+				obj\renderEntity!
 
 	for j = 1, cellsH + 1
 		for i = 1, cellsW + 1
-			intersection = @elements.intersections[i][j]
-			if intersection
-				intersection\render!
+			obj = @elements.intersections[i][j]
+			if obj and not (obj.entity and obj.entity.overridesRender)
+				obj\render!
+			if obj and obj.entity and obj.entity.background
+				obj\renderEntity!
 
 ENT.DrawForeground = () =>
+	OverrideAlphaWriteEnable true, true
+	Clear 0, 0, 0, 0, true, true
+
+    cellsW = @tileData.Tile.Width
+    cellsH = @tileData.Tile.Height
+
+	for j = 1, cellsH
+		for i = 1, cellsW
+			obj = @elements.cells[i][j]
+			if obj and obj.entity and not obj.entity.background
+				print "drawing", obj.entity\getClassName!
+				obj\renderEntity!
+
+	for j = 1, cellsH + 1
+		for i = 1, cellsW
+			obj = @elements.hpaths[i][j]
+			if obj and obj.entity and not obj.entity.background
+				obj\renderEntity!
+
+	for j = 1, cellsH
+		for i = 1, cellsW + 1
+			obj = @elements.vpaths[i][j]
+			if obj and obj.entity and not obj.entity.background
+				obj\renderEntity!
+
+	for j = 1, cellsH + 1
+		for i = 1, cellsW + 1
+			obj = @elements.intersections[i][j]
+			if obj and obj.entity and not obj.entity.background
+				obj\renderEntity!
+
+	OverrideAlphaWriteEnable false
+
+ENT.DrawTrace = () =>
 	OverrideAlphaWriteEnable true, true
 	Clear 0, 0, 0, 0
 
@@ -231,6 +277,9 @@ ENT.RenderPanel = () =>
 			render.SetViewPort 0, 0, @ScreenSize, @ScreenSize
 			cam.Start2D!
 
+			draw.NoTexture!
+			render.SetColorMaterial!
+
 			render.PushRenderTarget v.rt
 			v.render @
 			render.PopRenderTarget!
@@ -239,12 +288,19 @@ ENT.RenderPanel = () =>
 			render.SetViewPort 0, 0, oldw, oldh
 			render.SetStencilEnable true
 
+	draw.NoTexture!
+	render.SetColorMaterial!
+
 	SetDrawColor 255, 255, 255, 255
 	setRTTexture @rendertargets.background.rt
 	surface.DrawTexturedRect 0, 0, @ScreenSize, @ScreenSize
 
 	setRTTexture @rendertargets.foreground.rt
 	surface.DrawTexturedRect 0, 0, @ScreenSize, @ScreenSize
+
+	setRTTexture @rendertargets.trace.rt
+	surface.DrawTexturedRect 0, 0, @ScreenSize, @ScreenSize
+	render.OverrideBlend false
 
 ENT.Monitor_Offsets = {
 	["models//cheeze/pcb/pcb4.mdl"]: {

@@ -1,16 +1,6 @@
 _moonpanel = Moonpanel or {}
 export Moonpanel = _moonpanel
 
-export MOONPANEL_COLOR_BLACK   = 1
-export MOONPANEL_COLOR_WHITE   = 2
-export MOONPANEL_COLOR_CYAN    = 3
-export MOONPANEL_COLOR_MAGENTA = 4
-export MOONPANEL_COLOR_YELLOW  = 5
-export MOONPANEL_COLOR_RED     = 6
-export MOONPANEL_COLOR_GREEN   = 7
-export MOONPANEL_COLOR_BLUE    = 8
-export MOONPANEL_COLOR_ORANGE  = 9
-
 export MOONPANEL_ENTITY_TYPES = {
     NONE: 0
     START: 1
@@ -32,18 +22,6 @@ export MOONPANEL_OBJECT_TYPES = {
     INTERSECTION: 4
 }
 
-export MOONPANEL_COLORS = {
-    Color 0, 0, 0 
-    Color 255, 255, 255
-    Color 0, 255, 255
-    Color 255, 0, 255
-    Color 255, 255, 0
-    Color 255, 0, 0
-    Color 0, 128, 0
-    Color 0, 0, 255
-    Color 255, 160, 0
-}
- 
 export MOONPANEL_DEFAULT_RESOLUTIONS = {
     {
         innerScreenRatio: 1
@@ -129,6 +107,30 @@ net.Receive "TheMP EditorData", (len, ply) ->
 -- Globals --
 -------------
 
+Moonpanel.Color = {
+    Black: 1
+    White: 2
+    Cyan: 3
+    Magenta: 4
+    Yellow: 5
+    Red: 6
+    Green: 7
+    Blue: 8
+    Orange: 9
+}
+
+Moonpanel.Colors = {
+    [Moonpanel.Color.Black]: Color 0, 0, 0 
+    [Moonpanel.Color.White]: Color 255, 255, 255
+    [Moonpanel.Color.Cyan]: Color 0, 255, 255
+    [Moonpanel.Color.Magenta]: Color 255, 0, 255
+    [Moonpanel.Color.Yellow]: Color 255, 255, 0
+    [Moonpanel.Color.Red]: Color 255, 0, 0
+    [Moonpanel.Color.Green]: Color 0, 128, 0
+    [Moonpanel.Color.Blue]: Color 0, 0, 255
+    [Moonpanel.Color.Orange]: Color 255, 160, 0
+}
+
 Moonpanel.DefaultColors = {
     Background: Color 80, 77, 255, 255
     Untraced: Color 40, 22, 186
@@ -141,6 +143,9 @@ Moonpanel.DefaultColors = {
 --------------
 
 include "moonpanel/panel/sh_elements.lua"
+include "moonpanel/panel/ents/sh_cell.lua"
+include "moonpanel/panel/ents/sh_intersection.lua"
+include "moonpanel/panel/ents/sh_path.lua"
  
 ---------------------------
 -- Moonpanel definitions --

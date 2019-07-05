@@ -10,7 +10,7 @@ ENT.Instructions    = ""
 ENT.Spawnable       = false
 
 ENT.TickRate        = 20
-ENT.ScreenSize      = 512
+ENT.ScreenSize      = 1024
 
 import Rect from Moonpanel
 
@@ -52,6 +52,11 @@ ENT.SetupData = (@tileData) =>
 
             @elements.cells[i][j] = cell
 
+            if @tileData.Cells and @tileData.Cells[j] and @tileData.Cells[j][i]
+                entDef = @tileData.Cells[j][i]
+                if Moonpanel.Entities.Cell[entDef.Type]
+                    cell.entity = Moonpanel.Entities.Cell[entDef.Type] cell, entDef.Attributes
+
     @elements.hpaths = {}
     for i = 1, cellsW
         @elements.hpaths[i] = {}
@@ -62,6 +67,11 @@ ENT.SetupData = (@tileData) =>
             hpath.bounds = Rect x, y, barLength, barWidth
 
             @elements.hpaths[i][j] = hpath
+
+            if @tileData.HPaths and @tileData.HPaths[j] and @tileData.HPaths[j][i]
+                entDef = @tileData.HPaths[j][i]
+                if Moonpanel.Entities.HPath[entDef.Type]
+                    hpath.entity = Moonpanel.Entities.HPath[entDef.Type] hpath, entDef.Attributes
 
     @elements.vpaths = {}
     for i = 1, cellsW + 1
@@ -74,6 +84,11 @@ ENT.SetupData = (@tileData) =>
 
             @elements.vpaths[i][j] = vpath
 
+            if @tileData.VPaths and @tileData.VPaths[j] and @tileData.VPaths[j][i]
+                entDef = @tileData.VPaths[j][i]
+                if Moonpanel.Entities.VPath[entDef.Type]
+                    vpath.entity = Moonpanel.Entities.VPath[entDef.Type] vpath, entDef.Attributes
+
     @elements.intersections = {}
     for i = 1, cellsW + 1
         @elements.intersections[i] = {}
@@ -84,6 +99,11 @@ ENT.SetupData = (@tileData) =>
             int.bounds = Rect x, y, barWidth, barWidth
 
             @elements.intersections[i][j] = int
+
+            if @tileData.Intersections and @tileData.Intersections[j] and @tileData.Intersections[j][i]
+                entDef = @tileData.Intersections[j][i]
+                if Moonpanel.Entities.Intersection[entDef.Type]
+                    int.entity = Moonpanel.Entities.Intersection[entDef.Type] int, entDef.Attributes
 
     if CLIENT
         @SetupDataClient!

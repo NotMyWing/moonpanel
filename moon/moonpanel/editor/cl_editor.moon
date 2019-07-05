@@ -792,7 +792,7 @@ editor.Init = () =>
 
     colorLayout = vgui.Create "DIconLayout", controlsPanel
     __colors = {}
-    for i, v in pairs MOONPANEL_COLORS
+    for i, v in pairs Moonpanel.Colors
         button = vgui.Create "DButton", colorLayout
         __colors[#__colors + 1] = button
         with button
@@ -812,7 +812,7 @@ editor.Init = () =>
 
                 innerw = w * 0.6
                 innerh = h * 0.6
-                draw.RoundedBox 8, (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh, MOONPANEL_COLORS[i]
+                draw.RoundedBox 8, (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh, Moonpanel.Colors[i]
             if i == 1
                 \DoClick!
 
@@ -856,7 +856,7 @@ editor.Init = () =>
 
             .Paint = (_self, w, h) ->
                 draw.RoundedBox 8, 0, 0, w, h, (_self.selected and sel or unsel)
-                color = MOONPANEL_COLORS[@selectedColor] or white 
+                color = Moonpanel.Colors[@selectedColor] or white 
                 v.render w, h, color, _self
             if i == 1
                 \DoClick!

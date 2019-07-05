@@ -55,6 +55,13 @@ class HPath extends Path
         @cachedBottom or= (@tile.elements.cells[@x] or EMPTY_TABLE)[@y]
         return @cachedBottom
 
+corners = {
+    [0]: Material "moonpanel/corner64/0.png"
+    [90]: Material "moonpanel/corner64/90.png"
+    [180]: Material "moonpanel/corner64/180.png"
+    [270]: Material "moonpanel/corner64/270.png"
+}
+
 class Intersection extends Element
     getLeft: =>
         @cachedLeft or= (@tile.elements.hpaths[@x - 1] or EMPTY_TABLE)[@y]
@@ -73,8 +80,18 @@ class Intersection extends Element
         return @cachedBottom
 
     render: =>
+        angle = (not @getLeft! and not @getTop!) and 0 or
+            (not @getRight! and not @getTop!) and 90 or
+            (not @getRight! and not @getBottom!) and 180 or
+            (not @getBottom! and not @getLeft!) and 270 or -1
+
         surface.SetDrawColor @tile.colors.untraced
-        surface.DrawRect @bounds.x, @bounds.y, @bounds.width, @bounds.height
+        if angle ~= -1
+            surface.SetMaterial corners[angle]
+            surface.DrawTexturedRect @bounds.x, @bounds.y, @bounds.width, @bounds.height
+            draw.NoTexture!
+        else
+            surface.DrawRect @bounds.x, @bounds.y, @bounds.width, @bounds.height
 
 class Cell extends Element
     getLeft: =>

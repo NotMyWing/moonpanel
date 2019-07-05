@@ -52,7 +52,7 @@ cell.RenderPolyo = (w, h) =>
             if data.shape[j] and data.shape[j][i]
                 x = offsetX + (i - 1) * spacing + (i - 1) * squareWidth 
                 y = offsetY + (j - 1) * spacing + (j - 1) * squareWidth 
-                draw.RoundedBox 4, x, y, squareWidth, squareWidth, MOONPANEL_COLORS[data.color]
+                draw.RoundedBox 4, x, y, squareWidth, squareWidth, Moonpanel.Colors[data.color]
     
     if data.shape.rotational
         cam.PopModelMatrix!
@@ -64,7 +64,7 @@ cell.Paint = (w, h) =>
         return
         
     if @attributes.color
-        surface.SetDrawColor MOONPANEL_COLORS[@attributes.color]
+        surface.SetDrawColor Moonpanel.Colors[@attributes.color]
     else
         surface.SetDrawColor white
 

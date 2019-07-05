@@ -2,6 +2,9 @@ AddCSLuaFile "moonpanel/cl_init.lua"
 AddCSLuaFile "moonpanel/shared.lua"
 
 AddCSLuaFile "moonpanel/panel/sh_elements.lua"
+AddCSLuaFile "moonpanel/panel/ents/sh_cell.lua"
+AddCSLuaFile "moonpanel/panel/ents/sh_path.lua"
+AddCSLuaFile "moonpanel/panel/ents/sh_intersection.lua"
 
 AddCSLuaFile "moonpanel/editor/cl_editor.lua"
 AddCSLuaFile "moonpanel/editor/vgui_panel.lua"

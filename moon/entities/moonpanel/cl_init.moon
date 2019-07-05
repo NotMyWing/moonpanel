@@ -187,37 +187,25 @@ ENT.DrawBackground = () =>
     cellsW = @tileData.Tile.Width
     cellsH = @tileData.Tile.Height
 
-	for j = 1, cellsH
-		for i = 1, cellsW
-			obj = @elements.cells[i][j]
-			if obj and not (obj.entity and obj.entity.overridesRender)
-				obj\render!
-			if obj and obj.entity and obj.entity.background
-				obj\renderEntity!
-
-	for j = 1, cellsH + 1
-		for i = 1, cellsW
-			obj = @elements.hpaths[i][j]
-			if obj and not (obj.entity and obj.entity.overridesRender)
-				obj\render!
-			if obj and obj.entity and obj.entity.background
-				obj\renderEntity!
-
-	for j = 1, cellsH
-		for i = 1, cellsW + 1
-			obj = @elements.vpaths[i][j]
-			if obj and not (obj.entity and obj.entity.overridesRender)
-				obj\render!
-			if obj and obj.entity and obj.entity.background
-				obj\renderEntity!
-
 	for j = 1, cellsH + 1
 		for i = 1, cellsW + 1
-			obj = @elements.intersections[i][j]
-			if obj and not (obj.entity and obj.entity.overridesRender)
-				obj\render!
-			if obj and obj.entity and obj.entity.background
-				obj\renderEntity!
+			toRender = {}
+			if i <= cellsW and j <= cellsH
+				toRender[#toRender + 1] = @elements.cells[i][j]
+
+			if i <= cellsW and j <= cellsH + 1
+				toRender[#toRender + 1] = @elements.hpaths[i][j]
+
+			if i <= cellsW + 1 and j <= cellsH
+				toRender[#toRender + 1] = @elements.vpaths[i][j]
+
+			toRender[#toRender + 1] = @elements.intersections[i][j]
+			
+			for _, obj in pairs toRender
+				if obj and not (obj.entity and obj.entity.overridesRender)
+					obj\render!
+				if obj and obj.entity and obj.entity.background
+					obj\renderEntity!
 
 ENT.DrawForeground = () =>
 	OverrideAlphaWriteEnable true, true
@@ -226,30 +214,23 @@ ENT.DrawForeground = () =>
     cellsW = @tileData.Tile.Width
     cellsH = @tileData.Tile.Height
 
-	for j = 1, cellsH
-		for i = 1, cellsW
-			obj = @elements.cells[i][j]
-			if obj and obj.entity and not obj.entity.background
-				print "drawing", obj.entity\getClassName!
-				obj\renderEntity!
-
-	for j = 1, cellsH + 1
-		for i = 1, cellsW
-			obj = @elements.hpaths[i][j]
-			if obj and obj.entity and not obj.entity.background
-				obj\renderEntity!
-
-	for j = 1, cellsH
-		for i = 1, cellsW + 1
-			obj = @elements.vpaths[i][j]
-			if obj and obj.entity and not obj.entity.background
-				obj\renderEntity!
-
 	for j = 1, cellsH + 1
 		for i = 1, cellsW + 1
-			obj = @elements.intersections[i][j]
-			if obj and obj.entity and not obj.entity.background
-				obj\renderEntity!
+			toRender = {}
+			if i <= cellsW and j <= cellsH
+				toRender[#toRender + 1] = @elements.cells[i][j]
+
+			if i <= cellsW and j <= cellsH + 1
+				toRender[#toRender + 1] = @elements.hpaths[i][j]
+
+			if i <= cellsW + 1 and j <= cellsH
+				toRender[#toRender + 1] = @elements.vpaths[i][j]
+
+			toRender[#toRender + 1] = @elements.intersections[i][j]
+			
+			for _, obj in pairs toRender
+				if obj and obj.entity and not obj.entity.background
+					obj\renderEntity!
 
 	OverrideAlphaWriteEnable false
 

@@ -127,7 +127,7 @@ net.Receive "TheMP Editor", () ->
     Moonpanel.editor\Show! 
     Moonpanel.editor\MakePopup!
 
-net.Receive "TheMP EditorData", () ->
+net.Receive "TheMP EditorData Req", () ->
     data = "{}"
 
     if Moonpanel.editor

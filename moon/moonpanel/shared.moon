@@ -125,9 +125,36 @@ net.Receive "TheMP EditorData", (len, ply) ->
         if (IsValid ent) and ent.SetupData
             ent\SetupData data
 
+-------------
+-- Globals --
+-------------
+
+Moonpanel.DefaultColors = {
+    Background: Color 80, 77, 255, 255
+    Untraced: Color 40, 22, 186
+    Traced: Color 255, 255, 255, 255
+    Vignette: Color 0, 0, 0, 92
+}
+
+--------------
+-- Includes --
+--------------
+
+include "moonpanel/panel/sh_elements.lua"
+ 
 ---------------------------
 -- Moonpanel definitions --
 ---------------------------
+
+class Rect
+    new: (@x, @y, @width, @height) =>
+    contains: (x, y) =>
+        return x > @x and
+            y > @y and
+            x < @x + @width and
+            y < @y + @height
+
+Moonpanel.Rect = Rect
 
 Moonpanel.calculateDimensionsShared = (data) =>
     cellsW = data.cellsW or 2
@@ -148,8 +175,8 @@ Moonpanel.calculateDimensionsShared = (data) =>
     barLength = math.ceil barLength - (barWidth / (math.max cellsW, cellsH))
     barLength = math.min barLength, minPanelDimension * (data.maxBarLength or 0.25)
 
-    innerHeight = barWidth * (cellsW + 1) + barLength * (cellsW)
-    innerWidth = barWidth * (cellsH + 1) + barLength * (cellsH)
+    innerHeight = barWidth * (cellsH + 1) + barLength * (cellsH)
+    innerWidth = barWidth * (cellsW + 1) + barLength * (cellsW)
 
     return {
         barWidth: math.floor barWidth

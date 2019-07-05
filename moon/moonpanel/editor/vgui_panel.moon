@@ -55,7 +55,7 @@ panel.Init = () =>
 panel.Paint = (w, h) =>
     if @background and @background.path
         surface.SetMaterial @background.path
-        surface.SetDrawColor 255, 255, 255
+        surface.SetDrawColor 255, 255, 255, 255
         neww = math.min w, h
         surface.DrawTexturedRect (w/2) - (neww/2), (h/2) - (neww/2), neww, neww
 

@@ -168,16 +168,49 @@ RT_Material = CreateMaterial "TheMP_RT", "UnlitGeneric", {
 	["$vertexalpha"]: 1
 }
 
+ENT.SetupDataClient = () =>
+	defs = Moonpanel.DefaultColors
+	
+	@colors            or= {}
+	@colors.background or= defs.Background
+	@colors.untraced   or= defs.Untraced
+	@colors.traced     or= defs.Traced
+	@colors.vignette   or= defs.Vignette
+
 ENT.DrawBackground = () =>
-	Clear 0, 128, 255, 255, true, true
-	SetDrawColor 0, 255, 0, 255
-	DrawRect 64, 64, 256, 256
+	Clear 0, 0, 0, 0
+
+    cellsW = @tileData.Tile.Width
+    cellsH = @tileData.Tile.Height
+
+	for j = 1, cellsH
+		for i = 1, cellsW
+			cell = @elements.cells[i][j]
+			if cell
+				cell\render!
+
+	for j = 1, cellsH + 1
+		for i = 1, cellsW
+			hpath = @elements.hpaths[i][j]
+			if hpath
+				hpath\render!
+
+	for j = 1, cellsH
+		for i = 1, cellsW + 1
+			vpath = @elements.vpaths[i][j]
+			if vpath
+				vpath\render!
+
+	for j = 1, cellsH + 1
+		for i = 1, cellsW + 1
+			intersection = @elements.intersections[i][j]
+			if intersection
+				intersection\render!
 
 ENT.DrawForeground = () =>
 	OverrideAlphaWriteEnable true, true
 	Clear 0, 0, 0, 0
-	SetDrawColor 255, 0, 0, 127
-	DrawRect 256 - 64, 256 - 64, 256, 256
+
 	OverrideAlphaWriteEnable false
 
 setRTTexture = (rt) ->

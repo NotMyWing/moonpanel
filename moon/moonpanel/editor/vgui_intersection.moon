@@ -23,7 +23,7 @@ intersection.getAngle = (x, y, w, h) =>
     return -1
 
 intersection.Paint = (w, h) =>
-    surface.SetDrawColor white
+    surface.SetDrawColor @panel.data.colors.untraced or Moonpanel.DefaultColors.Untraced
 
     if @entity == MOONPANEL_ENTITY_TYPES.START
         surface.DisableClipping true

@@ -9,7 +9,7 @@ types = MOONPANEL_ENTITY_TYPES
 hexagon = Material "moonpanel/hexagon.png"
 
 hpath.Paint = (w, h) =>
-    surface.SetDrawColor white
+    surface.SetDrawColor @panel.data.colors.untraced or Moonpanel.DefaultColors.Untraced
     if @entity == types.HEXAGON or not @entity
         surface.DrawRect 0, 0, w, h
 

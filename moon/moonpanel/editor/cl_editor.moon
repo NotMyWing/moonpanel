@@ -940,6 +940,9 @@ editor.Init = () =>
     @data = {
         w: 3
         h: 3
+        colors: {
+
+        }
     }
 
     @grid = vgui.CreateFromTable (include "moonpanel/editor/vgui_panel.lua"), @
@@ -1067,6 +1070,7 @@ editor.Deserialize = (input) =>
         intersections: {}
         vpaths: {}
         hpaths: {}
+        colors: {}
     }
 
     @barWidth\SetValue newData.barWidth

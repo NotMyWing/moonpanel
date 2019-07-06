@@ -240,6 +240,9 @@ class PathFinder
                 @runCursorCallback data
 
     applyDeltas: (x, y) =>
+        if not @cursors
+            return
+
         @cursors[1].x += x
         @cursors[1].y += y
         @think!
@@ -421,7 +424,7 @@ ENT.SetupData = (@tileData) =>
     @isPowered = true
 
 ENT.ApplyDeltas = (x, y) =>
-    if x ~= 0 or y ~= 0
+    if IsValid(@) and @.pathFinder and (x ~= 0 or y ~= 0)
         if CLIENT
             @shouldRepaintTrace = true
         else

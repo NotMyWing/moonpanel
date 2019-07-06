@@ -26,6 +26,7 @@ class Path extends Element
 EMPTY_TABLE = {}
 
 class VPath extends Path
+    type: MOONPANEL_OBJECT_TYPES.VPATH
     populatePathMap: (pathMap) =>
         if @entity and (@entity\populatePathMap pathMap) == true
             return
@@ -57,6 +58,7 @@ class VPath extends Path
         return @cachedBottom 
 
 class HPath extends Path
+    type: MOONPANEL_OBJECT_TYPES.HPATH
     populatePathMap: (pathMap) =>
         if @entity and (@entity\populatePathMap pathMap) == true
             return
@@ -95,6 +97,7 @@ corners = {
 }
 
 class Intersection extends Element
+    type: MOONPANEL_OBJECT_TYPES.INTERSECTIONS
     getLeft: =>
         @cachedLeft or= (@tile.elements.hpaths[@x - 1] or EMPTY_TABLE)[@y]
         return @cachedLeft
@@ -126,6 +129,7 @@ class Intersection extends Element
             surface.DrawRect @bounds.x, @bounds.y, @bounds.width, @bounds.height
 
 class Cell extends Element
+    type: MOONPANEL_OBJECT_TYPES.CELL
     getLeft: =>
         @cachedLeft or= (@tile.elements.vpaths[@x] or EMPTY_TABLE)[@y]
         return @cachedLeft

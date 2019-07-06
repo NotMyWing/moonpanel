@@ -71,7 +71,9 @@ hook.Add "CreateMove", "TheMP Control", (cmd) ->
         if CurTime! >= lastclick and input.WasMousePressed MOUSE_LEFT
             Moonpanel.__nextclick = CurTime! + 0.05
             ent = LocalPlayer!\GetEyeTrace!.Entity
-            if IsValid(ent) and ent\GetClass! == "moonpanel"
+            if IsValid Moonpanel\getControlledPanel!
+                Moonpanel\requestControl Moonpanel\getControlledPanel!, 0, 0
+            elseif IsValid(ent) and ent\GetClass! == "moonpanel"
                 x, y = ent\GetCursorPos!
                 if x and y
                     Moonpanel\requestControl ent, x, y
@@ -130,7 +132,7 @@ net.Receive "TheMP Editor", () ->
 
 net.Receive "TheMP ApplyDeltas", () ->
     panel = net.ReadEntity!
-    if IsValid(panel) or not panel.ApplyDeltas
+    if not IsValid(panel) or not panel.ApplyDeltas
         return
 
     x, y = net.ReadFloat!, net.ReadFloat!
@@ -138,7 +140,6 @@ net.Receive "TheMP ApplyDeltas", () ->
     panel\ApplyDeltas x, y
 
 net.Receive "TheMP NodeStacks", (len) ->
-    print len
     stacks, curs = {}, {}
 
     panel = net.ReadEntity!
@@ -204,19 +205,19 @@ net.Receive "TheMP Start", () ->
                     break
 
         if nodeA
-            panel.pathFinder\restart nodeA, nodeB
-            panel.shouldRepaintTrace = true
+            panel\PuzzleStart nodeA, nodeB
 
 net.Receive "TheMP Finish", () ->
     panel = net.ReadEntity!
     success = net.ReadBool!
+    aborted = net.ReadBool!
     redOut = net.ReadTable!
     grayOut = net.ReadTable!
 
     if IsValid(panel) and panel.PuzzleFinish
-        panel\PuzzleFinish success, redOut, grayOut
+        panel\PuzzleFinish success, aborted, redOut, grayOut
 
-if Moonpanel.__initialized or true
+if Moonpanel.__initialized
     Moonpanel\init!
 
 ------------
@@ -262,3 +263,86 @@ Moonpanel.render.drawCircle = (x, y, r) ->
     render.SetMaterial circ
     Moonpanel.render.drawTexturedRect x - r, y - r, r * 2, r * 2
     render.SetColorMaterial!
+
+Moonpanel.render.createRipple = (x, y, rad, framecount = 100) ->
+    ripple = {
+        :framecount
+    }
+    ripple.frames = {}
+    for i = 1, framecount
+        r = (i / framecount) * rad
+        ripple.frames[#ripple.frames + 1] = {
+            arc: Moonpanel.render.precacheArc x, y, r, rad * 0.07, -180, 180, 30
+            alpha: (1 - (i / framecount)) * 255
+        }
+    
+    return ripple
+
+Moonpanel.render.drawRipple = (ripple, frame, color) ->
+    f = ripple.frames[math.ceil frame * ripple.framecount]
+    if not f
+        return
+
+    clr = ColorAlpha color, f.alpha
+    surface.SetDrawColor clr
+    Moonpanel.render.drawArc f.arc
+
+Moonpanel.render.precacheArc = (cx,cy,radius,thickness,startang,endang,roughness) ->
+	triarc = {}
+	-- local deg2rad = math.pi / 180
+	
+	-- Define step
+	roughness = math.max(roughness or 1, 1)
+	step = roughness
+	
+	-- Correct start/end ang
+	startang,endang = startang or 0, endang or 0
+	
+	if startang > endang then
+		step = math.abs(step) * -1
+	
+	-- Create the inner circle's points.
+	inner = {}
+	r = radius - thickness
+	for deg=startang, endang, step
+		rad = math.rad(deg)
+		-- local rad = deg2rad * deg
+		ox, oy = cx+(math.cos(rad)*r), cy+(-math.sin(rad)*r)
+		table.insert(inner, {
+			x: ox,
+			y: oy,
+			u: (ox-cx)/radius + .5,
+			v: (oy-cy)/radius + .5,
+		})
+	
+	-- Create the outer circle's points.
+	outer = {}
+	for deg=startang, endang, step
+		rad = math.rad(deg)
+		-- local rad = deg2rad * deg
+		ox, oy = cx+(math.cos(rad)*radius), cy+(-math.sin(rad)*radius)
+		table.insert(outer, {
+			x: ox,
+			y: oy,
+			u: (ox-cx)/radius + .5,
+			v: (oy-cy)/radius + .5,
+		})
+
+	-- Triangulize the points.
+	for tri=1,#inner*2 -- twice as many triangles as there are degrees.
+		p1,p2,p3
+		p1 = outer[math.floor(tri/2)+1]
+		p3 = inner[math.floor((tri+1)/2)+1]
+		if tri%2 == 0 then --if the number is even use outer.
+			p2 = outer[math.floor((tri+1)/2)]
+		else
+			p2 = inner[math.floor((tri+1)/2)]
+
+		table.insert(triarc, {p1,p2,p3})
+
+	-- Return a table of triangles to draw.
+	return triarc
+
+Moonpanel.render.drawArc = (arc) ->
+	for k,v in ipairs(arc)
+		surface.DrawPoly(v)

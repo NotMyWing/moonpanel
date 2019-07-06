@@ -7,8 +7,35 @@ white = Color 255, 255, 255
 cell.Init = () =>
     @type = MOONPANEL_OBJECT_TYPES.CELL
 
+triangle = Material "moonpanel/triangle.png"
 cell.RenderTriangles = (w, h, count) =>
+    surface.SetDrawColor Moonpanel.Colors[@attributes.color or Moonpanel.Color.Yellow]
+    surface.SetMaterial triangle
+    innerw = w * 0.275
+    innerh = h * 0.275
 
+    shrink = w * 0.8
+
+    triangleWidth = w * 0.2
+    spacing = w * 0.11
+    offset = if count == 1
+        0
+    else
+        (((count - 1) * triangleWidth) + ((count - 1) * spacing)) / 2
+
+    matrix = Matrix!
+    matrix\Translate Vector (w / 2) - offset, h / 2, 0
+    
+    surface.DisableClipping true
+    for i = 1, count do
+        if i > 1
+            cam.PopModelMatrix!
+            matrix\Translate Vector triangleWidth + spacing, 0, 0
+
+        cam.PushModelMatrix matrix
+        surface.DrawTexturedRect -(innerw/2), -(innerh/2), innerw, innerh
+    surface.DisableClipping false
+    cam.PopModelMatrix!
 
 cell.RenderPolyo = (w, h) =>
     data = @attributes
@@ -72,7 +99,7 @@ cell.Paint = (w, h) =>
         @RenderPolyo w, h
         
     elseif @entity == types.TRIANGLE
-        @RenderTriangles
+        @RenderTriangles w, h, @attributes.count
 
     elseif graphics[@entity]
         surface.SetMaterial graphics[@entity]

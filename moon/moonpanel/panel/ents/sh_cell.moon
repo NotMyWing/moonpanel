@@ -22,7 +22,6 @@ class Color extends CellEntity
     render: =>
         bounds = @parent.bounds
         if bounds
-            surface.SetDrawColor Moonpanel.Colors[@attributes.color]
             surface.SetMaterial _color
             surface.DrawTexturedRect bounds.x, bounds.y, bounds.width, bounds.height
             draw.NoTexture!
@@ -36,12 +35,11 @@ class Sun extends CellEntity
     render: =>
         bounds = @parent.bounds
         if bounds
-            @colorCache = @colorCache or Moonpanel.Colors[@attributes.color]
-            surface.SetDrawColor @colorCache
-            surface.SetMaterial color
+            surface.SetMaterial sun
             surface.DrawTexturedRect bounds.x, bounds.y, bounds.width, bounds.height
             draw.NoTexture!
 
+eraser = Material "moonpanel/eraser.png" 
 class Y extends CellEntity
     new: (@parent, defs) =>
         @attributes = {
@@ -50,67 +48,72 @@ class Y extends CellEntity
     render: =>
         bounds = @parent.bounds
         if bounds
-            render.setColor Moonpanel.Colors[@attributes.color]
-            shrink = bounds.width * 0.25
+            surface.SetMaterial eraser
+            surface.DrawTexturedRect bounds.x, bounds.y, bounds.width, bounds.height
+            draw.NoTexture!
 
-            width = shrink * 0.45
-            
-            matrix = Matrix!
-            matrix\translate Vector bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0
-            for i = 1, 3
-                render.pushMatrix matrix
-                render.drawRect -width / 2, -shrink, width, shrink
-                render.popMatrix!
-                if i ~= 3
-                    matrix\rotate Angle 0, 120, 0
-
+poly = Material "moonpanel/polyomino_cell.png"
 class Polyomino extends CellEntity
     new: (@parent, defs) =>
         @attributes = {
-            color: defs.Color
+            color: defs.Color or Moonpanel.Color.Yellow
         }
+
+        maxw = 0
+        for _, row in pairs defs.Shape
+            if #row > maxw
+                maxw = #row
+
+        @attributes.shape = Moonpanel.BitMatrix maxw, #defs.Shape
+        for j, row in pairs defs.Shape
+            for i = 1, maxw
+                @attributes.shape\set i, j, defs.Shape[j] and defs.Shape[j][i] == 1
+
+        @attributes.rotational = defs.Rotational
 
     render: =>
         bounds = @parent.bounds
-        if bounds
-            @colorCache = @colorCache or Moonpanel.Colors[COLOR_YELLOW]
 
-            surface.SetDrawColor @colorCache
+        @polyheight = @attributes.shape.h
+        @polywidth = @attributes.shape.w
 
-            @polyheight = @attributes.shape.h
-            @polywidth = @attributes.shape.w
+        maxDim = math.max @polyheight, @polywidth
+        shrink = bounds.width * 0.7
 
-            maxDim = math.max @polyheight, @polywidth
-            shrink = bounds.width * 0.7
+        spacing = shrink * 0.05
+        if @attributes.rotational
+            shrink *= 0.7
 
-            if @attributes.rotational
-                shrink *= 0.7
+        squareWidth = math.min shrink / maxDim, bounds.width * 0.2
 
-            squareWidth = math.min shrink / maxDim, bounds.width * 0.2
-            spacing = shrink * 0.1
+        offsetX = (bounds.width  / 2) - ((squareWidth * @polywidth ) + ((@polywidth  - 1) * spacing)) / 2
+        offsetY = (bounds.height / 2) - ((squareWidth * @polyheight) + ((@polyheight - 1) * spacing)) / 2
 
-            offsetX = (bounds.width  / 2) - ((squareWidth * @polywidth ) + ((@polywidth  - 1) * spacing)) / 2
-            offsetY = (bounds.height / 2) - ((squareWidth * @polyheight) + ((@polyheight - 1) * spacing)) / 2
+        v = Vector bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0
 
-            v = Vector bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0
+        if @attributes.rotational
+            matrix = Matrix!
+            matrix\Translate v
+            matrix\Rotate Angle 0, -15, 0
+            matrix\Translate -v
 
-            if @attributes.rotational
-                matrix = Matrix!
-                matrix\translate v
-                matrix\rotate Angle 0, -15, 0
-                matrix\translate -v
+            cam.PushModelMatrix matrix
 
-                render.pushMatrix matrix
-                
-            for j = 1, @polyheight
-                for i = 1, @polywidth
-                    if (@attributes.shape\get i, j)
-                        x = offsetX + bounds.x + (i - 1) * spacing + (i - 1) * squareWidth 
-                        y = offsetY + bounds.y + (j - 1) * spacing + (j - 1) * squareWidth 
-                        render.drawRoundedBox 4, x, y, squareWidth, squareWidth
-            
-            if @attributes.rotational
-                render.popMatrix!
+        surface.SetMaterial poly
+        for j = 1, @polyheight
+            for i = 1, @polywidth
+                if (@attributes.shape\get i, j)
+                    x = offsetX + bounds.x + (i - 1) * spacing + (i - 1) * squareWidth 
+                    y = offsetY + bounds.y + (j - 1) * spacing + (j - 1) * squareWidth 
+                    --draw.RoundedBox 4, x, y, squareWidth, squareWidth, @attributes.color
+                   
+                    surface.DrawTexturedRect x, y, squareWidth, squareWidth
+        draw.NoTexture!
+        
+        if @attributes.rotational
+            cam.PopModelMatrix!
+
+triangle = Material "moonpanel/triangle.png"
 
 class Triangle extends CellEntity
     new: (@parent, defs) =>
@@ -141,8 +144,6 @@ class Triangle extends CellEntity
     render: =>
         bounds = @parent.bounds
         if bounds
-            @trianglePoly = @trianglePoly or @buildPoly bounds
-            render.setColor Moonpanel.Colors[@attributes.color]
             shrink = bounds.width * 0.8
 
             triangleWidth = bounds.width * 0.2
@@ -153,18 +154,20 @@ class Triangle extends CellEntity
                 (((@attributes.count - 1) * triangleWidth) + ((@attributes.count - 1) * spacing)) / 2
 
             matrix = Matrix!
-            matrix\translate Vector bounds.x + (bounds.width / 2) - offset, bounds.y + bounds.height / 2, 0
-                
+            matrix\Translate Vector bounds.x + bounds.width / 2 - offset - triangleWidth / 2, 
+                bounds.y + bounds.height / 2 - triangleWidth / 2, 0
+            
+            surface.SetMaterial triangle
             for i = 1, @attributes.count do
                 if i > 1
-                    render.popMatrix!
-                    matrix\translate Vector triangleWidth + spacing, 0, 0
+                    cam.PopModelMatrix!
+                    matrix\Translate Vector triangleWidth + spacing, 0, 0
 
-                render.pushMatrix matrix
+                cam.PushModelMatrix matrix
                 for j = 1, 10
-                    render.drawPoly @trianglePoly
+                    surface.DrawTexturedRect 0, 0, triangleWidth, triangleWidth
 
-            render.popMatrix!
+            cam.PopModelMatrix!
 
 Moonpanel.Entities or= {}
 

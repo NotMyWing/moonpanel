@@ -1,6 +1,18 @@
 include("shared.lua")
 
+SOUND_PANEL_SCINT = Sound "moonpanel/panel_scint.ogg"
+SOUND_PANEL_FAILURE = Sound "moonpanel/panel_failure.ogg"
+SOUND_PANEL_POTENTIAL_FAILURE = Sound "moonpanel/panel_potential_failure.ogg"
+SOUND_PANEL_SUCCESS = Sound "moonpanel/panel_success.ogg"
+SOUND_PANEL_START = Sound "moonpanel/panel_start_tracing.ogg"
+SOUND_PANEL_ERASER = Sound "moonpanel/eraser_apply.ogg"
+SOUND_PANEL_ABORT = Sound "moonpanel/panel_abort_tracing.ogg"
+
 ENT.RenderGroup = RENDERGROUP_BOTH
+
+ENT.GetTimerName = (subname) =>
+	index = tostring @EntIndex!
+	return "TheMP_Panel#{index}_#{subname}"
 
 ENT.Initialize = () =>
 	@BaseClass.Initialize @
@@ -50,6 +62,7 @@ ENT.Initialize = () =>
 	index = tostring @EntIndex!
 	@rendertargets = {
 		foreground: {
+			always: true
 			rt: GetRenderTarget "TheMPFG#{index}", @ScreenSize, @ScreenSize
 			render: @DrawForeground
 		}
@@ -60,6 +73,11 @@ ENT.Initialize = () =>
 		trace: {
 			rt: GetRenderTarget "TheMPTrace#{index}", @ScreenSize, @ScreenSize
 			render: @DrawTrace
+		}
+		ripple: {
+			always: true
+			rt: GetRenderTarget "TheMPRipple#{index}", @ScreenSize, @ScreenSize
+			render: @DrawRipple
 		}
 	}
 
@@ -74,8 +92,8 @@ writez = Material("engine/writez")
 fn = (self) ->
 	self\RenderPanel!
 
-ENT.Draw = () =>
 ENT.DrawTranslucent = () =>
+ENT.Draw = () =>
 	@DrawModel()
 
 	if not @ScreenMatrix or halo.RenderedEntity() == @
@@ -107,13 +125,13 @@ ENT.DrawTranslucent = () =>
         render.ClearBuffersObeyStencil color.r, color.g, color.b, color.a, true
 
     --Render the starfall stuff
-    render.PushFilterMag TEXFILTER.ANISOTROPIC
-    render.PushFilterMin TEXFILTER.ANISOTROPIC
+    --render.PushFilterMag TEXFILTER.ANISOTROPIC
+    --render.PushFilterMin TEXFILTER.ANISOTROPIC
 
     xpcall fn, print, @
 
-    render.PopFilterMag!
-    render.PopFilterMin!
+    --render.PopFilterMag!
+    --render.PopFilterMin!
 
     render.SetStencilEnable false
 
@@ -166,6 +184,13 @@ ENT.ClientThink = () =>
 		@rendertargets.trace.dirty = true
 
 ENT.ClientTickrateThink = () =>
+	activeUser = @GetNW2Entity "ActiveUser"
+	if IsValid activeUser
+		if @__scintPower and @__scintPower >= 0.15 and CurTime! >= @__nextscint
+			@EmitSound SOUND_PANEL_SCINT, 75, 100, @__scintPower
+			@__nextscint = CurTime! + 2
+			@__scintPower *= 0.75
+			@__firstscint = false
 
 import SetDrawColor, DrawRect from surface
 import Clear, ClearDepth, OverrideAlphaWriteEnable from render
@@ -177,9 +202,96 @@ RT_Material = CreateMaterial "TheMP_RT", "UnlitGeneric", {
 	["$vertexalpha"]: 1
 }
 
-ENT.PuzzleStart = () =>
-ENT.PuzzleFinish = (success, redOut, grayOut) =>
-	print success
+ENT.PuzzleStart = (nodeA, nodeB) =>
+	tr = @colors.traced
+	@pen = Color tr.r, tr.g, tr.b, 255
+
+	@EmitSound SOUND_PANEL_START
+
+	@pathFinder\restart nodeA, nodeB
+    @shouldRepaintTrace = true
+
+	@__nextscint = CurTime! + 0.5
+	@__firstscint = true
+	@__scintPower = 1
+	@redOut = nil
+	@grayOut = nil
+	@grayOutStart = nil
+
+	timer.Remove @GetTimerName "redOut"
+	timer.Remove @GetTimerName "grayOut"
+	timer.Remove @GetTimerName "penFade"
+
+ENT.PuzzleFinish = (success, aborted, @redOut, _grayOut) =>
+	@__scintPower = nil
+
+	if success
+		if _grayOut.grayedOut
+			@EmitSound SOUND_PANEL_POTENTIAL_FAILURE
+
+			_oldPen = ColorAlpha @pen, 255
+			err = @colors.errored
+			@pen = Color err.r, err.g, err.b, 255
+
+			timer.Create @GetTimerName("penFade"), 0.05, 0, () ->
+				if not IsValid @
+					return
+
+				if @pen.a <= 0
+					@pen.a = 0
+					timer.Remove @GetTimerName "penFade"
+					return
+
+				@pen.a -= 5
+				@shouldRepaintTrace = true
+
+			timer.Create @GetTimerName("grayOut"), 0.75, 1, () ->
+				timer.Remove @GetTimerName "penFade"
+				@redOut = nil
+				@grayOut = _grayOut
+				@grayOutStart = CurTime!
+				@pen = _oldPen
+				@EmitSound SOUND_PANEL_ERASER
+
+		else
+			@EmitSound SOUND_PANEL_SUCCESS
+	elseif not aborted
+		@grayOut = _grayOut
+		@grayOutStart = CurTime!
+
+		@EmitSound SOUND_PANEL_FAILURE
+		if @pen
+			err = @colors.errored
+			@pen = Color err.r, err.g, err.b, 255
+
+			timer.Create @GetTimerName("penFade"), 0.05, 0, () ->
+				if not IsValid @
+					return
+
+				if @pen.a <= 0
+					@pen.a = 0
+					timer.Remove @GetTimerName "penFade"
+					return
+
+				@pen.a -= 5
+				@shouldRepaintTrace = true
+	else
+		@EmitSound SOUND_PANEL_ABORT
+
+		if @pen
+			@pen = Color @pen.r, @pen.g, @pen.b, 255
+
+			timer.Create @GetTimerName("penFade"), 0.05, 0, () ->
+				if not IsValid @
+					return
+
+				if @pen.a <= 0
+					@pen.a = 0
+					timer.Remove @GetTimerName "penFade"
+					return
+
+				@pen.a -= 5
+				@shouldRepaintTrace = true
 
 ENT.SetupDataClient = () =>
 	defs = Moonpanel.DefaultColors
@@ -189,8 +301,24 @@ ENT.SetupDataClient = () =>
 	@colors.untraced   or= defs.Untraced
 	@colors.traced     or= defs.Traced
 	@colors.vignette   or= defs.Vignette
+	@colors.errored    or= defs.Errored
 
-	@pen = ColorAlpha @colors.traced, 255
+	tr = @colors.traced
+	@pen = Color tr.r, tr.g, tr.b, 255
+
+    cellsW = @tileData.Tile.Width
+    cellsH = @tileData.Tile.Height
+
+	@startRipples = {}
+	@endRipples = {}
+	for j = 1, cellsH + 1
+		for i = 1, cellsW + 1
+			int = @elements.intersections[i][j]
+			if int and int.entity
+				if int.entity.type == MOONPANEL_ENTITY_TYPES.START
+					@startRipples[#@startRipples + 1] = int.entity.ripple
+				if int.entity.type == MOONPANEL_ENTITY_TYPES.END
+					@endRipples[#@endRipples + 1] = int.entity.ripple
 
 ENT.DrawBackground = () =>
 	Clear 0, 0, 0, 0
@@ -219,6 +347,33 @@ ENT.DrawBackground = () =>
 				if obj and obj.entity and obj.entity.background
 					obj\renderEntity!
 
+gradient = (startColor, endColor, percentFade) ->
+	diffRed = endColor.r - startColor.r
+	diffGreen = endColor.g - startColor.g
+	diffBlue = endColor.b - startColor.b
+	diffAlpha = endColor.a - startColor.a
+
+	return Color (diffRed * percentFade) + startColor.r,
+		(diffGreen * percentFade) + startColor.g,
+		(diffBlue * percentFade) + startColor.b,
+		(diffAlpha * percentFade) + startColor.a
+
+_err = Color 255, 0, 0, 255
+_errAlt = Color 0, 0, 0, 255
+ENT.ErrorifyColor = (color, alternate) =>
+	clr = _err
+	if color.r > 200 and color.b < 30 and color.g < 30
+		clr = _errAlt
+
+	time = CurTime!
+
+	pct = ((math.cos math.rad time * 500) + 1) / 2
+
+	if alternate
+		pct = 1 - pct
+
+	return gradient clr, color, pct	
+
 ENT.DrawForeground = () =>
 	Clear 0, 0, 0, 0
 	ClearDepth!
@@ -242,6 +397,19 @@ ENT.DrawForeground = () =>
 			
 			for _, obj in pairs toRender
 				if obj and obj.entity and not obj.entity.background
+					clr = Moonpanel.Colors[(obj.entity.attributes and obj.entity.attributes.color) or 1]
+
+					if @grayOut and @grayOut[obj.type] and @grayOut[obj.type][j] and @grayOut[obj.type][j][i]
+						pct = math.Clamp (CurTime!- @grayOutStart) / 2, 0, 0.6
+						pct = 1 - pct
+
+						clr = ColorAlpha clr, 255 * math.EaseInOut pct, 0.1, 0.1
+
+					elseif @redOut and @redOut[obj.type] and @redOut[obj.type][j] and @redOut[obj.type][j][i]
+						alternate = ((i + j) % 2 == 0) and true or false
+						clr = @ErrorifyColor clr, alternate
+
+					surface.SetDrawColor clr
 					obj\renderEntity!
 
 circ = Material "moonpanel/circ128.png"
@@ -268,12 +436,11 @@ ENT.DrawTrace = () =>
 	nodeStacks = @pathFinder.nodeStacks
 	cursors = @pathFinder.cursors
 
+	surface.SetDrawColor Color 255, 255, 255, 255
 	if nodeStacks
 		barWidth = @calculatedDimensions.barWidth
 		barLength = @calculatedDimensions.barLength
 		symmVector = nil
-
-		surface.SetDrawColor @colors.traced
 
 		for stackId, stack in pairs nodeStacks 
 			for k, v in pairs stack
@@ -289,23 +456,21 @@ ENT.DrawTrace = () =>
 				last = stack[#stack]
 				Moonpanel.render.drawCircle cur.x, cur.y, barWidth / 2  
 				Moonpanel.render.drawThickLine cur.x, cur.y, last.screenX, last.screenY, barWidth
-				
-				if cur.axes
-					for _, axis in pairs cur.axes
-						w, h = 6, 6
-						x, y = axis.sx - w/2, axis.sy - h/2
-
-						render.SetMaterial circ
-						Moonpanel.render.drawTexturedRect x, y, w, h, (Color 255, 0, 0)
-						render.SetColorMaterial!
-
-						surface.SetDrawColor (Color 255, 0, 0, 255)
-						surface.DrawLine cur.x, cur.y, axis.sx, axis.sy
 
 setRTTexture = (rt) ->
 	RT_Material\SetTexture "$basetexture", rt
 	surface.SetMaterial RT_Material
 	render.SetMaterial RT_Material
+
+ENT.DrawRipple = () =>
+	Clear 0, 0, 0, 0
+	ClearDepth!
+
+	activeUser = @GetNW2Entity "ActiveUser"
+	if @endRipples and @__nextscint and not @__firstscint and IsValid activeUser
+		buf = 1 - ((@__nextscint - CurTime!) / 2)
+		for _, ripple in pairs @endRipples
+			Moonpanel.render.drawRipple ripple, buf, (Color 255, 255, 255)
 
 ENT.RenderPanel = () =>
 	if not @rendertargets or not @calculatedDimensions
@@ -313,7 +478,7 @@ ENT.RenderPanel = () =>
 
 	oldw, oldh = ScrW!, ScrH!
 	for k, v in pairs @rendertargets
-		if v.dirty ~= false and v.render
+		if (v.always or v.dirty ~= false) and v.render
 			v.dirty = false
 
 			render.SetStencilEnable false
@@ -331,6 +496,7 @@ ENT.RenderPanel = () =>
 			render.SetViewPort 0, 0, oldw, oldh
 			render.SetStencilEnable true
 
+	render.SetColorModulation(1, 0.5, 0)
 	draw.NoTexture!
 	render.SetColorMaterial!
 
@@ -341,6 +507,10 @@ ENT.RenderPanel = () =>
 	setRTTexture @rendertargets.foreground.rt
 	surface.DrawTexturedRect 0, 0, @ScreenSize, @ScreenSize
 
+	setRTTexture @rendertargets.ripple.rt
+	surface.DrawTexturedRect 0, 0, @ScreenSize, @ScreenSize
+
+	surface.SetDrawColor @pen
 	setRTTexture @rendertargets.trace.rt
 	surface.DrawTexturedRect 0, 0, @ScreenSize, @ScreenSize
 

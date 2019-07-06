@@ -89,7 +89,7 @@ editorEnts = {
             surface.SetDrawColor color
             surface.SetMaterial gfx[types.COLOR]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (cell, color) ->
+        set: (button, cell, color) ->
             if cell.attributes.color == color and cell.entity == types.COLOR
                 cell.entity = nil
             else
@@ -104,7 +104,7 @@ editorEnts = {
             surface.SetDrawColor color
             surface.SetMaterial gfx[types.SUN]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (cell, color) ->
+        set: (button, cell, color) ->
             if cell.attributes.color == color and cell.entity == types.SUN
                 cell.entity = nil
             else
@@ -119,7 +119,7 @@ editorEnts = {
             surface.SetDrawColor color
             surface.SetMaterial gfx[types.ERASER]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (cell, color) ->
+        set: (button, cell, color) ->
             if cell.attributes.color == color and cell.entity == types.ERASER
                 cell.entity = nil
             else
@@ -154,7 +154,7 @@ editorEnts = {
                             polyoEditor\Hide!
                             polyoEditor.Think = nil
 
-        set: (cell, color) ->
+        set: (button, cell, color) ->
             norm = normalize polyoData
 
             if not norm or 
@@ -205,12 +205,18 @@ editorEnts = {
             cam.PopModelMatrix!
 
         click: (button, wasSelected) ->
-            button.attributes.count or= 1
+            button.count or= 1
             if wasSelected
-                button.attributes.count = (button.attributes.count % 3) + 1
+                button.count = (button.count % 3) + 1
 
-        set: (cell, color) ->
-            
+        set: (button, cell, color) ->
+            count = button.count
+            if cell.attributes.color == color and cell.attributes.count == count and cell.entity == types.TRIANGLE
+                cell.entity = nil
+            else
+                cell.attributes.color = color
+                cell.attributes.count = count
+                cell.entity = types.TRIANGLE 
     }
 }
 
@@ -223,7 +229,7 @@ editorPathEnts = {
             surface.SetDrawColor color
             surface.SetMaterial gfx[types.START]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (int, color) ->
+        set: (button, int, color) ->
             if int.entity == types.START
                 int.entity = nil
             else
@@ -237,7 +243,7 @@ editorPathEnts = {
             surface.SetDrawColor color
             surface.SetMaterial gfx[types.END]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (int, color) ->
+        set: (button, int, color) ->
             if int.entity == types.END
                 int.entity = nil
             else
@@ -251,7 +257,7 @@ editorPathEnts = {
             surface.SetDrawColor color
             surface.SetMaterial gfx[types.DISJOINT]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (bar, color) ->
+        set: (button, bar, color) ->
             if bar.entity == types.DISJOINT
                 bar.entity = nil
             else
@@ -268,7 +274,7 @@ editorPathEnts = {
             surface.SetDrawColor Color 60, 60, 60
             surface.SetMaterial gfx[types.HEXAGON][2]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (bar, color) ->
+        set: (button, bar, color) ->
             if bar.entity == types.HEXAGON
                 bar.entity = nil
             else
@@ -306,7 +312,7 @@ editor.clickCallback = (element) =>
         return
 
     element.attributes or= {}
-    selected.tool.set element, @selectedColor
+    selected.tool.set selected, element, @selectedColor
     @OnChange!
 
 editor.Autosave = () =>

@@ -136,6 +136,7 @@ Moonpanel.DefaultColors = {
     Untraced: Color 40, 22, 186
     Traced: Color 255, 255, 255, 255
     Vignette: Color 0, 0, 0, 92
+    Errored: Color 0, 0, 0, 0
 }
 
 ---------------------------
@@ -151,6 +152,96 @@ class Rect
             y < @y + @height
 
 Moonpanel.Rect = Rect
+
+import rshift, lshift, band, bor, bnot from (bit or bit32 or require "bit")
+
+class BitMatrix
+    new: (@w, @h) =>
+        @rows = {}
+        for j = 1, @h
+            @rows[j] = 0
+
+    popcount: (x) =>
+        x = band(x, 0x55555555) + band(rshift(x, 1),  0x55555555)
+        x = band(x, 0x33333333) + band(rshift(x, 2),  0x33333333)
+        x = band(x, 0x0F0F0F0F) + band(rshift(x, 4),  0x0F0F0F0F)
+        x = band(x, 0x00FF00FF) + band(rshift(x, 8),  0x00FF00FF)
+        x = band(x, 0x0000FFFF) + band(rshift(x, 16), 0x0000FFFF)
+        return x
+
+    compare: (other) =>
+        if other.w ~= @w or other.h ~= @h
+            return false
+
+        for row = 1, @h
+            if other.rows[row] ~= @rows[row]
+                return false
+        
+        return true
+
+    set: (i, j, value) =>
+        mask = lshift 1, i - 1
+        if value ~= 0 and value ~= false
+            @rows[j] = bor @rows[j], mask
+        else
+            @rows[j] = band @rows[j], bnot mask
+
+    get: (i, j) =>
+        return band(@rows[j], (lshift 1, i - 1)) ~= 0
+
+    print: () =>
+        print "---"
+        
+        for j, row in pairs @rows
+            str = "["
+            for i = 1, @w
+                str ..= (band(row, (lshift 1, i - 1)) ~= 0) and 1 or 0
+                if i ~= @w
+                    str ..= ", "
+            print str .. "]"
+
+    fromNested: (nested) ->
+        w = #nested[1]
+        h = #nested
+        m = BitMatrix w, h
+        for j = 1, h
+            for i = 1, w
+                m\set i, j, nested[j][i]
+        return m
+
+    countOnes: () =>
+        count = 0
+        for j, row in pairs @rows
+            count += @popcount row
+        return count
+
+    isZero: () =>
+        for k, v in pairs @rows
+            if v ~= 0
+                return false
+        return true
+
+    rotate: (n) =>
+        n = n % 4
+        if n == 0
+            return @
+        
+        w = (n == 2) and @w or @h
+        h = (n == 2) and @h or @w
+
+        newMatrix = BitMatrix w, h
+        for y = 1, h
+            for x = 1, w
+                if n == 1
+                    newMatrix\set x, y, @get y, w + 1 - x
+                if n == 2
+                    newMatrix\set x, y, @get w + 1 - x, h + 1 - y
+                if n == 3
+                    newMatrix\set x, y, @get h + 1 - y, x
+
+        return newMatrix
+
+Moonpanel.BitMatrix = BitMatrix
 
 Moonpanel.calculateDimensionsShared = (data) =>
     cellsW = data.cellsW or 2

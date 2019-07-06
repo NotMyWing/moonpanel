@@ -30,6 +30,49 @@ util.AddNetworkString "TheMP Focus"
 util.AddNetworkString "TheMP Mouse Deltas"
 util.AddNetworkString "TheMP Request Control"
 
+resource.AddSingleFile "materials/moonpanel/acirc128.png"
+resource.AddSingleFile "materials/moonpanel/circ64.png"
+resource.AddSingleFile "materials/moonpanel/circ128.png"
+resource.AddSingleFile "materials/moonpanel/circ256.png"
+resource.AddSingleFile "materials/moonpanel/color.png"
+resource.AddSingleFile "materials/moonpanel/corner64.png"
+resource.AddSingleFile "materials/moonpanel/corner128.png"
+resource.AddSingleFile "materials/moonpanel/corner256.png"
+resource.AddSingleFile "materials/moonpanel/disjoint.png"
+resource.AddSingleFile "materials/moonpanel/end.png"
+resource.AddSingleFile "materials/moonpanel/eraser.png"
+resource.AddSingleFile "materials/moonpanel/hex_layer1.png"
+resource.AddSingleFile "materials/moonpanel/hex_layer2.png"
+resource.AddSingleFile "materials/moonpanel/hexagon.png"
+resource.AddSingleFile "materials/moonpanel/panel_transparent.png"
+resource.AddSingleFile "materials/moonpanel/panel_transparent_a.png"
+resource.AddSingleFile "materials/moonpanel/polyo.png"
+resource.AddSingleFile "materials/moonpanel/polyomino_cell.png"
+resource.AddSingleFile "materials/moonpanel/qcirc64.png"
+resource.AddSingleFile "materials/moonpanel/qcirc128.png"
+resource.AddSingleFile "materials/moonpanel/qcirc256.png"
+resource.AddSingleFile "materials/moonpanel/start.png"
+resource.AddSingleFile "materials/moonpanel/sun.png"
+resource.AddSingleFile "materials/moonpanel/triangle.png"
+resource.AddSingleFile "materials/moonpanel/slider/head.png"
+resource.AddSingleFile "materials/moonpanel/slider/left.png"
+resource.AddSingleFile "materials/moonpanel/slider/middle.png"
+resource.AddSingleFile "materials/moonpanel/slider/notch.png"
+resource.AddSingleFile "materials/moonpanel/slider/right.png"
+resource.AddSingleFile "materials/moonpanel/corner64/0.png"
+resource.AddSingleFile "materials/moonpanel/corner64/90.png"
+resource.AddSingleFile "materials/moonpanel/corner64/180.png"
+resource.AddSingleFile "materials/moonpanel/corner64/270.png"
+resource.AddSingleFile "sound/moonpanel/eraser_apply.ogg"
+resource.AddSingleFile "sound/moonpanel/focus_on.ogg"
+resource.AddSingleFile "sound/moonpanel/focus_off.ogg"
+resource.AddSingleFile "sound/moonpanel/panel_abort_tracing.ogg"
+resource.AddSingleFile "sound/moonpanel/panel_failure.ogg"
+resource.AddSingleFile "sound/moonpanel/panel_potential_failure.ogg"
+resource.AddSingleFile "sound/moonpanel/panel_scint.ogg"
+resource.AddSingleFile "sound/moonpanel/panel_start_tracing.ogg"
+resource.AddSingleFile "sound/moonpanel/panel_success.ogg"
+
 Moonpanel.setFocused = (player, state, force) =>
     time = player.themp_lastfocuschange or 0
 
@@ -60,17 +103,20 @@ Moonpanel.getControlledPanel = (ply) =>
     return ply\GetNW2Entity "TheMP Controlled Panel" 
 
 Moonpanel.requestControl = (ply, ent, x, y, force) =>
+    print ply, ent, x, y, force
     if (ply.themp_nextrequest or 0) > CurTime!
         return
 
     if ply\GetNW2Entity("TheMP Controlled Panel") == ent
         ply.themp_nextrequest = CurTime! + 0.25
-        ent\FinishPuzzle x, y
+        if ent.FinishPuzzle
+            ent\FinishPuzzle x, y
         ply\SetNW2Entity "TheMP Controlled Panel", nil
     else
         ply.themp_nextrequest = CurTime! + 0.25
-        if ent\StartPuzzle ply, x, y
-            ply\SetNW2Entity "TheMP Controlled Panel", ent
+        if ent.StartPuzzle
+            if ent\StartPuzzle ply, x, y
+                ply\SetNW2Entity "TheMP Controlled Panel", ent
 
 Moonpanel.sendStart = (ply, panel, node, symmNode) =>
     net.Start "TheMP Start"
@@ -81,7 +127,7 @@ Moonpanel.sendStart = (ply, panel, node, symmNode) =>
     if symmNode
         net.WriteFloat symmNode.x
         net.WriteFloat symmNode.y
-    net.Send ply
+    net.Broadcast!
 
 Moonpanel.broadcastNodeStacks = (ply, panel, nodeStacks, cursors) =>
     net.Start "TheMP NodeStacks"
@@ -105,7 +151,7 @@ Moonpanel.broadcastDeltas = (ply, panel, x, y) =>
     net.WriteEntity panel
     net.WriteFloat x
     net.WriteFloat y
-    net.Broadcast!
+    net.SendOmit ply
 
 Moonpanel.broadcastData = (raw, length, ent) =>
     net.Start "TheMP EditorData"
@@ -115,10 +161,17 @@ Moonpanel.broadcastData = (raw, length, ent) =>
     net.Broadcast!
 
 hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
+    tr = ply\GetEyeTrace!
+
     if key == IN_USE
-        Moonpanel\setFocused ply, false
-    if key == IN_ATTACK and (Moonpanel\isFocused ply) and IsValid Moonpanel\getControlledPanel ply
-        Moonpanel\requestControl ply, (Moonpanel\getControlledPanel ply), x, y
+        if not ply\GetNW2Bool "TheMP Focused"
+            timer.Simple 0, () ->
+                if tr and IsValid(tr.Entity) and tr.Entity.ApplyDeltas and not tr.Entity\IsPlayerHolding!
+                    Moonpanel\setFocused ply, true
+        else
+            Moonpanel\setFocused ply, false
+    if key == IN_ATTACK and (Moonpanel\isFocused ply) 
+        Moonpanel\requestControl ply, ply\GetNW2Entity("TheMP Controlled Panel"), x, y
 
 hook.Add "Think", "TheMP Think", () ->
     for k, v in pairs player.GetAll!

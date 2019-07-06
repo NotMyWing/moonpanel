@@ -19,18 +19,23 @@ class PathEntity
     populatePathMap: (pathMap) => 
 
 class Hexagon extends PathEntity
+    new: (@parent, defs) =>
+        @attributes = {
+            color: Moonpanel.Color.Black
+        }
+
     checkSolution: (areaData) =>
         return @parent.solutionData.traced
-
+ 
     render: =>
         bounds = @parent.bounds
 
         w = math.min bounds.width, bounds.height
-        
-        render.SetMaterial hexagon
-        Moonpanel.render.drawTexturedRect bounds.x + (bounds.width / 2) - (w / 2), 
-            bounds.y + (bounds.height / 2) - (w / 2), w, w, (Color 10, 10, 10)
-        render.SetColorMaterial!
+
+        surface.SetMaterial hexagon
+        surface.DrawTexturedRect bounds.x + (bounds.width / 2) - (w / 2), 
+            bounds.y + (bounds.height / 2) - (w / 2), w, w
+        draw.NoTexture!
 
 class VBroken extends PathEntity
     overridesRender: true

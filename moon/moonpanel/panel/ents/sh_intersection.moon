@@ -22,20 +22,29 @@ class Entrance extends IntersectionEntity
     background: true
     overridesRender: true
     new: (@parent) =>
-        parentBounds = @parent.bounds
-        w = parentBounds.width * 2.5
-        h = parentBounds.height * 2.5
-        x = parentBounds.x + (parentBounds.width / 2) - w / 2
-        y = parentBounds.y + (parentBounds.width / 2) - h / 2
+        if CLIENT
+            parentBounds = @parent.bounds
+            w = parentBounds.width * 2.5
+            h = parentBounds.height * 2.5
+            x = parentBounds.x + (parentBounds.width / 2) - w / 2
+            y = parentBounds.y + (parentBounds.width / 2) - h / 2
 
-        @bounds = Rect x, y, w, h
+            @bounds = Rect x, y, w, h
+
+            @ripple = Moonpanel.render.createRipple x + w/2, y + h/2, w * 3
 
     render: =>
+        surface.SetDrawColor @parent.tile.colors.untraced
         render.SetMaterial circ
         Moonpanel.render.drawTexturedRect @bounds.x, @bounds.y, @bounds.width, @bounds.height, @parent.tile.colors.untraced
         render.SetColorMaterial!
 
 class Hexagon extends IntersectionEntity
+    new: (@parent, defs) =>
+        @attributes = {
+            color: Moonpanel.Color.Black
+        }
+
     checkSolution: (areaData) =>
         return @parent.solutionData.traced
 
@@ -43,11 +52,11 @@ class Hexagon extends IntersectionEntity
         bounds = @parent.bounds
 
         w = math.min bounds.width, bounds.height
-        
-        render.SetMaterial hexagon
-        Moonpanel.render.drawTexturedRect bounds.x + (bounds.width / 2) - (w / 2), 
-            bounds.y + (bounds.height / 2) - (w / 2), w, w, (Color 10, 10, 10)
-        render.SetColorMaterial!
+
+        surface.SetMaterial hexagon
+        surface.DrawTexturedRect bounds.x + (bounds.width / 2) - (w / 2), 
+            bounds.y + (bounds.height / 2) - (w / 2), w, w
+        draw.NoTexture!
 
 class Exit extends IntersectionEntity
     circ: Material "moonpanel/circ128.png"
@@ -70,6 +79,22 @@ class Exit extends IntersectionEntity
             return 0
 
         return -1
+
+    new: (@parent) =>
+        if CLIENT
+            bounds = @parent.bounds
+
+            td = @parent.tile.tileData.Tile
+            x, y, w, h = @parent.x, @parent.y, td.Width + 1, td.Height + 1
+
+            dir = @dirs[@getAngle x, y, w, h]
+
+            if dir
+                x = bounds.x + bounds.width * dir.x + bounds.width / 2
+                y = bounds.y + bounds.height * dir.y + bounds.height / 2
+                w = @parent.bounds.width
+
+                @ripple = Moonpanel.render.createRipple x, y, w
 
     populatePathMap: (pathMap) =>
         bounds = @parent.bounds
@@ -101,6 +126,7 @@ class Exit extends IntersectionEntity
             table.insert pathMap, node
         
     render: =>
+        surface.SetDrawColor @parent.tile.colors.untraced
         bounds = @parent.bounds
 
         td = @parent.tile.tileData.Tile

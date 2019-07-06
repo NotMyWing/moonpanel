@@ -8,6 +8,10 @@ class Element
         if @entity
             @entity\render!
 
+    populatePathMap: (pathMap) =>
+        if @entity
+            @entity\populatePathMap pathMap
+
 class Path extends Element
     isBroken: =>
         return @entity and @entity\getClassName! == "Broken"
@@ -22,6 +26,20 @@ class Path extends Element
 EMPTY_TABLE = {}
 
 class VPath extends Path
+    populatePathMap: (pathMap) =>
+        if @entity and (@entity\populatePathMap pathMap) == true
+            return
+
+        topIntersection = @getTop!
+        bottomIntersection = @getBottom!
+
+        topNode = topIntersection and topIntersection.pathMapNode
+        bottomNode = bottomIntersection and bottomIntersection.pathMapNode
+
+        if topNode and bottomNode
+            table.insert topNode.neighbors, bottomNode
+            table.insert bottomNode.neighbors, topNode
+
     getLeft: =>
         @cachedLeft or= (@tile.elements.cells[@x - 1] or EMPTY_TABLE)[@y]
         return @cachedLeft
@@ -39,6 +57,20 @@ class VPath extends Path
         return @cachedBottom 
 
 class HPath extends Path
+    populatePathMap: (pathMap) =>
+        if @entity and (@entity\populatePathMap pathMap) == true
+            return
+
+        leftIntersection = @getLeft!
+        rightIntersection = @getRight!
+
+        leftNode = leftIntersection and leftIntersection.pathMapNode
+        rightNode = rightIntersection and rightIntersection.pathMapNode
+
+        if leftNode and rightNode
+            table.insert leftNode.neighbors, rightNode
+            table.insert rightNode.neighbors, leftNode
+
     getLeft: =>
         @cachedLeft or= (@tile.elements.intersections[@x] or EMPTY_TABLE)[@y]
         return @cachedLeft

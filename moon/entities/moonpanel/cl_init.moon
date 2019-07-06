@@ -28,12 +28,12 @@ ENT.Initialize = () =>
 	rotation\SetAngles          info.rot
 	translation\SetTranslation  info.offset
 	translation2\SetTranslation Vector -512 / info.RatioX,  -512,       0
-	scale\SetScale              Vector info.RS / 2,             info.RS / 2,    info.RS / 2
+	scale\SetScale              Vector info.RS / 2, info.RS / 2, info.RS / 2
 
 	@ScreenMatrix = translation * rotation * scale * translation2
 	@ScreenInfo = info
 	@Aspect = info.RatioX
-	@Scale = info.RS
+	@Scale = info.RS / 2
 	@Origin = info.offset
 
 	w, h = @ScreenSize / @Aspect, @ScreenSize
@@ -159,11 +159,16 @@ ENT.GetResolution = () =>
 	return @ScreenSize / @Aspect, @ScreenSize
 
 ENT.ClientThink = () =>
+	if @shouldRepaintTrace and CurTime! >= (@nextTraceRepaint or 0)
+		@shouldRepaintTrace = false
+		@nextTraceRepaint = CurTime! + 0.01
+
+		@rendertargets.trace.dirty = true
 
 ENT.ClientTickrateThink = () =>
 
 import SetDrawColor, DrawRect from surface
-import Clear, OverrideAlphaWriteEnable from render
+import Clear, ClearDepth, OverrideAlphaWriteEnable from render
 
 RT_Material = CreateMaterial "TheMP_RT", "UnlitGeneric", {
 	["$nolod"]: 1,
@@ -171,6 +176,10 @@ RT_Material = CreateMaterial "TheMP_RT", "UnlitGeneric", {
 	["$vertexcolor"]: 1,
 	["$vertexalpha"]: 1
 }
+
+ENT.PuzzleStart = () =>
+ENT.PuzzleFinish = (success, redOut, grayOut) =>
+	print success
 
 ENT.SetupDataClient = () =>
 	defs = Moonpanel.DefaultColors
@@ -181,8 +190,11 @@ ENT.SetupDataClient = () =>
 	@colors.traced     or= defs.Traced
 	@colors.vignette   or= defs.Vignette
 
+	@pen = ColorAlpha @colors.traced, 255
+
 ENT.DrawBackground = () =>
 	Clear 0, 0, 0, 0
+	ClearDepth!
 
     cellsW = @tileData.Tile.Width
     cellsH = @tileData.Tile.Height
@@ -208,8 +220,8 @@ ENT.DrawBackground = () =>
 					obj\renderEntity!
 
 ENT.DrawForeground = () =>
-	OverrideAlphaWriteEnable true, true
-	Clear 0, 0, 0, 0, true, true
+	Clear 0, 0, 0, 0
+	ClearDepth!
 
     cellsW = @tileData.Tile.Width
     cellsH = @tileData.Tile.Height
@@ -232,13 +244,63 @@ ENT.DrawForeground = () =>
 				if obj and obj.entity and not obj.entity.background
 					obj\renderEntity!
 
-	OverrideAlphaWriteEnable false
-
+circ = Material "moonpanel/circ128.png"
 ENT.DrawTrace = () =>
-	OverrideAlphaWriteEnable true, true
 	Clear 0, 0, 0, 0
+	ClearDepth!
 
-	OverrideAlphaWriteEnable false
+	if false
+		for _, node in pairs @pathMap
+			w, h = 32, 32
+			x, y = node.screenX - w/2, node.screenY - w/2
+			render.SetMaterial circ
+			Moonpanel.render.drawTexturedRect x, y, w, h, (Color 255, 0, 0)
+			render.SetColorMaterial!
+
+			for _, neighbor in pairs node.neighbors
+				draw.NoTexture!
+				surface.SetDrawColor (Color 255, 0, 0, 255)
+				surface.DrawLine node.screenX, node.screenY, neighbor.screenX, neighbor.screenY
+
+	nodeStacks = nil
+	cursors = {}
+	--if LocalPlayer! == @GetNW2Entity "ActiveUser"
+	nodeStacks = @pathFinder.nodeStacks
+	cursors = @pathFinder.cursors
+
+	if nodeStacks
+		barWidth = @calculatedDimensions.barWidth
+		barLength = @calculatedDimensions.barLength
+		symmVector = nil
+
+		surface.SetDrawColor @colors.traced
+
+		for stackId, stack in pairs nodeStacks 
+			for k, v in pairs stack
+				Moonpanel.render.drawCircle v.screenX, v.screenY, (k == 1) and barWidth * 1.25 or barWidth / 2
+
+				if k > 1
+					prev = stack[k - 1]
+					Moonpanel.render.drawThickLine prev.screenX, prev.screenY, v.screenX, v.screenY, barWidth
+
+		if cursors and #cursors > 0
+			for stackid, cur in pairs cursors
+				stack = nodeStacks[stackid]
+				last = stack[#stack]
+				Moonpanel.render.drawCircle cur.x, cur.y, barWidth / 2  
+				Moonpanel.render.drawThickLine cur.x, cur.y, last.screenX, last.screenY, barWidth
+				
+				if cur.axes
+					for _, axis in pairs cur.axes
+						w, h = 6, 6
+						x, y = axis.sx - w/2, axis.sy - h/2
+
+						render.SetMaterial circ
+						Moonpanel.render.drawTexturedRect x, y, w, h, (Color 255, 0, 0)
+						render.SetColorMaterial!
+
+						surface.SetDrawColor (Color 255, 0, 0, 255)
+						surface.DrawLine cur.x, cur.y, axis.sx, axis.sy
 
 setRTTexture = (rt) ->
 	RT_Material\SetTexture "$basetexture", rt
@@ -281,7 +343,6 @@ ENT.RenderPanel = () =>
 
 	setRTTexture @rendertargets.trace.rt
 	surface.DrawTexturedRect 0, 0, @ScreenSize, @ScreenSize
-	render.OverrideBlend false
 
 ENT.Monitor_Offsets = {
 	["models//cheeze/pcb/pcb4.mdl"]: {

@@ -11,6 +11,8 @@ class CellEntity
     getClassName: =>
         return @__class.__name
 
+    populatePathMap: (pathMap) =>
+
 _color = Material "moonpanel/color.png" 
 class Color extends CellEntity
     new: (@parent, defs) =>

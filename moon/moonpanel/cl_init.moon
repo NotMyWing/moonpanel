@@ -84,8 +84,9 @@ hook.Add "CreateMove", "TheMP Control", (cmd) ->
 hook.Add "InputMouseApply", "TheMP FocusMode", (cmd, x, y) ->
     if Moonpanel\isFocused! 
         panel = Moonpanel\getControlledPanel!
-        if panel
+        if IsValid panel
             if x ~= 0 or y ~= 0
+                x, y = math.floor(x * 0.75), math.floor(y * 0.75)
                 Moonpanel\sendMouseDeltas x, y
                 panel\ApplyDeltas x, y
             cmd\SetMouseX 0
@@ -127,6 +128,44 @@ net.Receive "TheMP Editor", () ->
     Moonpanel.editor\Show! 
     Moonpanel.editor\MakePopup!
 
+net.Receive "TheMP ApplyDeltas", () ->
+    panel = net.ReadEntity!
+    if IsValid(panel) or not panel.ApplyDeltas
+        return
+
+    x, y = net.ReadFloat!, net.ReadFloat!
+
+    panel\ApplyDeltas x, y
+
+net.Receive "TheMP NodeStacks", (len) ->
+    print len
+    stacks, curs = {}, {}
+
+    panel = net.ReadEntity!
+    if IsValid panel
+        return
+
+    stackCount = net.ReadUInt 4
+    for i = 1, stackCount
+        pointCount = net.ReadUInt 10
+        stack = {}
+        for j = 1, pointCount
+            stack[#stack + 1] = {
+                x: net.ReadUInt 10
+                y: net.ReadUInt 10
+            }
+
+        stacks[#stacks + 1] = stack
+
+    curCount = net.ReadUInt 4
+    for i = 1, curCount
+        curs[#curs + 1] = {
+            x: net.ReadUInt 10
+            y: net.ReadUInt 10
+        }
+
+    panel.shouldRepaintTrace = true
+
 net.Receive "TheMP EditorData Req", () ->
     data = "{}"
 
@@ -138,5 +177,88 @@ net.Receive "TheMP EditorData Req", () ->
     net.WriteData data, #data
     net.SendToServer!
  
+net.Receive "TheMP Start", () ->
+    panel = net.ReadEntity!
+    _nodeA, nodeB = {
+        x: net.ReadFloat!
+        y: net.ReadFloat!
+    }, nil
+    if net.ReadBool!
+        _nodeB = {
+            x: net.ReadFloat!
+            y: net.ReadFloat!
+        }
+
+    if IsValid(panel) and panel.pathFinder
+        nodeA, nodeB = nil, nil
+        if _nodeA
+            for _, node in pairs panel.pathFinder.nodeMap
+                if node.x == _nodeA.x and node.y == _nodeA.y
+                    nodeA = node
+                    break
+
+        if _nodeB
+            for _, node in pairs panel.pathFinder.nodeMap
+                if node.x == _nodeB.x and node.y == _nodeB.y
+                    nodeB = node
+                    break
+
+        if nodeA
+            panel.pathFinder\restart nodeA, nodeB
+            panel.shouldRepaintTrace = true
+
+net.Receive "TheMP Finish", () ->
+    panel = net.ReadEntity!
+    success = net.ReadBool!
+    redOut = net.ReadTable!
+    grayOut = net.ReadTable!
+
+    if IsValid(panel) and panel.PuzzleFinish
+        panel\PuzzleFinish success, redOut, grayOut
+
 if Moonpanel.__initialized or true
     Moonpanel\init!
+
+------------
+-- Render --
+------------
+
+-- https://github.com/thegrb93/StarfallEx
+quad_v1, quad_v2, quad_v3, quad_v4 = Vector(0,0,0), Vector(0,0,0), Vector(0,0,0), Vector(0,0,0)
+
+Moonpanel.render = {}
+
+makeQuad = (x, y, w, h) ->
+	right, bot = x + w, y + h
+	quad_v1.x = x
+	quad_v1.y = y
+	quad_v2.x = right
+	quad_v2.y = y
+	quad_v3.x = right
+	quad_v3.y = bot
+	quad_v4.x = x
+	quad_v4.y = bot
+
+Moonpanel.render.drawTexturedRect = (x, y, w, h, color) ->
+	makeQuad x, y, w, h
+	render.DrawQuad quad_v1, quad_v2, quad_v3, quad_v4, color
+
+Moonpanel.render.drawThickLine = (x1, y1, x2, y2, width) ->
+    angle = math.deg math.atan2 (y2 - y1), (x2 - x1)
+    dist = math.sqrt (y2 - y1)^2 + (x2 - x1)^2
+
+    matrix = Matrix!
+    matrix\Translate Vector x2, y2, 0
+    matrix\Rotate Angle 0, angle + 90, 0
+    cam.PushModelMatrix matrix
+
+    surface.DrawRect -width / 2, 0, width, dist
+
+    cam.PopModelMatrix!
+
+circ = Material "moonpanel/circ128.png"
+
+Moonpanel.render.drawCircle = (x, y, r) ->
+    render.SetMaterial circ
+    Moonpanel.render.drawTexturedRect x - r, y - r, r * 2, r * 2
+    render.SetColorMaterial!

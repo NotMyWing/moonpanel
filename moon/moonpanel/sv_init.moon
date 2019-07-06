@@ -21,6 +21,10 @@ AddCSLuaFile "entities/moonpanel/cl_init.lua"
 util.AddNetworkString "TheMP EditorData Req"
 util.AddNetworkString "TheMP EditorData"
 
+util.AddNetworkString "TheMP Start"
+util.AddNetworkString "TheMP Finish"
+util.AddNetworkString "TheMP ApplyDeltas"
+
 util.AddNetworkString "TheMP Editor"
 util.AddNetworkString "TheMP Focus"
 util.AddNetworkString "TheMP Mouse Deltas"
@@ -68,6 +72,41 @@ Moonpanel.requestControl = (ply, ent, x, y, force) =>
         if ent\StartPuzzle ply, x, y
             ply\SetNW2Entity "TheMP Controlled Panel", ent
 
+Moonpanel.sendStart = (ply, panel, node, symmNode) =>
+    net.Start "TheMP Start"
+    net.WriteEntity panel
+    net.WriteFloat node.x
+    net.WriteFloat node.y
+    net.WriteBool symmNode and true or false
+    if symmNode
+        net.WriteFloat symmNode.x
+        net.WriteFloat symmNode.y
+    net.Send ply
+
+Moonpanel.broadcastNodeStacks = (ply, panel, nodeStacks, cursors) =>
+    net.Start "TheMP NodeStacks"
+    net.WriteEntity panel
+    net.WriteUInt #nodeStacks, 4
+    for _, stack in pairs nodeStacks
+        net.WriteUInt #stack, 10
+        for _, point in pairs stack
+            net.WriteUInt point.sx, 10
+            net.WriteUInt point.sy, 10
+
+    net.WriteUInt #cursors, 4
+    for _, cursor in pairs cursors
+        net.WriteUInt cursor.x, 10
+        net.WriteUInt cursor.y, 10
+
+    net.SendOmit ply
+
+Moonpanel.broadcastDeltas = (ply, panel, x, y) =>
+    net.Start "TheMP ApplyDeltas"
+    net.WriteEntity panel
+    net.WriteFloat x
+    net.WriteFloat y
+    net.Broadcast!
+
 Moonpanel.broadcastData = (raw, length, ent) =>
     net.Start "TheMP EditorData"
     net.WriteUInt length, 32
@@ -83,6 +122,11 @@ hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
 
 hook.Add "Think", "TheMP Think", () ->
     for k, v in pairs player.GetAll!
+        panel = v\GetNW2Entity("TheMP Controlled Panel")
+
+        if not IsValid panel and panel
+            v\SetNW2Entity("TheMP Controlled Panel", nil)
+
         if v\GetNW2Bool "TheMP Focused"
             v\SelectWeapon "none"
 

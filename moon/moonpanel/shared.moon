@@ -138,15 +138,6 @@ Moonpanel.DefaultColors = {
     Vignette: Color 0, 0, 0, 92
 }
 
---------------
--- Includes --
---------------
-
-include "moonpanel/panel/sh_elements.lua"
-include "moonpanel/panel/ents/sh_cell.lua"
-include "moonpanel/panel/ents/sh_intersection.lua"
-include "moonpanel/panel/ents/sh_path.lua"
- 
 ---------------------------
 -- Moonpanel definitions --
 ---------------------------
@@ -189,3 +180,12 @@ Moonpanel.calculateDimensionsShared = (data) =>
         innerWidth: math.floor innerWidth
         innerHeight: math.floor innerHeight
     }
+
+--------------
+-- Includes --
+--------------
+
+include "moonpanel/panel/sh_elements.lua"
+include "moonpanel/panel/ents/sh_cell.lua"
+include "moonpanel/panel/ents/sh_intersection.lua"
+include "moonpanel/panel/ents/sh_path.lua"

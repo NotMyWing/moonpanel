@@ -178,8 +178,6 @@ ENT.GetResolution = () =>
 	return @ScreenSize / @Aspect, @ScreenSize
 
 ENT.ClientThink = () =>
-	@__buf = CurTime! / 10
-
 	if @shouldRepaintTrace and CurTime! >= (@nextTraceRepaint or 0)
 		@shouldRepaintTrace = false
 		@nextTraceRepaint = CurTime! + 0.02

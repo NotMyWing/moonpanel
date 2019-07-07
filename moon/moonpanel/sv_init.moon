@@ -21,15 +21,10 @@ AddCSLuaFile "entities/moonpanel/cl_init.lua"
 util.AddNetworkString "TheMP EditorData Req"
 util.AddNetworkString "TheMP EditorData"
 
--- util.AddNetworkString "TheMP Start"
--- util.AddNetworkString "TheMP Finish"
--- util.AddNetworkString "TheMP ApplyDeltas"
 util.AddNetworkString "TheMP Flow"
 
 util.AddNetworkString "TheMP Editor"
 util.AddNetworkString "TheMP Focus"
-util.AddNetworkString "TheMP Mouse Deltas"
-util.AddNetworkString "TheMP Request Control"
 
 resource.AddSingleFile "materials/moonpanel/acirc128.png"
 resource.AddSingleFile "materials/moonpanel/circ64.png"

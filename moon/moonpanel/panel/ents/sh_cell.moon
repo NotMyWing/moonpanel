@@ -105,8 +105,7 @@ class Polyomino extends CellEntity
                 if (@attributes.shape\get i, j)
                     x = offsetX + bounds.x + (i - 1) * spacing + (i - 1) * squareWidth 
                     y = offsetY + bounds.y + (j - 1) * spacing + (j - 1) * squareWidth 
-                    --draw.RoundedBox 4, x, y, squareWidth, squareWidth, @attributes.color
-                   
+                    
                     surface.DrawTexturedRect x, y, squareWidth, squareWidth
         draw.NoTexture!
         
@@ -164,8 +163,7 @@ class Triangle extends CellEntity
                     matrix\Translate Vector triangleWidth + spacing, 0, 0
 
                 cam.PushModelMatrix matrix
-                for j = 1, 10
-                    surface.DrawTexturedRect 0, 0, triangleWidth, triangleWidth
+                surface.DrawTexturedRect 0, 0, triangleWidth, triangleWidth
 
             cam.PopModelMatrix!
 

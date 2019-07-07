@@ -21,13 +21,17 @@ export MOONPANEL_ENTITY_GRAPHICS = {
 export Moonpanel = Moonpanel or {}
 
 Moonpanel.sendMouseDeltas = (x, y) =>
-    net.Start "TheMP Mouse Deltas"
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.ApplyDeltas, 8
+
     net.WriteFloat x
     net.WriteFloat y
     net.SendToServer!
 
 Moonpanel.requestControl = (ent, x, y) =>
-    net.Start "TheMP Request Control"
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.RequestControl, 8
+
     net.WriteEntity ent
     net.WriteUInt x, 10
     net.WriteUInt y, 10
@@ -67,16 +71,32 @@ hook.Add "CreateMove", "TheMP Control", (cmd) ->
         cmd\ClearButtons!
 
     if Moonpanel\isFocused!
+        clicked = input.WasMousePressed MOUSE_LEFT
+        panel = Moonpanel\getControlledPanel!
         lastclick = Moonpanel.__nextclick or 0
-        if CurTime! >= lastclick and input.WasMousePressed MOUSE_LEFT
+
+        if CurTime! >= lastclick and clicked
             Moonpanel.__nextclick = CurTime! + 0.05
             ent = LocalPlayer!\GetEyeTrace!.Entity
-            if IsValid Moonpanel\getControlledPanel!
-                Moonpanel\requestControl Moonpanel\getControlledPanel!, 0, 0
+            if IsValid(panel)
+                Moonpanel\requestControl panel, 0, 0
+
             elseif IsValid(ent) and ent\GetClass! == "moonpanel"
                 x, y = ent\GetCursorPos!
                 if x and y
                     Moonpanel\requestControl ent, x, y
+
+        if IsValid(panel) and CurTime! >= (Moonpanel.__nextMovementSend or 0)
+            y = -cmd\GetForwardMove!
+            x = cmd\GetSideMove!
+
+            x = ((x > 0 and 1) or (x < 0 and -1) or 0) * 10
+            y = ((y > 0 and 1) or (y < 0 and -1) or 0) * 10
+
+            if x ~= 0 or y ~= 0
+                Moonpanel.__nextMovementSend = CurTime! + 0.01
+                Moonpanel\sendMouseDeltas x, y
+                panel\ApplyDeltas x, y
 
         cmd\ClearMovement!
         use = cmd\KeyDown IN_USE
@@ -130,15 +150,6 @@ net.Receive "TheMP Editor", () ->
     Moonpanel.editor\Show! 
     Moonpanel.editor\MakePopup!
 
-net.Receive "TheMP ApplyDeltas", () ->
-    panel = net.ReadEntity!
-    if not IsValid(panel) or not panel.ApplyDeltas
-        return
-
-    x, y = net.ReadFloat!, net.ReadFloat!
-
-    panel\ApplyDeltas x, y
-
 net.Receive "TheMP NodeStacks", (len) ->
     stacks, curs = {}, {}
 
@@ -178,44 +189,75 @@ net.Receive "TheMP EditorData Req", () ->
     net.WriteData data, #data
     net.SendToServer!
  
-net.Receive "TheMP Start", () ->
+net.Receive "TheMP Flow", () ->
+    flowType = net.ReadUInt 8
     panel = net.ReadEntity!
-    _nodeA, nodeB = {
-        x: net.ReadFloat!
-        y: net.ReadFloat!
-    }, nil
-    if net.ReadBool!
-        _nodeB = {
-            x: net.ReadFloat!
-            y: net.ReadFloat!
-        }
 
-    if IsValid(panel) and panel.pathFinder
-        nodeA, nodeB = nil, nil
-        if _nodeA
-            for _, node in pairs panel.pathFinder.nodeMap
-                if node.x == _nodeA.x and node.y == _nodeA.y
-                    nodeA = node
-                    break
+    if not IsValid panel
+        return
 
-        if _nodeB
-            for _, node in pairs panel.pathFinder.nodeMap
-                if node.x == _nodeB.x and node.y == _nodeB.y
-                    nodeB = node
-                    break
+    switch flowType
+        when Moonpanel.Flow.PuzzleStart
+            if not panel.PuzzleStart or not panel.synchronized
+                return
 
-        if nodeA
-            panel\PuzzleStart nodeA, nodeB
+            _nodeA, nodeB = {
+                x: net.ReadFloat!
+                y: net.ReadFloat!
+            }, nil
+            if net.ReadBool!
+                _nodeB = {
+                    x: net.ReadFloat!
+                    y: net.ReadFloat!
+                }
 
-net.Receive "TheMP Finish", () ->
-    panel = net.ReadEntity!
-    success = net.ReadBool!
-    aborted = net.ReadBool!
-    redOut = net.ReadTable!
-    grayOut = net.ReadTable!
+            if IsValid(panel) and panel.pathFinder
+                nodeA, nodeB = nil, nil
+                if _nodeA
+                    for _, node in pairs panel.pathFinder.nodeMap
+                        if node.x == _nodeA.x and node.y == _nodeA.y
+                            nodeA = node
+                            break
 
-    if IsValid(panel) and panel.PuzzleFinish
-        panel\PuzzleFinish success, aborted, redOut, grayOut
+                if _nodeB
+                    for _, node in pairs panel.pathFinder.nodeMap
+                        if node.x == _nodeB.x and node.y == _nodeB.y
+                            nodeB = node
+                            break
+
+                if nodeA
+                    panel\PuzzleStart nodeA, nodeB
+        
+        when Moonpanel.Flow.ApplyDeltas
+            if not panel.ApplyDeltas or not panel.synchronized
+                return
+
+            x, y = net.ReadFloat!, net.ReadFloat!
+
+            panel\ApplyDeltas x, y
+
+        when Moonpanel.Flow.PuzzleFinish
+            if not panel.PuzzleFinish or not panel.synchronized
+                return
+
+            ply = net.ReadEntity!
+            len = net.ReadUInt 32
+            data = util.JSONToTable(util.Decompress(net.ReadData(len)) or "{}") or {}
+
+            panel\PuzzleFinish ply, data
+
+        when Moonpanel.Flow.PanelData
+            if not panel.SetupData
+                return
+
+            length = net.ReadUInt 32
+            raw = net.ReadData length
+
+            data = util.JSONToTable((util.Decompress raw) or "{}") or {}
+ 
+            panel\SetupData data.tileData
+            PrintTable data.tileData
+            panel.synchronized = true
 
 if Moonpanel.__initialized
     Moonpanel\init!
@@ -298,7 +340,7 @@ Moonpanel.render.precacheArc = (cx,cy,radius,thickness,startang,endang,roughness
 	-- Correct start/end ang
 	startang,endang = startang or 0, endang or 0
 	
-	if startang > endang then
+	if startang > endang
 		step = math.abs(step) * -1
 	
 	-- Create the inner circle's points.
@@ -333,7 +375,7 @@ Moonpanel.render.precacheArc = (cx,cy,radius,thickness,startang,endang,roughness
 		p1,p2,p3
 		p1 = outer[math.floor(tri/2)+1]
 		p3 = inner[math.floor((tri+1)/2)+1]
-		if tri%2 == 0 then --if the number is even use outer.
+		if tri%2 == 0 --if the number is even use outer.
 			p2 = outer[math.floor((tri+1)/2)]
 		else
 			p2 = inner[math.floor((tri+1)/2)]

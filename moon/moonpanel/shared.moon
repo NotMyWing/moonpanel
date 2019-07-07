@@ -70,42 +70,23 @@ export MOONPANEL_DEFAULTEST_RESOLUTION = {
     barWidth: 0.025
 }
 
-net.Receive "TheMP EditorData", (len, ply) ->
-    pending = nil
-    if SERVER
-        pendingEditorData = Moonpanel.pendingEditorData
-
-        for k, v in pairs pendingEditorData
-            if v.player == ply
-                pending = v
-                break
-
-        if not pending
-            return
-
-        for i = 1, #pendingEditorData
-            if pendingEditorData[i] == pending
-                table.remove pendingEditorData, i
-                break
-
-        timer.Remove pending.timer
-
-    length = net.ReadUInt 32
-    raw = net.ReadData length
-
-    if SERVER
-        pending.callback raw, length
-    else
-        data = util.JSONToTable((util.Decompress raw) or "{}") or {}
-
-        ent = net.ReadEntity!
-
-        if (IsValid ent) and ent.SetupData
-            ent\SetupData data
-
 -------------
 -- Globals --
 -------------
+
+Moonpanel.PanelState = {
+    None: 1
+    BeingUsed: 2
+    Finished: 3
+}
+
+Moonpanel.Flow = {
+    ApplyDeltas: 1
+    PanelData: 2
+    PuzzleFinish: 3
+    PuzzleStart: 4
+    RequestControl: 5
+}
 
 Moonpanel.Color = {
     Black: 1
@@ -135,7 +116,7 @@ Moonpanel.DefaultColors = {
     Background: Color 80, 77, 255, 255
     Untraced: Color 40, 22, 186
     Traced: Color 255, 255, 255, 255
-    Vignette: Color 0, 0, 0, 92
+    Vignette: Color 255, 255, 255, 160
     Errored: Color 0, 0, 0, 0
 }
 

@@ -21,9 +21,10 @@ AddCSLuaFile "entities/moonpanel/cl_init.lua"
 util.AddNetworkString "TheMP EditorData Req"
 util.AddNetworkString "TheMP EditorData"
 
-util.AddNetworkString "TheMP Start"
-util.AddNetworkString "TheMP Finish"
-util.AddNetworkString "TheMP ApplyDeltas"
+-- util.AddNetworkString "TheMP Start"
+-- util.AddNetworkString "TheMP Finish"
+-- util.AddNetworkString "TheMP ApplyDeltas"
+util.AddNetworkString "TheMP Flow"
 
 util.AddNetworkString "TheMP Editor"
 util.AddNetworkString "TheMP Focus"
@@ -103,7 +104,6 @@ Moonpanel.getControlledPanel = (ply) =>
     return ply\GetNW2Entity "TheMP Controlled Panel" 
 
 Moonpanel.requestControl = (ply, ent, x, y, force) =>
-    print ply, ent, x, y, force
     if (ply.themp_nextrequest or 0) > CurTime!
         return
 
@@ -118,9 +118,23 @@ Moonpanel.requestControl = (ply, ent, x, y, force) =>
             if ent\StartPuzzle ply, x, y
                 ply\SetNW2Entity "TheMP Controlled Panel", ent
 
-Moonpanel.sendStart = (ply, panel, node, symmNode) =>
-    net.Start "TheMP Start"
+Moonpanel.broadcastFinish = (panel, ply, data) =>
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.PuzzleFinish, 8
     net.WriteEntity panel
+
+    net.WriteEntity ply
+    raw = util.Compress util.TableToJSON data
+    net.WriteUInt #raw, 32
+    net.WriteData raw, #raw
+
+	net.Broadcast!
+
+Moonpanel.broadcastStart = (panel, node, symmNode) =>
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.PuzzleStart, 8
+    net.WriteEntity panel
+
     net.WriteFloat node.x
     net.WriteFloat node.y
     net.WriteBool symmNode and true or false
@@ -147,18 +161,35 @@ Moonpanel.broadcastNodeStacks = (ply, panel, nodeStacks, cursors) =>
     net.SendOmit ply
 
 Moonpanel.broadcastDeltas = (ply, panel, x, y) =>
-    net.Start "TheMP ApplyDeltas"
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.ApplyDeltas, 8
     net.WriteEntity panel
+
     net.WriteFloat x
     net.WriteFloat y
     net.SendOmit ply
 
-Moonpanel.broadcastData = (raw, length, ent) =>
-    net.Start "TheMP EditorData"
-    net.WriteUInt length, 32
-    net.WriteData raw, length
-    net.WriteEntity ent
-    net.Broadcast!
+Moonpanel.sendData = (panel, ply) =>
+    if ply and not IsValid ply
+        return
+
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.PanelData, 8
+    net.WriteEntity panel
+
+    data = {
+        tileData: panel.tileData
+    }
+
+    raw = util.Compress util.TableToJSON data
+
+    net.WriteUInt #raw, 32
+    net.WriteData raw, #raw
+
+    if IsValid ply
+        net.Send ply
+    else
+        net.Broadcast!
 
 hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
     tr = ply\GetEyeTrace!
@@ -189,20 +220,49 @@ hook.Add "PostPlayerDeath", "TheMP PlayerDeath", (ply) ->
 hook.Add "PlayerSilentDeath", "TheMP PlayerDeath", (ply) ->
     Moonpanel\setFocused ply, false, true
 
-net.Receive "TheMP Request Control", (len, ply) ->
-    ent = net.ReadEntity!
-    x = net.ReadUInt 10
-    y = net.ReadUInt 10
+net.Receive "TheMP Flow", (len, ply) ->
+    flowType = net.ReadUInt 8
+    
+    switch flowType
+        when Moonpanel.Flow.RequestControl
+            ent = net.ReadEntity!
 
-    Moonpanel\requestControl ply, ent, x, y
+            x = net.ReadUInt 10
+            y = net.ReadUInt 10
 
-net.Receive "TheMP Mouse Deltas", (len, ply) ->
-    panel = ply\GetNW2Entity("TheMP Controlled Panel")
-    if IsValid panel
-        x = net.ReadFloat!
-        y = net.ReadFloat!
+            Moonpanel\requestControl ply, ent, x, y
 
-        panel\ApplyDeltas x, y
+        when Moonpanel.Flow.ApplyDeltas
+            panel = ply\GetNW2Entity "TheMP Controlled Panel"
+            if IsValid panel
+                x = net.ReadFloat!
+                y = net.ReadFloat!
+
+                panel\ApplyDeltas x, y
+
+net.Receive "TheMP EditorData", (len, ply) ->
+    pending = nil
+    pendingEditorData = Moonpanel.pendingEditorData
+
+    for k, v in pairs pendingEditorData
+        if v.player == ply
+            pending = v
+            break
+
+    if not pending
+        return
+
+    for i = 1, #pendingEditorData
+        if pendingEditorData[i] == pending
+            table.remove pendingEditorData, i
+            break
+
+    timer.Remove pending.timer
+
+    length = net.ReadUInt 32
+    raw = net.ReadData length
+
+    pending.callback raw, length
 
 Moonpanel.pendingEditorData = {}
 pendingEditorData = Moonpanel.pendingEditorData

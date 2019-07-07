@@ -96,7 +96,7 @@ TOOL.LeftClick = (trace) =>
 			data = util.JSONToTable((util.Decompress raw) or "{}") or {}
 			sf\SetupData data
 			
-			Moonpanel\broadcastData raw, length, sf
+			Moonpanel\sendData sf
 
 	err = () ->
 		print "err"

@@ -269,6 +269,16 @@ class PathFinder
             @screenHeight = .screenHeight
             @symmetry = .symmetry
 
+        -- Cache the nodemap IDs so we can communicate them easily.
+        -- This is highly unsafe since nodemaps might end up
+        -- being different on a client. To make it a bit safe,
+        -- we can append the nodemap length to a message.
+        -- Normally, this SHOULDN'T ever happen.
+        @__nodeLength = #@nodeMap
+        @nodeIds = {}
+        for i, node in pairs @nodeMap
+            @nodeIds[node] = i
+
 import Rect from Moonpanel
 
 ENT.BuildPathMap = () =>

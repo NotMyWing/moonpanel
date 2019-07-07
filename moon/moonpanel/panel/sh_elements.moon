@@ -97,7 +97,7 @@ corners = {
 }
 
 class Intersection extends Element
-    type: MOONPANEL_OBJECT_TYPES.INTERSECTIONS
+    type: MOONPANEL_OBJECT_TYPES.INTERSECTION
     getLeft: =>
         @cachedLeft or= (@tile.elements.hpaths[@x - 1] or EMPTY_TABLE)[@y]
         return @cachedLeft

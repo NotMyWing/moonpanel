@@ -37,11 +37,9 @@ ENT.StartPuzzle = (ply, x, y) =>
 		return false
 
 	@SetNW2Entity "ActiveUser", ply
-	Moonpanel\sendStart ply, @, nodeA, nodeB
+	Moonpanel\broadcastStart @, nodeA, nodeB
 	@pathFinder\restart nodeA, nodeB
 
-	@__scintPower = 1
-	@__nextscint = CurTime! + 0.75
 	return true
 
 import rshift, lshift, band, bor, bnot from (bit or bit32 or require "bit")
@@ -430,13 +428,25 @@ ENT.FinishPuzzle = () =>
 	else
 		aborted = true
 
-	net.Start "TheMP Finish"
-	net.WriteEntity @
-	net.WriteBool success
-	net.WriteBool aborted
-	net.WriteTable redOut or {}
-	net.WriteTable grayOut or {}
-	net.Broadcast!
+	-- Serialize them stacks.
+	stacks = {}
+	for _, nodeStack in pairs @pathFinder.nodeStacks
+		stack = {}
+		stacks[#stacks + 1] = stack
+
+		for _, node in pairs nodeStack
+			stack[#stack + 1] = @pathFinder.nodeIds[node]
+
+	cursors = @pathFinder.cursors
+
+	Moonpanel\broadcastFinish @, activeUser, {
+		:success
+		:aborted
+		:redOut
+		:grayOut
+		:stacks
+		:cursors
+	}
 
 ENT.ServerThink = () =>
 	activeUser = @GetNW2Entity "ActiveUser"

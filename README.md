@@ -22,8 +22,6 @@ TBA.
 
 * **Not My Wing** - [Neeve01](https://github.com/Neeve01)
 
-See also the list of [contributors](https://github.com/your/project/contributors) who participated in this project.
-
 ## License
 
 TBA.

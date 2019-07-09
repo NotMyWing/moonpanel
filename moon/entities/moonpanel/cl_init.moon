@@ -1,6 +1,8 @@
 include("shared.lua")
 
 REDOUT_TIME = 4.5
+RESYNC_ATTEMPT_TIME = 2
+
 SOUND_PANEL_SCINT = Sound "moonpanel/panel_scint.ogg"
 SOUND_PANEL_FAILURE = Sound "moonpanel/panel_failure.ogg"
 SOUND_PANEL_POTENTIAL_FAILURE = Sound "moonpanel/panel_potential_failure.ogg"
@@ -10,6 +12,7 @@ SOUND_PANEL_ERASER = Sound "moonpanel/eraser_apply.ogg"
 SOUND_PANEL_ABORT = Sound "moonpanel/panel_abort_tracing.ogg"
 
 ENT.RenderGroup = RENDERGROUP_BOTH
+ENT.Moonpanel = true
 
 ENT.GetTimerName = (subname) =>
 	index = tostring @EntIndex!
@@ -58,8 +61,6 @@ ENT.Initialize = () =>
         Color(0, 0, 0, 255)
     }
 
-	@SetBackgroundColor 80, 77, 255, 255
-
 	index = tostring @EntIndex!
 	@rendertargets = {
 		foreground: {
@@ -82,10 +83,33 @@ ENT.Initialize = () =>
 		}
 	}
 
+	Moonpanel\requestData @
+	@__nextSyncAttempt = CurTime! + RESYNC_ATTEMPT_TIME
+
+ENT.CleanUp = () =>
+	@redOut = nil
+	@grayOut = nil
+	@grayOutStart = nil
+
+	timer.Remove @GetTimerName "redOut"
+	timer.Remove @GetTimerName "grayOut"
+	timer.Remove @GetTimerName "penFade"
+	timer.Remove @GetTimerName "foreground"
+
+ENT.Desynchronize = () =>
+	@tileData = nil
+	@synchronized = false
+
 ENT.Draw = () =>
 	@DrawModel!
 
 ENT.SetBackgroundColor = (r, g, b, a) =>
+	if type(r) ~= "number" and r.r
+		g = r.g
+		b = r.b
+		a = r.a
+		r = r.r
+
 	@ScreenQuad[5] = Color r, g, b, (math.max a, 1)
 
 writez = Material("engine/writez")
@@ -126,13 +150,13 @@ ENT.Draw = () =>
         render.ClearBuffersObeyStencil color.r, color.g, color.b, color.a, true
 
     --Render the starfall stuff
-    --render.PushFilterMag TEXFILTER.ANISOTROPIC
-    --render.PushFilterMin TEXFILTER.ANISOTROPIC
+    render.PushFilterMag TEXFILTER.ANISOTROPIC
+    render.PushFilterMin TEXFILTER.ANISOTROPIC
 
     xpcall fn, print, @
 
-    --render.PopFilterMag!
-    --render.PopFilterMin!
+    render.PopFilterMag!
+	render.PopFilterMin!
 
     render.SetStencilEnable false
 
@@ -178,13 +202,20 @@ ENT.GetResolution = () =>
 	return @ScreenSize / @Aspect, @ScreenSize
 
 ENT.ClientThink = () =>
-	if @shouldRepaintTrace and CurTime! >= (@nextTraceRepaint or 0)
+	if not @synchronized and CurTime! >= (@__nextSyncAttempt or 0)
+		Moonpanel\requestData @
+		@__nextSyncAttempt = CurTime! + RESYNC_ATTEMPT_TIME
+
+	elseif @shouldRepaintTrace and CurTime! >= (@nextTraceRepaint or 0)
 		@shouldRepaintTrace = false
 		@nextTraceRepaint = CurTime! + 0.02
 
 		@rendertargets.trace.dirty = true
 
 ENT.ClientTickrateThink = () =>
+	if not @synchronized
+		return
+		
 	activeUser = @GetNW2Entity "ActiveUser"
 	if IsValid activeUser
 		if @__scintPower and @__scintPower >= 0.15 and CurTime! >= @__nextscint
@@ -205,6 +236,9 @@ RT_Material = CreateMaterial "TheMP_RT", "UnlitGeneric", {
 }
 
 ENT.PuzzleStart = (nodeA, nodeB) =>
+	if not @synchronized
+		return
+
 	@rendertargets.foreground.always = false
 	@rendertargets.foreground.dirty = true
 
@@ -219,14 +253,8 @@ ENT.PuzzleStart = (nodeA, nodeB) =>
 	@__nextscint = CurTime! + 0.5
 	@__firstscint = true
 	@__scintPower = 1
-	@redOut = nil
-	@grayOut = nil
-	@grayOutStart = nil
-
-	timer.Remove @GetTimerName "redOut"
-	timer.Remove @GetTimerName "grayOut"
-	timer.Remove @GetTimerName "penFade"
-	timer.Remove @GetTimerName "foreground"
+	
+	@CleanUp!
 
 ENT.PenFade = (interval, clr, delta = 5) =>
 	if clr
@@ -244,7 +272,7 @@ ENT.PenFade = (interval, clr, delta = 5) =>
 		@pen.a -= delta
 		@shouldRepaintTrace = true
 
-ENT.PuzzleFinish = (ply, data) =>
+ENT.PuzzleFinish = (data) =>
 	success = data.success or false
 	aborted = data.aborted or false
 	@redOut = data.redOut or {}
@@ -273,7 +301,8 @@ ENT.PuzzleFinish = (ply, data) =>
 
 	if success
 		if _grayOut.grayedOut
-			@EmitSound SOUND_PANEL_POTENTIAL_FAILURE
+			if not data.sync
+				@EmitSound SOUND_PANEL_POTENTIAL_FAILURE
 
 			_oldPen = ColorAlpha @pen, 255
 			err = @colors.errored
@@ -285,17 +314,20 @@ ENT.PuzzleFinish = (ply, data) =>
 				@grayOut = _grayOut
 				@grayOutStart = CurTime!
 				@pen = _oldPen
-				@EmitSound SOUND_PANEL_ERASER
-				@EmitSound SOUND_PANEL_SUCCESS
+				if not data.sync
+					@EmitSound SOUND_PANEL_ERASER
+					@EmitSound SOUND_PANEL_SUCCESS
 		else
-			@EmitSound SOUND_PANEL_SUCCESS
+			if not data.sync
+				@EmitSound SOUND_PANEL_SUCCESS
 
 	elseif not aborted
 		err = @colors.errored
 		@pen = Color err.r, err.g, err.b, 255
 
 		if _grayOut.grayedOut
-			@EmitSound SOUND_PANEL_POTENTIAL_FAILURE
+			if not data.sync
+				@EmitSound SOUND_PANEL_POTENTIAL_FAILURE
 			timer.Create @GetTimerName("grayOut"), 0.75, 1, () ->
 				@grayOut = _grayOut
 				@grayOutStart = CurTime!
@@ -304,27 +336,21 @@ ENT.PuzzleFinish = (ply, data) =>
 				@EmitSound SOUND_PANEL_FAILURE
 		else
 			@PenFade 0.05, Color err.r, err.g, err.b
-			@EmitSound SOUND_PANEL_FAILURE
+			if not data.sync
+				@EmitSound SOUND_PANEL_FAILURE
 
 	else
-		@EmitSound SOUND_PANEL_ABORT
+		if not data.sync
+			@EmitSound SOUND_PANEL_ABORT
 
 		if @pen
-			@pen = Color @pen.r, @pen.g, @pen.b, 255
+			@PenFade 0.05, Color @pen.r, @pen.g, @pen.b, 255
+	
+	@shouldRepaintTrace = true
 
-			timer.Create @GetTimerName("penFade"), 0.05, 0, () ->
-				if not IsValid @
-					return
+ENT.SetupDataClient = (data) =>
+	@CleanUp!
 
-				if @pen.a <= 0
-					@pen.a = 0
-					timer.Remove @GetTimerName "penFade"
-					return
-
-				@pen.a -= 5
-				@shouldRepaintTrace = true
-
-ENT.SetupDataClient = () =>
 	defs = Moonpanel.DefaultColors
 	
 	@colors            or= {}
@@ -333,6 +359,9 @@ ENT.SetupDataClient = () =>
 	@colors.traced     or= defs.Traced
 	@colors.vignette   or= defs.Vignette
 	@colors.errored    or= defs.Errored
+
+	print @colors.background
+	@SetBackgroundColor @colors.background
 
 	tr = @colors.traced
 	@pen = Color tr.r, tr.g, tr.b, 255
@@ -350,6 +379,24 @@ ENT.SetupDataClient = () =>
 					@startRipples[#@startRipples + 1] = int.entity.ripple
 				if int.entity.type == MOONPANEL_ENTITY_TYPES.END
 					@endRipples[#@endRipples + 1] = int.entity.ripple
+
+	@synchronized = true
+	if data.lastSolution
+		data.lastSolution.sync = true
+		data.lastSolution.stacks = data.stacks
+		data.lastSolution.cursors = data.cursors
+		@PuzzleFinish data.lastSolution
+	
+	else
+		stacks = data.stacks or {}
+
+		@pathFinder.cursors = data.cursors
+		@pathFinder.nodeStacks = {}
+		for _, inStack in pairs stacks 
+			stack = {}
+			@pathFinder.nodeStacks[#@pathFinder.nodeStacks + 1] = stack
+			for _, i in pairs inStack
+				stack[#stack + 1] = @pathFinder.nodeMap[i]
 
 ENT.DrawBackground = () =>
 	Clear 0, 0, 0, 0
@@ -477,7 +524,7 @@ ENT.DrawTrace = () =>
 
 		for stackId, stack in pairs nodeStacks 
 			for k, v in pairs stack
-				Moonpanel.render.drawCircle v.screenX, v.screenY, (k == 1) and barWidth * 1.25 or barWidth / 2
+				Moonpanel.render.drawCircle v.screenX, v.screenY, ((k == 1) and barWidth * 1.25 or barWidth / 2) - 0.5
 
 				if k > 1
 					prev = stack[k - 1]
@@ -494,7 +541,6 @@ ENT.DrawTrace = () =>
 setRTTexture = (rt) ->
 	RT_Material\SetTexture "$basetexture", rt
 	surface.SetMaterial RT_Material
-	render.SetMaterial RT_Material
 
 ENT.DrawRipple = () =>
 	Clear 0, 0, 0, 0
@@ -508,51 +554,70 @@ ENT.DrawRipple = () =>
 		for _, ripple in pairs @endRipples
 			Moonpanel.render.drawRipple ripple, buf, (Color 255, 255, 255)
 
-vignette = Material "moonpanel/vignette2.png"
+vignette = Material "moonpanel/vignette.png"
+
+renderFunc = (x, y, w, h) ->
+	surface.DrawTexturedRect x, y, w, h
+
+import SetStencilEnable, SetViewPort, SetColorMaterial, PushRenderTarget, PopRenderTarget from render
+
+polyo = Material "moonpanel/polyomino_cell.png", "smooth"
+
 ENT.RenderPanel = () =>
-	if not @rendertargets or not @calculatedDimensions
-		return
+	shouldRender = @synchronized and @rendertargets and @calculatedDimensions
+	if shouldRender
+		oldw, oldh = ScrW!, ScrH!
+		for k, v in pairs @rendertargets
+			if (v.always or v.dirty ~= false) and v.render
+				v.dirty = false
 
-	oldw, oldh = ScrW!, ScrH!
-	for k, v in pairs @rendertargets
-		if (v.always or v.dirty ~= false) and v.render
-			v.dirty = false
+				SetStencilEnable false
+				SetViewPort 0, 0, @ScreenSize, @ScreenSize
+				cam.Start2D!
 
-			render.SetStencilEnable false
-			render.SetViewPort 0, 0, @ScreenSize, @ScreenSize
-			cam.Start2D!
+				draw.NoTexture!
+				SetColorMaterial!
 
-			draw.NoTexture!
-			render.SetColorMaterial!
+				PushRenderTarget v.rt
+				v.render @
+				PopRenderTarget!
 
-			render.PushRenderTarget v.rt
-			v.render @
-			render.PopRenderTarget!
+				cam.End2D!
+				SetViewPort 0, 0, oldw, oldh
+				SetStencilEnable true
+	else 
+		color = Color 255, 255, 255
+		width = @ScreenSize * 0.1
+		num = 4
+		step = (math.pi) / num
+		spacing = width * 0.4
 
-			cam.End2D!
-			render.SetViewPort 0, 0, oldw, oldh
-			render.SetStencilEnable true
+		totalWidth = width * num + spacing * (num - 1)
+		surface.SetMaterial polyo
+		for i = 0, num - 1
+			pct = ((1 + (math.sin CurTime! * 2.5 - i * step)) / 2) 
+			surface.SetDrawColor ColorAlpha color, (255 * (1-pct))
+			surface.DrawTexturedRect (@ScreenSize / 2) - (totalWidth / 2) + (i * width) + (i * spacing),
+				(@ScreenSize / 2) - (width / 2), width, width
 
-	surface.SetDrawColor @colors.vignette
+	surface.SetDrawColor (@colors and @colors.vignette) or Moonpanel.DefaultColors.Vignette
 	surface.SetMaterial vignette
 	surface.DrawTexturedRect 0, 0, @ScreenSize, @ScreenSize
 
-	func = (x, y, w, h) ->
-		surface.DrawTexturedRect x, y, w, h
+	if shouldRender
+		SetDrawColor 255, 255, 255, 255
+		setRTTexture @rendertargets.background.rt
+		renderFunc 0, 0, @ScreenSize, @ScreenSize
 
-	SetDrawColor 255, 255, 255, 255
-	setRTTexture @rendertargets.background.rt
-	func 0, 0, @ScreenSize, @ScreenSize
+		setRTTexture @rendertargets.foreground.rt
+		renderFunc 0, 0, @ScreenSize, @ScreenSize
 
-	setRTTexture @rendertargets.foreground.rt
-	func 0, 0, @ScreenSize, @ScreenSize
+		setRTTexture @rendertargets.ripple.rt
+		renderFunc 0, 0, @ScreenSize, @ScreenSize
 
-	setRTTexture @rendertargets.ripple.rt
-	func 0, 0, @ScreenSize, @ScreenSize
-
-	surface.SetDrawColor @pen
-	setRTTexture @rendertargets.trace.rt
-	func 0, 0, @ScreenSize, @ScreenSize
+		surface.SetDrawColor @pen
+		setRTTexture @rendertargets.trace.rt
+		renderFunc 0, 0, @ScreenSize, @ScreenSize
 
 ENT.Monitor_Offsets = {
 	["models//cheeze/pcb/pcb4.mdl"]: {
@@ -867,4 +932,21 @@ ENT.Monitor_Offsets = {
 		y2:	96,
 		z:	192,
 	}
+}
+
+properties.Add "themp", {
+	MenuLabel: "Desynchronize",
+	Order: 999,
+	MenuIcon: "icon16/wrench.png", -- We should create an icon
+	Filter: ( self, ent, ply ) ->
+		if not IsValid( ent )
+			return false
+		if not gamemode.Call( "CanProperty", ply, "themp", ent )
+			return false
+		return ent.Moonpanel
+
+	MenuOpen: MenuOpen,
+	Action: (ent) =>
+		ent\Desynchronize!
+		Moonpanel\requestData ent
 }

@@ -4,7 +4,7 @@ backgroundImages = {
     ["default"]: {
         outDimension: { w: 1474, h: 1474 }
         inDimension: { w: 1024, h: 1024 }
-        path: Material "moonpanel/panel_transparent_a.png"
+        path: Material "moonpanel/panel_transparent.png"
     }
 }
 
@@ -59,11 +59,14 @@ panel.Paint = (w, h) =>
         neww = math.min w, h
         surface.DrawTexturedRect (w/2) - (neww/2), (h/2) - (neww/2), neww, neww
 
-panel.Setup = (@data = {}, __clickCallback) =>
+panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
     @background = backgroundImages[@data.bg or "default"]
 
     if __clickCallback
         @clickCallback = __clickCallback
+
+    if __copyCallback
+        @copyCallback = __copyCallback
 
     @data.w or= 3
     @data.h or= 3
@@ -127,6 +130,9 @@ panel.Setup = (@data = {}, __clickCallback) =>
             element.DoClick = (_) ->
                 if @.clickCallback
                     @.clickCallback _
+            element.DoRightClick = (_) ->
+                if @.copyCallback
+                    @.copyCallback _
             element\Dock LEFT
 
     @centerPanel\InvalidateLayout! 

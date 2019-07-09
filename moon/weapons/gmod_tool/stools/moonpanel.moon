@@ -7,12 +7,12 @@ TOOL.ConfigName		= ""
 
 TOOL.ClientConVar["Model"] = "models/hunter/plates/plate2x2.mdl"
 TOOL.ClientConVar["Type"] = 1
-cleanup.Register("moonpanel")
+cleanup.Register("moonpanels")
 
 if SERVER
 	CreateConVar "sbox_maxmoonpanels", 3, { FCVAR_REPLICATED, FCVAR_NOTIFY, FCVAR_ARCHIVE }
 
-	export MakeComponent = (cl, pl, Pos, Ang, model) ->
+	export MakeComponent = (cl, pl, pos, ang, model, tileData, g) ->
 		if not (pl\CheckLimit "moonpanels")
             return false
 
@@ -21,29 +21,32 @@ if SERVER
             return false
 
         with sf
-		    \SetAngles Ang
-		    \SetPos Pos
+		    \SetAngles ang
+		    \SetPos pos
 		    \SetModel model
 		    \Spawn!
 
-		pl\AddCount "moonpanel", sf
-		pl\AddCleanup "moonpanel", sf
+		if tileData
+			sf\SetupData tileData
+
+		pl\AddCount "moonpanels", sf
+		pl\AddCleanup "moonpanels", sf
 
 		return sf
 
     fn = (...) ->
         MakeComponent "moonpanel", ...
 
-	duplicator.RegisterEntityClass("moonpanel", fn, "Pos", "Ang", "Model")
+	duplicator.RegisterEntityClass("moonpanel", fn, "Pos", "Ang", "Model", "TheMoonpanelTileData")
 
 else
 	language.Add "Tool.moonpanel.name", "The Moonpanel"
 	language.Add "Tool.moonpanel.desc", "Spawns a Moonpanel."
-	language.Add "sboxlimit_moonpanel", "You've hit the Moonpanel limit!"
-	language.Add "undone_Moonpanel", "Undone Moonpanel"
+	language.Add "sboxlimit_moonpanels", "You've hit the Moonpanel limit!"
+	language.Add "undone_moonpanel", "Undone Moonpanel"
 	language.Add "Cleanup_moonpanel", "Moonpanels"
 	TOOL.Information = {
-		{ name: "left", stage: 0, text: "Spawn a Moonpanel" },
+		{ name: "left", stage: 0, text: "Spawn/update a Moonpanel" },
 		{ name: "right_0", stage: 0, text: "Open the editor" },
 	}
 	for _, info in pairs(TOOL.Information)
@@ -84,19 +87,17 @@ TOOL.LeftClick = (trace) =>
         if phys\IsValid()
             phys\EnableMotion(false)
 
-    undo.Create("Moonpanel")
+    undo.Create("moonpanel")
     undo.AddEntity(sf)
     if const
         undo.AddEntity(const)
     undo.SetPlayer(ply)
     undo.Finish()
 
-	success = (raw, length) ->
+	success = (data) ->
 		if IsValid sf
-			data = util.JSONToTable((util.Decompress raw) or "{}") or {}
 			sf\SetupData data
-			
-			Moonpanel\sendData sf
+			sf.ready = true
 
 	err = () ->
 		print "err"

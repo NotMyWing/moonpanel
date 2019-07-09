@@ -70,7 +70,7 @@ intersection.Paint = (w, h) =>
             innerw = math.min w, h
             innerh = innerw
 
-            surface.SetDrawColor 60, 60, 60
+            surface.SetDrawColor Moonpanel.Colors[@attributes.color or Moonpanel.Color.Black]
             surface.SetMaterial hexagon
             surface.DrawTexturedRect (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh
 

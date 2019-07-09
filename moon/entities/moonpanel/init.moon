@@ -12,35 +12,9 @@ ENT.Use = (activator) =>
 	Moonpanel\setFocused activator, true
 
 ENT.PreEntityCopy = () =>
+	duplicator.StoreEntityModifier @, "TheMoonpanelTileData", @tileData
 
 ENT.PostEntityPaste = (ply, ent, CreatedEntities) =>
-
-ENT.StartPuzzle = (ply, x, y) =>
-	shouldStart = false
-	activeUser = @GetNW2Entity "ActiveUser"
-
-	nodeA, nodeB = nil
-	if @pathFinder -- and @isPowered
-		if not IsValid(activeUser) and IsValid ply
-			nodeA = @pathFinder\getClosestNode x, y, @calculatedDimensions.barLength
-			if not nodeA
-				return
-
-			if @tileData.Tile.Symmetry
-				nodeB = @pathFinder\getSymmetricalNode nodeA
-				if not nodeB
-					return
-					
-			shouldStart = true
-
-	if not shouldStart
-		return false
-
-	@SetNW2Entity "ActiveUser", ply
-	Moonpanel\broadcastStart @, nodeA, nodeB
-	@pathFinder\restart nodeA, nodeB
-
-	return true
 
 import rshift, lshift, band, bor, bnot from (bit or bit32 or require "bit")
 
@@ -57,7 +31,7 @@ findPolySolutions = (polyos, maxArea, result, currentPoly = 1, solution = {}, cu
         table.insert result, sol
         return
 
-	if #result > 1000
+	if #result > 3000
 		return
 
     findPolySolutions polyos, maxArea, result, currentPoly + 1, { unpack (solution) }, currentArea
@@ -127,7 +101,10 @@ ENT.CheckPolySolution = (polys, area) =>
 
 	return false
 
+timeout = 0.5
 ENT.CheckSolution = (errors) =>
+	@__solutionCheckMaxTime = CurTime! + timeout
+
 	paths = {}
 	cells = {}
 	intersections = {}
@@ -247,24 +224,41 @@ ENT.CheckSolution = (errors) =>
 
 	totalErrors = {}
 	for _, area in pairs areas
-		areaErrors = {}
+		if CurTime! >= @__solutionCheckMaxTime
+			error "Moonpanel ##{@EntIndex!}: solution check timed out."
+
 		areaData = {}
 		ySymbols = {}
 
 		markAsError = (element) ->
-			if #ySymbols > 0
+			nextYSymbol = nil
+			nextYSymbolID = nil
+			for id, ySymbol in pairs ySymbols
+				if ySymbol ~= element and not ySymbol.solutionData.inactive
+					nextYSymbol = ySymbol
+					nextYSymbolID = id
+					break
+
+			if nextYSymbol
 				grayOut.grayedOut = true
+				
 				grayOut[element.type][element.y] or= {}
 				grayOut[element.type][element.y][element.x] = true
-				grayOut[MOONPANEL_OBJECT_TYPES.CELL][ySymbols[1].y] or= {}
-				grayOut[MOONPANEL_OBJECT_TYPES.CELL][ySymbols[1].y][ySymbols[1].x] = true
+				grayOut[MOONPANEL_OBJECT_TYPES.CELL][nextYSymbol.y] or= {}
+				grayOut[MOONPANEL_OBJECT_TYPES.CELL][nextYSymbol.y][nextYSymbol.x] = true
 
 				element.solutionData.inactive = true
-				ySymbols[1].solutionData.inactive = true
-				table.remove ySymbols, 1
+				nextYSymbol.solutionData.inactive = true
+				table.remove ySymbols, nextYSymbolID
+				
+				if element.entity\getClassName! == "Y"
+					for id, ySymbol in pairs ySymbols
+						if ySymbol == element
+							table.remove ySymbols, id
+							break
+
 			else
 				redOut.errored = true
-				table.insert areaErrors, element
 
 			redOut[element.type][element.y] or= {}
 			redOut[element.type][element.y][element.x] = true
@@ -360,6 +354,9 @@ ENT.CheckSolution = (errors) =>
 					else
 						successfulSolutions = {}
 						for k, v in pairs polyCombinations
+							if CurTime! >= @__solutionCheckMaxTime
+								error "Moonpanel ##{@EntIndex!}: solution check timed out."
+
 							if v[#v] == countNegatives
 								table.remove v, #v
 								success = @CheckPolySolution v, areaMatrix
@@ -378,29 +375,56 @@ ENT.CheckSolution = (errors) =>
 
 		-- It could've been great if I could just handle suns the OO way as well,
 		-- but... well, this is just easier overall.
-		for _, element in pairs area
-			if element.entity and element.entity\getClassName! == "Sun"
-				count = 1
-				for _, otherElement in pairs area
-					if otherElement.type == MOONPANEL_OBJECT_TYPES.CELL and
-						element ~= otherElement and otherElement.entity and otherElement.entity.attributes and
-						not otherElement.solutionData.inactive and
-						otherElement.entity.attributes.color == element.entity.attributes.color
+		checkSuns = () ->
+			for _, element in pairs area
+				if not element.solutionData.inactive and element.entity and element.entity\getClassName! == "Sun"
+					count = 1
+					for _, otherElement in pairs area
+						if otherElement.type == MOONPANEL_OBJECT_TYPES.CELL and
+							element ~= otherElement and otherElement.entity and otherElement.entity.attributes and
+							not otherElement.solutionData.inactive and
+							otherElement.entity.attributes.color == element.entity.attributes.color
 
-						count += 1
-						if count > 2
-							break
-				if count ~= 2
-					markAsError element
+							count += 1
+							if count > 2
+								break 
+					if count ~= 2
+						markAsError element
 
-		if #ySymbols > 0 or #areaErrors > 0
-			for k, v in pairs ySymbols
-				redOut[MOONPANEL_OBJECT_TYPES.CELL][v.y] or= {}
-				redOut[MOONPANEL_OBJECT_TYPES.CELL][v.y][v.x] = true
-			redOut.errored = true
-			table.insert totalErrors, areaErrors
+		checkSuns!
+		for _, ySymbol in pairs ySymbols
+			markAsError ySymbol
+		checkSuns!
 
 	return grayOut, redOut
+
+ENT.StartPuzzle = (ply, x, y) =>
+	shouldStart = false
+	activeUser = @GetNW2Entity "ActiveUser"
+
+	nodeA, nodeB = nil
+	if @pathFinder -- and @isPowered
+		if not IsValid(activeUser) and IsValid ply
+			nodeA = @pathFinder\getClosestNode x, y, @calculatedDimensions.barLength
+			if not nodeA
+				return
+
+			if @tileData.Tile.Symmetry
+				nodeB = @pathFinder\getSymmetricalNode nodeA
+				if not nodeB
+					return
+					
+			shouldStart = true
+
+	if not shouldStart
+		return false
+
+	@SetNW2Entity "ActiveUser", ply
+	Moonpanel\broadcastStart @, nodeA, nodeB
+	@pathFinder\restart nodeA, nodeB
+	@__lastSolution = nil
+
+	return true
 
 ENT.FinishPuzzle = () =>
 	activeUser = @GetNW2Entity "ActiveUser"
@@ -439,13 +463,20 @@ ENT.FinishPuzzle = () =>
 
 	cursors = @pathFinder.cursors
 
-	Moonpanel\broadcastFinish @, activeUser, {
+	Moonpanel\broadcastFinish @, {
 		:success
 		:aborted
 		:redOut
 		:grayOut
 		:stacks
 		:cursors
+	}
+
+	@lastSolution = {
+		:success
+		:aborted
+		:redOut
+		:grayOut
 	}
 
 ENT.ServerThink = () =>

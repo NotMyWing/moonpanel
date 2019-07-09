@@ -21,7 +21,7 @@ class PathEntity
 class Hexagon extends PathEntity
     new: (@parent, defs) =>
         @attributes = {
-            color: Moonpanel.Color.Black
+            color: defs.Color or Moonpanel.Color.Black
         }
 
     checkSolution: (areaData) =>

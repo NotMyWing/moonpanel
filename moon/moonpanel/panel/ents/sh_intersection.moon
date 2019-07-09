@@ -42,7 +42,7 @@ class Entrance extends IntersectionEntity
 class Hexagon extends IntersectionEntity
     new: (@parent, defs) =>
         @attributes = {
-            color: Moonpanel.Color.Black
+            color: defs.Color or Moonpanel.Color.Black
         }
 
     checkSolution: (areaData) =>

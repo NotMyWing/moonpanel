@@ -84,7 +84,7 @@ class PathFinder
             @updateCallback packed
 
     think: () =>
-        if not @nodeStacks
+        if not @nodeStacks or not @cursors
             return
 
         toInsert = {}
@@ -172,7 +172,7 @@ class PathFinder
                             table.insert toRemove, #nodeStack
                         else
                             table.remove nodeStack, #nodeStack
-                            @packAndCallback!
+
                         shouldUpdateCursor = false
                         break
 
@@ -181,7 +181,7 @@ class PathFinder
                             table.insert toInsert, to
                         else
                             table.insert nodeStack, to
-                            @packAndCallback!
+
                         shouldUpdateCursor = false
                         break
                         
@@ -195,10 +195,6 @@ class PathFinder
                     dy: maxDotVector.y
                     pointId: #nodeStack
                 }
-
-                if not (@compareCursorData cursorData, @cursorDatas[_])
-                    @cursorDatas[_] = cursorData
-                    table.insert pendingCursorUpdates, cursorData
             else
                 nodeCursor.x = nodeStack[#nodeStack].screenX
                 nodeCursor.y = nodeStack[#nodeStack].screenY
@@ -208,7 +204,6 @@ class PathFinder
                     table.insert toRemove, #nodeStack
                 else
                     table.remove nodeStack, #nodeStack
-                    @packAndCallback!
                 shouldUpdateCursor = false
 
         if @symmetry and #toInsert > 1 and toInsert[1] ~= toInsert[2]
@@ -220,8 +215,6 @@ class PathFinder
 
                 table.insert @nodeStacks[1], toInsert[1]
                 table.insert @nodeStacks[2], toInsert[2]
-                shouldUpdateCursor = false
-                @packAndCallback!
 
         if @symmetry and #toRemove > 1 and toRemove[1] == toRemove[2]
             a = @nodeStacks[1][toRemove[1]]
@@ -232,12 +225,6 @@ class PathFinder
 
                 table.remove @nodeStacks[1], toRemove[1]
                 table.remove @nodeStacks[2], toRemove[2]
-                shouldUpdateCursor = false
-                @packAndCallback!
-
-        if shouldUpdateCursor
-            for k, data in pairs pendingCursorUpdates
-                @runCursorCallback data
 
     applyDeltas: (x, y) =>
         if not @cursors
@@ -321,8 +308,12 @@ ENT.BuildPathMap = () =>
             vpath = @elements.vpaths[i][j]
             vpath\populatePathMap @pathMap
 
-ENT.SetupData = (@tileData) =>
+ENT.SetupData = (data) =>
     elementClasses = Moonpanel.Elements
+    if CLIENT
+        @tileData = data.tileData
+    else
+        @tileData = data
 
     if not elementClasses
         return
@@ -416,9 +407,6 @@ ENT.SetupData = (@tileData) =>
                     int.entity = Moonpanel.Entities.Intersection[entDef.Type] int, entDef.Attributes
                     int.entity.type = entDef.Type
 
-    if CLIENT
-        @SetupDataClient!
-
     @BuildPathMap!
 
     pfData = {
@@ -430,6 +418,9 @@ ENT.SetupData = (@tileData) =>
     }
 
     @pathFinder = PathFinder @pathMap, pfData, () ->, () ->
+
+    if CLIENT
+        @SetupDataClient data
 
     @isPowered = true
 

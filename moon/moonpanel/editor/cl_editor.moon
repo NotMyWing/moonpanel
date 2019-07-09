@@ -1,15 +1,26 @@
 editor = {}
 
-updateDirRecur = (path) =>
-editor.UpdateTree = () =>
-    @tree\Clear!
+TIPLABEL_TIPS = {
+    "You can remove an entity by clicking on it twice!"
+    "You can copy an entity by right-clicking on it!"
+    "The editor autosaves your puzzles. Don't worry about accidentally losing your progress!"
+    "You should play The Witness!"
+}
 
-    node = @tree\AddNode "moonpanel"
-    node\MakeFolder "moonpanel", "DATA", true
-    node\SetExpanded true
-    node.isRoot = true
+-----------------------------------
+--                               --
+-- HERE BE LOCALS.               --
+--                               --
+-----------------------------------
 
-normalize = (t) ->
+prettifyFileName = (fileName) ->
+    s, e = string.find fileName, "/"
+    if s
+        fileName = string.sub fileName, e + 1, -1
+
+    return string.StripExtension fileName
+
+normalizePolyomino = (t) ->
     norm = {}
     minx, miny, maxx, maxy = nil, nil, nil, nil
     for j = 1, 5
@@ -40,17 +51,37 @@ normalize = (t) ->
     return norm
 
 comparePolyos = (a, b) ->
+    if (a.rotational or false) ~= (b.rotational or false)
+        return false
+
     if a.w ~= b.w or a.h ~= b.h
         return false
 
     for i = 1, a.h
         for j = 1, a.w
-            if a[j][i] ~= b[j][i]
+            if a[j] and b[j] and (a[j][i] ~= b[j][i])
                 return false
     
     return true
 
-gfx = {
+POLYOMINO_EDITOR = nil
+POLYOMINO_EDITOR_DATA = {}
+
+COLOR_WHITE = Color 255, 255, 255
+
+-----------------------------------
+--                               --
+-- HERE BE TOOLSETS.             --
+--                               --
+-----------------------------------
+
+TOOL_GRAPHICS = {
+    ["place"]: (Material "moonpanel/editor_brush.png", "noclamp smooth")
+    ["erase"]: (Material "moonpanel/editor_eraser.png", "noclamp smooth")
+    ["flood"]: (Material "moonpanel/editor_bucket.png", "noclamp smooth")
+}
+
+ENTITY_GRAPHICS = {
     [MOONPANEL_ENTITY_TYPES.POLYOMINO]: (Material "moonpanel/polyo.png", "noclamp smooth")
     [MOONPANEL_ENTITY_TYPES.SUN]: (Material "moonpanel/sun.png", "noclamp smooth")
     [MOONPANEL_ENTITY_TYPES.TRIANGLE]: (Material "moonpanel/triangle.png", "noclamp smooth")
@@ -65,119 +96,193 @@ gfx = {
     }
 }
 
-polyoEditor = nil
-polyoData = {}
-
-white = Color 255, 255, 255
-
-objs = MOONPANEL_OBJECT_TYPES
-types = MOONPANEL_ENTITY_TYPES
-
-prettifyFileName = (fileName) ->
-    s, e = string.find fileName, "/"
-    if s
-        fileName = string.sub fileName, e + 1, -1
-
-    return string.StripExtension fileName
-
-editorEnts = {
+TOOLSET_TOOLS = {
+    -----------------
+    -- Tool: brush --
+    -----------------
     {
-        type: types.COLOR
+        tooltip: "Place or Erase Entities"
+        render: (w, h) ->
+            innerw = w * 0.8
+            innerh = h * 0.8
+
+            surface.SetDrawColor COLOR_WHITE
+            surface.SetMaterial TOOL_GRAPHICS["place"]
+            surface.DrawTexturedRect (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh
+
+        click: (button, gridElement, color) ->
+            if button and button.tool and button.tool.set
+                button.tool.set button, gridElement, color
+                return true
+    }
+    ------------------
+    -- Tool: eraser --
+    ------------------
+    {
+        tooltip: "Erase Entities"
+        render: (w, h) ->
+            innerw = w * 0.8
+            innerh = h * 0.8
+
+            surface.SetDrawColor COLOR_WHITE
+            surface.SetMaterial TOOL_GRAPHICS["erase"]
+            surface.DrawTexturedRect (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh
+
+        click: (button, gridElement, color) ->
+            if gridElement and gridElement.entity
+                gridElement.entity = nil
+                return true
+    }
+    -------------------
+    -- Tool: recolor --
+    -------------------
+    {
+        tooltip: "Recolor Entities"
+        render: (w, h) ->
+            innerw = w * 0.8
+            innerh = h * 0.8
+
+            surface.SetDrawColor COLOR_WHITE
+            surface.SetMaterial TOOL_GRAPHICS["flood"]
+            surface.DrawTexturedRect (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh
+
+        click: (button, gridElement, color) ->
+            if gridElement and gridElement.entity and gridElement.attributes
+                gridElement.attributes.color = color
+                return true
+    }
+}
+
+TOOLSET_ENTITIES = {
+    ------------------------
+    -- Tool: color entity --
+    ------------------------
+    {
         tooltip: "Color"
-        target: objs.CELL
+        entity: MOONPANEL_ENTITY_TYPES.COLOR
+        target: MOONPANEL_OBJECT_TYPES.CELL
+
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial gfx[types.COLOR]
+            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.COLOR]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (button, cell, color) ->
-            if cell.attributes.color == color and cell.entity == types.COLOR
-                cell.entity = nil
+
+        set: (button, gridElement, color) ->
+            if gridElement.attributes.color == color and gridElement.entity == MOONPANEL_ENTITY_TYPES.COLOR
+                gridElement.entity = nil
             else
-                cell.attributes.color = color
-                cell.entity = types.COLOR 
+                gridElement.attributes.color = color
+                gridElement.entity = MOONPANEL_ENTITY_TYPES.COLOR 
     }
+    ------------------------
+    -- Tool: sun entity   --
+    ------------------------
     {
-        type: types.SUN
         tooltip: "Sun / Star"
-        target: objs.CELL
+        entity: MOONPANEL_ENTITY_TYPES.SUN
+        target: MOONPANEL_OBJECT_TYPES.CELL
+
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial gfx[types.SUN]
+            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.SUN]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (button, cell, color) ->
-            if cell.attributes.color == color and cell.entity == types.SUN
-                cell.entity = nil
+
+        set: (button, gridElement, color) ->
+            if gridElement.attributes.color == color and gridElement.entity == MOONPANEL_ENTITY_TYPES.SUN
+                gridElement.entity = nil
+
             else
-                cell.attributes.color = color
-                cell.entity = types.SUN 
+                gridElement.attributes.color = color
+                gridElement.entity = MOONPANEL_ENTITY_TYPES.SUN 
     }
+    -------------------------
+    -- Tool: eraser entity --
+    -------------------------
     {
-        type: types.ERASER
         tooltip: "Y-Symbol / Eraser"
-        target: objs.CELL
+        entity: MOONPANEL_ENTITY_TYPES.ERASER
+        target: MOONPANEL_OBJECT_TYPES.CELL
+
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial gfx[types.ERASER]
+            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.ERASER]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (button, cell, color) ->
-            if cell.attributes.color == color and cell.entity == types.ERASER
-                cell.entity = nil
+
+        set: (button, gridElement, color) ->
+            if gridElement.attributes.color == color and gridElement.entity == MOONPANEL_ENTITY_TYPES.ERASER
+                gridElement.entity = nil
             else
-                cell.attributes.color = color
-                cell.entity = types.ERASER 
+                gridElement.attributes.color = color
+                gridElement.entity = MOONPANEL_ENTITY_TYPES.ERASER 
     }
+    ------------------------
+    -- Tool: polyo entity --
+    ------------------------
     {
-        type: types.POLYOMINO
         tooltip: "Polyomino / Tetris"
-        target: objs.CELL
+        entity: MOONPANEL_ENTITY_TYPES.POLYOMINO
+        target: MOONPANEL_OBJECT_TYPES.CELL
+
+        copy: (button, editor, gridElement) ->
+            table.Empty POLYOMINO_EDITOR_DATA
+            table.CopyFromTo gridElement.attributes.shape, POLYOMINO_EDITOR_DATA
+
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial gfx[types.POLYOMINO]
+            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.POLYOMINO]
             surface.DrawTexturedRect 0, 0, w, h
+
         click: (button, wasSelected) ->
-            if IsValid button.polyoEditor
-                button.polyoEditor\Remove!
+            if IsValid button.POLYOMINO_EDITOR
+                button.POLYOMINO_EDITOR\Remove!
 
-            button.polyoEditor = vgui.CreateFromTable (include "moonpanel/editor/vgui_polyoeditor.lua")
+            button.POLYOMINO_EDITOR = vgui.CreateFromTable (include "moonpanel/editor/vgui_polyoeditor.lua")
 
-            if IsValid button.polyoEditor
-                polyoEditor = button.polyoEditor
-                polyoEditor\Setup polyoData
-                polyoEditor\MakePopup!
-                polyoEditor\Show!
-                x, y = button\LocalToScreen(0, button\GetTall!)
-                polyoEditor\SetPos x, y
-                polyoEditor\RequestFocus!
-                timer.Simple 0.01, () ->
-                    polyoEditor.Think = () ->
-                        if not polyoEditor\HasFocus!
-                            polyoEditor\Hide!
-                            polyoEditor.Think = nil
+            if IsValid button.POLYOMINO_EDITOR
+                x, y = button\LocalToScreen 0, button\GetTall!
+                POLYOMINO_EDITOR = button.POLYOMINO_EDITOR
+                with POLYOMINO_EDITOR
+                    \Setup POLYOMINO_EDITOR_DATA
+                    \MakePopup!
+                    \Show!
+                    \SetPos x, y
+                    \RequestFocus!
+                    timer.Simple 0.01, () ->
+                        .Think = () ->
+                            if not \HasFocus!
+                                \Remove!
 
-        set: (button, cell, color) ->
-            norm = normalize polyoData
+        set: (button, gridElement, color) ->
+            norm = normalizePolyomino POLYOMINO_EDITOR_DATA
 
             if not norm or 
-                (cell.attributes.color == color and 
-                    cell.entity == types.POLYOMINO and
-                    cell.attributes.shape and
-                    (comparePolyos norm, cell.attributes.shape)
+                (gridElement.attributes.color == color and 
+                    gridElement.entity == MOONPANEL_ENTITY_TYPES.POLYOMINO and
+                    gridElement.attributes.shape and
+                    (comparePolyos norm, gridElement.attributes.shape)
                 )
-                cell.entity = nil
+                gridElement.entity = nil
             elseif norm
-                cell.attributes.color = color
+                gridElement.attributes.color = color
 
-                cell.attributes.shape = norm
-                cell.entity = types.POLYOMINO 
+                gridElement.attributes.shape = norm
+                gridElement.entity = MOONPANEL_ENTITY_TYPES.POLYOMINO 
     }
+    ---------------------------
+    -- Tool: triangle entity --
+    ---------------------------
     {
-        type: types.TRIANGLE
-        tooltip: "Triangle"
-        target: objs.CELL
+        tooltip: "Triangle (Click again to change the count)"
+        entity: MOONPANEL_ENTITY_TYPES.TRIANGLE
+        target: MOONPANEL_OBJECT_TYPES.CELL
+
+        copy: (button, editor, gridElement) ->
+            button.count = gridElement.attributes.count
+
         render: (w, h, color, button) ->
             button.count or= 1
             surface.SetDrawColor color
-            surface.SetMaterial gfx[types.TRIANGLE]
+            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.TRIANGLE]
             innerw = w * 0.275
             innerh = h * 0.275
 
@@ -209,80 +314,119 @@ editorEnts = {
             if wasSelected
                 button.count = (button.count % 3) + 1
 
-        set: (button, cell, color) ->
+        set: (button, gridElement, color) ->
             count = button.count
-            if cell.attributes.color == color and cell.attributes.count == count and cell.entity == types.TRIANGLE
-                cell.entity = nil
+            if gridElement.attributes.color == color and 
+                gridElement.attributes.count == count and gridElement.entity == MOONPANEL_ENTITY_TYPES.TRIANGLE
+                gridElement.entity = nil
             else
-                cell.attributes.color = color
-                cell.attributes.count = count
-                cell.entity = types.TRIANGLE 
+                gridElement.attributes.color = color
+                gridElement.attributes.count = count
+                gridElement.entity = MOONPANEL_ENTITY_TYPES.TRIANGLE 
     }
 }
 
-editorPathEnts = {
+TOOLSET_PATHENTITIES = {
+    ------------------------
+    -- Tool: start entity --
+    ------------------------
     {
-        type: types.START
         tooltip: "Entrance / Start"
-        target: objs.INTERSECTION
+        entity: MOONPANEL_ENTITY_TYPES.START
+        target: MOONPANEL_OBJECT_TYPES.INTERSECTION
+
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial gfx[types.START]
+            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.START]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (button, int, color) ->
-            if int.entity == types.START
-                int.entity = nil
+
+        set: (button, gridElement, color) ->
+            if gridElement.entity == MOONPANEL_ENTITY_TYPES.START
+                gridElement.entity = nil
             else
-                int.entity = types.START 
+                gridElement.entity = MOONPANEL_ENTITY_TYPES.START 
     }
+    -----------------------
+    -- Tool: exit entity --
+    -----------------------
     {
-        type: types.END
         tooltip: "Exit / End"
-        target: objs.INTERSECTION
+        entity: MOONPANEL_ENTITY_TYPES.END
+        target: MOONPANEL_OBJECT_TYPES.INTERSECTION
+
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial gfx[types.END]
+            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.END]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (button, int, color) ->
-            if int.entity == types.END
-                int.entity = nil
+
+        set: (button, gridElement, color) ->
+            if gridElement.entity == MOONPANEL_ENTITY_TYPES.END
+                gridElement.entity = nil
             else
-                int.entity = types.END 
+                gridElement.entity = MOONPANEL_ENTITY_TYPES.END 
     }
+    ---------------------------
+    -- Tool: disjoint entity --
+    ---------------------------
     {
-        type: types.DISJOINT
         tooltip: "Break / Disjoint"
-        target: { objs.HPATH, objs.VPATH }
+        entity: MOONPANEL_ENTITY_TYPES.DISJOINT
+        target: { MOONPANEL_OBJECT_TYPES.HPATH, MOONPANEL_OBJECT_TYPES.VPATH }
+
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial gfx[types.DISJOINT]
+            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.DISJOINT]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (button, bar, color) ->
-            if bar.entity == types.DISJOINT
-                bar.entity = nil
+
+        set: (button, gridElement, color) ->
+            if gridElement.entity == MOONPANEL_ENTITY_TYPES.DISJOINT
+                gridElement.entity = nil
             else
-                bar.entity = types.DISJOINT 
+                gridElement.entity = MOONPANEL_ENTITY_TYPES.DISJOINT 
     }
+    --------------------------
+    -- Tool: hexagon entity --
+    --------------------------
     {
-        type: types.HEXAGON
         tooltip: "Dot / Hexagon"
-        target: { objs.HPATH, objs.VPATH, objs.INTERSECTION }
-        render: (w, h, color) ->
-            surface.SetDrawColor color
-            surface.SetMaterial gfx[types.HEXAGON][1]
+        entity: MOONPANEL_ENTITY_TYPES.HEXAGON
+        target: { MOONPANEL_OBJECT_TYPES.HPATH, MOONPANEL_OBJECT_TYPES.VPATH, MOONPANEL_OBJECT_TYPES.INTERSECTION }
+
+        render: (w, h, bgColor, entColor) ->
+            surface.SetDrawColor bgColor
+            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.HEXAGON][1]
             surface.DrawTexturedRect 0, 0, w, h
-            surface.SetDrawColor Color 60, 60, 60
-            surface.SetMaterial gfx[types.HEXAGON][2]
+            surface.SetDrawColor entColor
+            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.HEXAGON][2]
             surface.DrawTexturedRect 0, 0, w, h
-        set: (button, bar, color) ->
-            if bar.entity == types.HEXAGON
-                bar.entity = nil
+
+        set: (button, gridElement, color) ->
+            if gridElement.attributes.color == color and gridElement.entity == MOONPANEL_ENTITY_TYPES.HEXAGON
+                gridElement.entity = nil
             else
-                bar.entity = types.HEXAGON
+                gridElement.attributes.color = color
+                gridElement.entity = MOONPANEL_ENTITY_TYPES.HEXAGON 
     }
 }
 
-editor.clickCallback = (element) =>
+-----------------------------------
+--                               --
+-- HERE BE THE EDITOR.           --
+--                               --
+-----------------------------------
+
+editor.UpdateTree = () =>
+    @tree_fileTree\Clear!
+
+    node = @tree_fileTree\AddNode "moonpanel"
+    node\MakeFolder "moonpanel", "DATA", true
+    node\SetExpanded true
+    node.isRoot = true
+
+editor.Grid_ClickCallback = (element) =>
+    if not element
+        return
+
     selected = nil
 
     fn = (btn) ->
@@ -295,14 +439,14 @@ editor.clickCallback = (element) =>
                 if btn.tool.target == element.type
                     return btn
 
-    for k, v in pairs @__editorEnts
+    for k, v in pairs @__toolset_entities
         val = fn v
         if val
             selected = val
             break
 
-    if not val 
-        for k, v in pairs @__editorPathEnts
+    if not selected 
+        for k, v in pairs @__toolset_path_entities
             val = fn v
             if val
                 selected = val
@@ -311,9 +455,56 @@ editor.clickCallback = (element) =>
     if not selected
         return
 
+    button = nil
+    for k, v in pairs @__toolset_tools
+        if v.selected
+            button = v
+
+    if not button
+        return
+
     element.attributes or= {}
-    selected.tool.set selected, element, @selectedColor
-    @OnChange!
+    if button.tool.click selected, element, @selectedColor
+        @OnChange!
+
+editor.Grid_CopyCallback = (element) =>
+    button = nil
+
+    fn = (btn) ->
+        if btn.tool.entity == element.entity
+            return btn
+
+    for k, v in pairs @__toolset_entities
+        val = fn v
+        if val
+            button = val
+            break
+
+    if not button 
+        for k, v in pairs @__toolset_path_entities
+            val = fn v
+            if val
+                button = val
+                break
+ 
+    if not button
+        return
+
+    element.attributes or= {}
+    colorButton = nil
+    for k, v in pairs @__toolset_colors
+        if v.color == (element.attributes.color or Moonpanel.Color.Black)
+            colorButton = v
+            break
+
+    if button
+        button\Select!
+
+        if button.tool.copy
+            button.tool.copy button, editor, element
+
+    if colorButton
+        colorButton\DoClick!
 
 editor.Autosave = () =>
     timer.Remove "TheMP Editor Autosave"
@@ -336,16 +527,17 @@ editor.OnChange = () =>
     @__hasChanged = true
 
     timer.Remove "TheMP Editor Autosave"
-    timer.Create "TheMP Editor Autosave", 5, 1, () ->
+    timer.Create "TheMP Editor Autosave", 1, 1, () ->
         @Autosave!
 
 editor.PerformLayout = (w, h) =>
     @BaseClass.PerformLayout @, w, h
-    if @middlePanel
-        px, py = @middlePanel\GetPos!
+    if @panel_middleContainer
+        px, py = @panel_middleContainer\GetPos!
 
-        @upperBar\SetPos px, 0
-        @upperBar\SizeToContents!
+        @panel_toolBar\SetPos px, 0
+        @panel_toolBar\SizeToContents!
+        @label_tips\SizeToContents!
 
         titleLabel = nil
         for k, v in pairs @GetChildren!
@@ -354,15 +546,15 @@ editor.PerformLayout = (w, h) =>
                 break
  
         if titleLabel
-            if not @treePanel\IsVisible!
+            if not @panel_fileTreeContainer\IsVisible!
                 tx, ty = titleLabel\GetPos!
                 if not titleLabel.initialPos
                     titleLabel.initialPos = { x: tx, y: ty }
 
                 offsety = ty
-                offsetx = 8 + @upperBar\GetWide!
+                offsetx = 8 + @panel_toolBar\GetWide!
             
-                bx, by = @upperBar\GetPos!
+                bx, by = @panel_toolBar\GetPos!
 
                 titleLabel\SetPos bx + offsetx, by + offsety
             elseif titleLabel.initialPos
@@ -380,22 +572,19 @@ editor.Init = () =>
         \Center!
         \Hide!
 
-    @treePanel = vgui.Create "DPanel", @
-    with @treePanel
+    @panel_fileTreeContainer = with vgui.Create "DPanel", @
         \Dock LEFT
         \SetWide 250
         \DockMargin 0, 0, 4, 0
 
-    updatebtn = vgui.Create "Button", @treePanel
-    with updatebtn
+    with vgui.Create "Button", @panel_fileTreeContainer
         \Dock BOTTOM
         \SetTall 24
         \SetText "Update"
         .DoClick = () ->
             @UpdateTree!
 
-    @tree = vgui.Create "DTree", @treePanel
-    with @tree
+    @tree_fileTree = with vgui.Create "DTree", @panel_fileTreeContainer
         \Dock FILL
         .DoRightClick = (_self, node) ->
             fileName = node.GetFileName and node\GetFileName!
@@ -415,7 +604,7 @@ editor.Init = () =>
                     Derma_Query "Overwrite file?", "Overwrite",
                         "Yes", () ->
                             @SaveTo fileName
-                            @tree\SetSelectedItem node,
+                            @tree_fileTree\SetSelectedItem node,
                         "No"
 
                 copyTo = menu\AddOption "Copy to..."
@@ -517,19 +706,18 @@ editor.Init = () =>
             _self.nextClick = CurTime! + 0.5
             _self.lastNode = node
 
-    @middlePanel = vgui.Create "DPanel", @
-    with @middlePanel
+    
+    @panel_middleContainer = with vgui.Create "DPanel", @
         \Dock LEFT
-        \SetWide 260
+        \SetWide 305
         \DockMargin 0, 0, 0, 0
         .Paint = nil
 
-    @upperBar = vgui.Create "DPanel", @
-    @upperBar\SetZPos 1
-    @upperBar.Paint = nil
+    @panel_toolBar = with vgui.Create "DPanel", @
+        \SetZPos 1
+        .Paint = nil
 
-    contractExpand = vgui.Create "DImageButton", @upperBar
-    with contractExpand
+    with vgui.Create "DImageButton", @panel_toolBar
         \DockMargin 4, 4, 0, 4
         \SetImage "icon16/application_side_contract.png"
         \Dock LEFT
@@ -539,15 +727,14 @@ editor.Init = () =>
             _self.hidden = not _self.hidden
             if _self.hidden
                 _self\SetImage "icon16/application_side_contract.png"
-                @treePanel\Hide!
+                @panel_fileTreeContainer\Hide!
             else
                 _self\SetImage "icon16/application_side_expand.png"
-                @treePanel\Show!
+                @panel_fileTreeContainer\Show!
             
             @InvalidateLayout!
 
-    newBtn = vgui.Create "DImageButton", @upperBar
-    with newBtn 
+    with vgui.Create "DImageButton", @panel_toolBar
         \DockMargin 16, 4, 0, 4
         \SetImage "icon16/page.png"
         \SetTooltip "New"
@@ -564,8 +751,7 @@ editor.Init = () =>
                 @SetOpenedFile!
                 @Deserialize {}
 
-    saveBtn = vgui.Create "DImageButton", @upperBar
-    with saveBtn
+    with vgui.Create "DImageButton", @panel_toolBar
         \DockMargin 4, 4, 0, 4
         \SetImage "icon16/disk.png"
         \Dock LEFT
@@ -581,104 +767,122 @@ editor.Init = () =>
             else
                 @ShowSaveAsDialog!  
 
-    saveAllBtn = vgui.Create "DImageButton", @upperBar
-    with saveAllBtn
+    with vgui.Create "DImageButton", @panel_toolBar
         \DockMargin 4, 4, 0, 4
         \SetImage "icon16/disk_multiple.png"
         \Dock LEFT
         \SetTooltip "Save As..."
         \SizeToContents!
         .DoClick = () ->
-            @ShowSaveAsDialog!           
+            @ShowSaveAsDialog!   
+
+    with vgui.Create "DImageButton", @panel_toolBar
+        \DockMargin 4, 4, 0, 4
+        \SetImage "icon16/cancel.png"
+        \Dock LEFT
+        \SetTooltip "Clear..."
+        \SizeToContents!
+        .DoClick = () ->
+            Derma_Query "This will remove all entities from the grid! Clear anyway?", "Clear",
+                "Yes", () ->
+                    data = @Serialize!
+                    data.VPaths = {}
+                    data.HPaths = {}
+                    data.Intersections = {}
+                    data.Cells = {}
+                    @Deserialize data
+                    @OnChange!,
+                "No"
+
+    with vgui.Create "DImageButton", @panel_toolBar
+        \DockMargin 16, 4, 0, 4
+        \SetImage "moonpanel/icon16_windmill.png"
+        \Dock LEFT
+        \SetTooltip "Import from The Windmill..."
+        \SizeToContents!
+        .DoClick = () ->
+            --@ShowSaveAsDialog!     
     
-    @upperBar\SetWide 90
-    @upperBar\InvalidateLayout!
+    @panel_toolBar\SetWide 160
+    @panel_toolBar\InvalidateLayout!
 
-    sheet = vgui.Create "DPropertySheet", @middlePanel
-    sheet\Dock FILL
+    @sheet_toolSheet = with vgui.Create "DPropertySheet", @panel_middleContainer
+        \Dock FILL
 
-    controlsPanel = vgui.Create "DScrollPanel", sheet
-    with controlsPanel
+    panel_controls = with vgui.Create "DScrollPanel", @sheet_toolSheet
         \Dock FILL
         \DockMargin 6, 0, 6, 6
 
-    sheet\AddSheet "Panel", controlsPanel, "icon16/pencil.png"
+    @sheet_toolSheet\AddSheet "Panel", panel_controls, "icon16/pencil.png"
 
-    --
-    -- Controls
-    --
+    do
+        widthHeight = with vgui.Create "DPanel", panel_controls
+            \Dock TOP
+            \SetTall 120
+            .Paint = nil
 
-    widthHeight = vgui.Create "DPanel", controlsPanel
-    widthHeight\Dock TOP
-    widthHeight\SetTall 120
-    widthHeight.Paint = nil
-    
-    left = vgui.Create "DPanel", widthHeight
-    left\Dock LEFT
-    left.Paint = nil
-    
-    right = vgui.Create "DPanel", widthHeight
-    right\Dock RIGHT
-    right.Paint = nil
+        left = with vgui.Create "DPanel", widthHeight
+            \Dock LEFT
+            .Paint = nil
+        
+        right = with vgui.Create "DPanel", widthHeight
+            \Dock RIGHT
+            .Paint = nil
 
-    widthHeight.PerformLayout = (_, w, h) ->
-        left\SetWide w/2
-        right\SetWide w/2
+        widthHeight.PerformLayout = (_, w, h) ->
+            left\SetWide w/2
+            right\SetWide w/2
 
-    label = vgui.Create "DLabel", left
-    with label
-        \DockMargin 5, 0, 5, 2
-        \SetColor Color 0, 0, 0, 255
-        \Dock TOP
-        \SetText "Width:"
+        with vgui.Create "DLabel", left
+            \DockMargin 5, 0, 5, 2
+            \SetColor Color 0, 0, 0, 255
+            \Dock TOP
+            \SetText "Width:"
 
-    @widthCombo = vgui.Create "DComboBox", left
-    with @widthCombo
-        \SetSortItems false
-        \DockMargin 5, 0, 5, 2
-        \Dock TOP
-        \SetValue 3
-        .OnSelect = (_, index, value) ->
-            data = @Serialize!
-            data.Tile.Width = value
-            @Deserialize data
-            @OnChange!
+        @comboBox_widthCombo = with vgui.Create "DComboBox", left
+            \SetSortItems false
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetValue 3
+            .OnSelect = (_, index, value) ->
+                data = @Serialize!
+                data.Tile.Width = value
+                @Deserialize data
+                @OnChange!
 
-    for i = 1, 10
-        @widthCombo\AddChoice i
+            for i = 1, 10
+                \AddChoice i
 
-    label = vgui.Create "DLabel", right
-    with label
-        \SetColor Color 0, 0, 0, 255
-        \DockMargin 5, 0, 5, 2
-        \Dock TOP
-        \SetText "Height:"
+        with vgui.Create "DLabel", right
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetText "Height:"
 
-    @heightCombo = vgui.Create "DComboBox", right
-    with @heightCombo
-        \SetSortItems false
-        \DockMargin 5, 0, 5, 2
-        \Dock TOP
-        \SetValue 3
-        .OnSelect = (_, index, value) ->
-            data = @Serialize!
-            data.Tile.Height = value
-            @Deserialize data
-            @OnChange!
+        @comboBox_heightCombo = with vgui.Create "DComboBox", right
+            \SetSortItems false
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetValue 3
+            .OnSelect = (_, index, value) ->
+                data = @Serialize!
+                data.Tile.Height = value
+                @Deserialize data
+                @OnChange!
 
-    for i = 1, 10
-        @heightCombo\AddChoice i
+            for i = 1, 10
+                \AddChoice i
 
-    left\SizeToContents true, true
-    right\SizeToContents true, true
-    widthHeight\SizeToChildren true, true
-    widthHeight\SetTall widthHeight\GetTall! + 20
+        left\SizeToContents true, true
+        right\SizeToContents true, true
 
-    widthHeight\InvalidateChildren!
-    widthHeight\InvalidateLayout!
+        with widthHeight
+            \SizeToChildren true, true
+            \SetTall widthHeight\GetTall! + 20
+            \InvalidateChildren!
+            \InvalidateLayout!
  
-    @barWidth = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), controlsPanel
-    with @barWidth
+    with @slider_barWidth = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), panel_controls
         \DockMargin 5, 8, 5, 2
         \Dock TOP
         \SetText "Bar Width"
@@ -699,13 +903,12 @@ editor.Init = () =>
 
             if __editor.data
                 __editor.data.barWidth = numval
-                __editor.grid\InvalidateLayout!
+                __editor.moonpanel_grid\InvalidateLayout!
                 __editor\OnChange!
 
         \SetValue 0
 
-    @innerScreenRatio = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), controlsPanel
-    with @innerScreenRatio
+    with @slider_innerScreenRatio = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), panel_controls
         \DockMargin 5, 0, 5, 2
         \Dock TOP
         \SetValue 0
@@ -728,11 +931,10 @@ editor.Init = () =>
 
             if __editor.data
                 __editor.data.innerScreenRatio = numval
-                __editor.grid\InvalidateLayout!
+                __editor.moonpanel_grid\InvalidateLayout!
                 __editor\OnChange!
 
-    @maxBarLength = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), controlsPanel
-    with @maxBarLength
+    with @slider_maxBarLength = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), panel_controls
         \DockMargin 5, 0, 5, 2
         \Dock TOP
         \SetText "Max Bar Length"
@@ -753,13 +955,12 @@ editor.Init = () =>
 
             if __editor.data
                 __editor.data.maxBarLength = numval
-                __editor.grid\InvalidateLayout!
+                __editor.moonpanel_grid\InvalidateLayout!
                 __editor\OnChange!
 
         \SetValue 0
 
-    @disjointLength = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), controlsPanel
-    with @disjointLength
+    with @slider_disjointLength = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), panel_controls
         \DockMargin 5, 0, 5, 2
         \Dock TOP
         \SetText "Disjoint Length"
@@ -780,164 +981,244 @@ editor.Init = () =>
 
             if __editor.data
                 __editor.data.disjointLength = numval
-                __editor.grid\InvalidateLayout!
+                __editor.moonpanel_grid\InvalidateLayout!
                 __editor\OnChange!
 
         \SetValue 0
 
-    iconWidth = 50
-    unsel = Color 160, 160, 160, 128
-    sel = Color 30, 225, 30, 128
+    ICON_WIDTH = 50
+    COLOR_TOOL_UNSELECTED = Color 160, 160, 160, 128
+    COLOR_TOOL_SELECTED = Color 30, 225, 30, 128
 
-    label = vgui.Create "DLabel", controlsPanel
-    with label
-        \SetColor Color 0, 0, 0, 255
-        \DockMargin 5, 8, 5, 2
-        \Dock TOP
-        \SetText "Color:"
+    -----------------------------------
+    --                               --
+    -- Tools toolset. haha.          --
+    --                               --
+    -----------------------------------
+    do
+        @__toolset_tools = {}
 
-    colorLayout = vgui.Create "DIconLayout", controlsPanel
-    __colors = {}
-    for i, v in pairs Moonpanel.Colors
-        button = vgui.Create "DButton", colorLayout
-        __colors[#__colors + 1] = button
-        with button
-            \SetText ""
-            \SetWide iconWidth
-            \SetTall iconWidth
-            \SetTooltip v.tooltip
-            .DoClick = (_self) ->
-                @selectedColor = i
-                _self.selected = true
-                for _, btn in pairs __colors
-                    if btn ~= _self
-                        btn.selected = false
+        with vgui.Create "DLabel", panel_controls
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 8, 5, 2
+            \Dock TOP
+            \SetText "Tool:"
 
-            .Paint = (_self, w, h) ->
-                draw.RoundedBox 8, 0, 0, w, h, (_self.selected and sel or unsel)
+        toolLayout = with vgui.Create "DIconLayout", panel_controls
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetSpaceX 4
+            \SetSpaceY 4
 
-                innerw = w * 0.6
-                innerh = h * 0.6
-                draw.RoundedBox 8, (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh, Moonpanel.Colors[i]
-            if i == 1
-                \DoClick!
+        for i, v in pairs TOOLSET_TOOLS
+            button = vgui.Create "DButton", toolLayout
+            button.tool = v
+            __editor.__toolset_tools[#__editor.__toolset_tools + 1] = button
 
-    with colorLayout
-        \DockMargin 5, 0, 5, 0
-        \Dock TOP
-        \SetSpaceX 4
-        \SetSpaceY 4
+            with button
+                \SetText ""
+                \SetWide ICON_WIDTH
+                \SetTall ICON_WIDTH
+                \SetTooltip v.tooltip
+                .Select = () =>
+                    wasSelected = @selected
 
-    label = vgui.Create "DLabel", controlsPanel
-    with label
-        \SetColor Color 0, 0, 0, 255
-        \DockMargin 5, 8, 5, 2
-        \Dock TOP
-        \SetText "Cell:"
+                    @selected = true
+                    for _, btn in pairs __editor.__toolset_tools
+                        if btn ~= @
+                            btn.selected = false
 
-    toolLayout = vgui.Create "DIconLayout", controlsPanel
+                    return wasSelected
 
-    @__editorEnts = {}
-    __editorEnts = @__editorEnts
+                .DoClick = () =>
+                    wasSelected = @Select!
+                    
+                    if v.click
+                        v.click @, wasSelected
 
-    for i, v in pairs editorEnts
-        button = vgui.Create "DButton", toolLayout
-        button.tool = v
-        __editorEnts[#__editorEnts + 1] = button
-        with button
-            \SetText ""
-            \SetWide iconWidth
-            \SetTall iconWidth
-            \SetTooltip v.tooltip
-            .DoClick = () =>
-                wasSelected = @selected
+                .Paint = (_self, w, h) ->
+                    draw.RoundedBox 8, 0, 0, w, h, (_self.selected and COLOR_TOOL_SELECTED or COLOR_TOOL_UNSELECTED)
+                    color = Moonpanel.Colors[@selectedColor] or COLOR_WHITE 
+                    v.render w, h, color, _self
 
-                @selected = true
-                for _, btn in pairs __editorEnts
-                    if btn ~= @
-                        btn.selected = false
+                if i == 1
+                    \DoClick!
 
-                if v.click
-                    v.click @, wasSelected
+    -----------------------------------
+    --                               --
+    -- Colors toolset.               --
+    --                               --
+    -----------------------------------
+    do
+        @__toolset_colors = {}
+        with vgui.Create "DLabel", panel_controls
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 8, 5, 2
+            \Dock TOP
+            \SetText "Color:"
 
-            .Paint = (_self, w, h) ->
-                draw.RoundedBox 8, 0, 0, w, h, (_self.selected and sel or unsel)
-                color = Moonpanel.Colors[@selectedColor] or white 
-                v.render w, h, color, _self
-            if i == 1
-                \DoClick!
+        colorLayout = with vgui.Create "DIconLayout", panel_controls
+            \DockMargin 5, 0, 5, 0
+            \Dock TOP
+            \SetSpaceX 4
+            \SetSpaceY 4
 
-    with toolLayout
-        \DockMargin 5, 0, 5, 2
-        \Dock TOP
-        \SetSpaceX 4
-        \SetSpaceY 4
+        for i, v in pairs Moonpanel.Colors
+            button = vgui.Create "DButton", colorLayout
+            button.color = i
+            @__toolset_colors[#@__toolset_colors + 1] = button
 
-    label = vgui.Create "DLabel", controlsPanel
-    with label
-        \SetColor Color 0, 0, 0, 255
-        \DockMargin 5, 8, 5, 2
-        \Dock TOP
-        \SetText "Path / Intersection:"
+            with button
+                \SetText ""
+                \SetWide ICON_WIDTH
+                \SetTall ICON_WIDTH
+                .DoClick = (_self) ->
+                    @selectedColor = i
+                    _self.selected = true
+                    for _, btn in pairs @__toolset_colors
+                        if btn ~= _self
+                            btn.selected = false
 
-    pathEntLayout = vgui.Create "DIconLayout", controlsPanel
+                .Paint = (_self, w, h) ->
+                    draw.RoundedBox 8, 0, 0, w, h, (_self.selected and COLOR_TOOL_SELECTED or COLOR_TOOL_UNSELECTED)
 
-    @__editorPathEnts = {}
-    __editorPathEnts = @__editorPathEnts
+                    innerw = w * 0.6
+                    innerh = h * 0.6
+                    draw.RoundedBox 8, (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh, v
 
-    for i, v in pairs editorPathEnts
-        button = vgui.Create "DButton", pathEntLayout
-        button.tool = v
-        __editorPathEnts[#__editorPathEnts + 1] = button
-        with button
-            \SetText ""
-            \SetWide iconWidth
-            \SetTall iconWidth
-            \SetTooltip v.tooltip
-            .DoClick = () =>
-                wasSelected = @selected
+                if i == 1
+                    \DoClick!
 
-                @selected = true
-                for _, btn in pairs __editorPathEnts
-                    if btn ~= @
-                        btn.selected = false
+    -----------------------------------
+    --                               --
+    -- Cell entity toolset.          --
+    --                               --
+    -----------------------------------
+    do
+        @__toolset_entities = {}
 
-                if v.click
-                    v.click @, wasSelected
+        with vgui.Create "DLabel", panel_controls
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 8, 5, 2
+            \Dock TOP
+            \SetText "Cell:"
 
-            .Paint = (_self, w, h) ->
-                draw.RoundedBox 8, 0, 0, w, h, (_self.selected and sel or unsel)
-                color = (@data and @data.colors and @data.colors.untraced) or white
-                v.render w, h, color, _self
+        entLayout = with vgui.Create "DIconLayout", panel_controls
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetSpaceX 4
+            \SetSpaceY 4
 
-            if i == 1
-                \DoClick!
+        for i, v in pairs TOOLSET_ENTITIES
+            button = vgui.Create "DButton", entLayout
+            button.tool = v
+            __editor.__toolset_entities[#__editor.__toolset_entities + 1] = button
 
-    with pathEntLayout
-        \DockMargin 5, 0, 5, 2
-        \Dock TOP
-        \SetSpaceX 4
-        \SetSpaceY 4
+            with button
+                \SetText ""
+                \SetWide ICON_WIDTH
+                \SetTall ICON_WIDTH
+                \SetTooltip v.tooltip
+                .Select = () =>
+                    wasSelected = @selected
 
-    -------------
-    -- Palette --
-    -------------
+                    @selected = true
+                    for _, btn in pairs __editor.__toolset_entities
+                        if btn ~= @
+                            btn.selected = false
 
-    palettePanel = vgui.Create "DScrollPanel", sheet
-    palettePanel\Dock FILL
-    palettePanel\DockMargin 6, 0, 6, 6
+                    return wasSelected
 
-    sheet\AddSheet "Colors", palettePanel, "icon16/palette.png"
+                .DoClick = () =>
+                    wasSelected = @Select!
+                    
+                    if v.click
+                        v.click @, wasSelected
 
-    label = vgui.Create "DLabel", palettePanel
-    with label
+                .Paint = (_self, w, h) ->
+                    draw.RoundedBox 8, 0, 0, w, h, (_self.selected and COLOR_TOOL_SELECTED or COLOR_TOOL_UNSELECTED)
+                    color = Moonpanel.Colors[@selectedColor] or 1 
+                    v.render w, h, color, _self
+                if i == 1
+                    \DoClick!
+
+    -----------------------------------
+    --                               --
+    -- Path entities toolset.        --
+    --                               --
+    -----------------------------------
+    do
+        @__toolset_path_entities = {}
+
+        with vgui.Create "DLabel", panel_controls
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 8, 5, 2
+            \Dock TOP
+            \SetText "Path / Intersection:"
+
+        pathEntLayout = with vgui.Create "DIconLayout", panel_controls
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetSpaceX 4
+            \SetSpaceY 4
+
+        for i, v in pairs TOOLSET_PATHENTITIES
+            button = vgui.Create "DButton", pathEntLayout
+            button.tool = v
+            __editor.__toolset_path_entities[#__editor.__toolset_path_entities + 1] = button
+
+            with button
+                \SetText ""
+                \SetWide ICON_WIDTH
+                \SetTall ICON_WIDTH
+                \SetTooltip v.tooltip
+                .Select = () =>
+                    wasSelected = @selected
+
+                    @selected = true
+                    for _, btn in pairs __editor.__toolset_path_entities
+                        if btn ~= @
+                            btn.selected = false
+
+                    return wasSelected
+
+                .DoClick = () =>
+                    wasSelected = @Select!
+                    
+                    if v.click
+                        v.click @, wasSelected
+
+                .Paint = (_self, w, h) ->
+                    draw.RoundedBox 8, 0, 0, w, h, (_self.selected and COLOR_TOOL_SELECTED or COLOR_TOOL_UNSELECTED)
+                    bgColor = (@data and @data.colors and @data.colors.untraced) or Moonpanel.DefaultColors.Untraced
+                    bgColor = ColorAlpha bgColor, 128
+
+                    entColor = Moonpanel.Colors[@selectedColor] or 1
+
+                    v.render w, h, bgColor, entColor
+
+                if i == 1
+                    \DoClick!
+
+    -----------------------------------
+    --                               --
+    -- Palette                       --
+    --                               --
+    -----------------------------------
+
+    panel_palette = with vgui.Create "DScrollPanel", @sheet_toolSheet
+        \Dock FILL
+        \DockMargin 6, 0, 6, 6
+
+    @sheet_toolSheet\AddSheet "Colors", panel_palette, "icon16/palette.png"
+
+    with vgui.Create "DLabel", panel_palette
         \DockMargin 5, 0, 5, 2
         \SetColor Color 0, 0, 0, 255
         \Dock TOP
         \SetText "Presets:"
 
-    combo = vgui.Create "DComboBox", palettePanel
-    with combo
+    with vgui.Create "DComboBox", panel_palette
         \SetSortItems false
         \DockMargin 5, 0, 5, 2
         \Dock TOP
@@ -951,8 +1232,34 @@ editor.Init = () =>
         }
     }
 
-    @grid = vgui.CreateFromTable (include "moonpanel/editor/vgui_panel.lua"), @
-    with @grid
+    panel_gridContainer = with vgui.Create "DPanel", @
+        \Dock FILL
+        .Paint = nil
+
+    @label_tips = with vgui.Create "DButton", panel_gridContainer
+        \Dock BOTTOM
+        \SetFont "Trebuchet18"
+        \SetMultiline true
+        \SetContentAlignment 5
+        .Paint = nil
+        .DoClick = () =>
+            text = nil
+
+            if #TIPLABEL_TIPS >= 1
+                @__lastTipID = @__tipID
+
+                while @__tipID == @__lastTipID
+                    @__tipID = math.random 1, #TIPLABEL_TIPS
+                
+                text = TIPLABEL_TIPS[@__tipID]
+            else
+                text = TIPLABEL_TIPS[1] or "There were once tips."
+            
+            \SetText "Did you know? " .. text
+        \DoClick!
+        \SetTextColor Color 255, 255, 255
+
+    @moonpanel_grid = with vgui.CreateFromTable (include "moonpanel/editor/vgui_panel.lua"), panel_gridContainer
         \Dock FILL
     
     if file.Exists "moonpanel_meta/autosave.txt", "DATA"
@@ -970,8 +1277,13 @@ editor.Init = () =>
     @UpdateTree!
 
 editor.SetupGrid = (data) =>
-    @grid\Setup @data, (...) ->
-        @clickCallback ...
+    click = (...) ->
+        @Grid_ClickCallback ...
+
+    copy = (...) ->
+        @Grid_CopyCallback ...
+
+    @moonpanel_grid\Setup @data, click, copy
 
 editor.Serialize = () =>
     data_colors = @data.colors or {}
@@ -1002,7 +1314,7 @@ editor.Serialize = () =>
         HPaths: {}
     }
 
-    for j, row in pairs @grid.rows
+    for j, row in pairs @moonpanel_grid.rows
         for i, element in pairs row\GetChildren!
             t = nil
             if not element.entity
@@ -1079,13 +1391,13 @@ editor.Deserialize = (input) =>
         colors: {}
     }
 
-    @barWidth\SetValue newData.barWidth
-    @innerScreenRatio\SetValue newData.innerScreenRatio
-    @maxBarLength\SetValue newData.maxBarLength
-    @disjointLength\SetValue newData.disjointLength
+    @slider_barWidth\SetValue newData.barWidth
+    @slider_innerScreenRatio\SetValue newData.innerScreenRatio
+    @slider_maxBarLength\SetValue newData.maxBarLength
+    @slider_disjointLength\SetValue newData.disjointLength
 
-    @widthCombo\SetText newData.w
-    @heightCombo\SetText newData.h
+    @comboBox_widthCombo\SetText newData.w
+    @comboBox_heightCombo\SetText newData.h
 
     w, h = newData.w, newData.h
     for j = 1, h + 1
@@ -1130,6 +1442,9 @@ editor.Deserialize = (input) =>
                 newData.hpaths[sj] or= {}
                 newData.hpaths[sj][si] = {
                     entity: hbar.Type
+                    attributes: {
+                        color: hbar.Attributes and hbar.Attributes.Color
+                    }
                 }
 
             if input.VPaths and j <= h and input.VPaths[sj] and input.VPaths[sj][si]
@@ -1138,6 +1453,9 @@ editor.Deserialize = (input) =>
                 newData.vpaths[sj] or= {}
                 newData.vpaths[sj][si] = {
                     entity: vbar.Type
+                    attributes: {
+                        color: vbar.Attributes and vbar.Attributes.Color
+                    }
                 }
 
             if input.Intersections and input.Intersections[sj] and input.Intersections[sj][si]
@@ -1146,6 +1464,9 @@ editor.Deserialize = (input) =>
                 newData.intersections[sj] or= {}
                 newData.intersections[sj][si] = {
                     entity: int.Type
+                    attributes: {
+                        color: int.Attributes and int.Attributes.Color
+                    }
                 }
     
     table.Empty @data

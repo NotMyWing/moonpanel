@@ -70,6 +70,7 @@ class Polyomino extends CellEntity
                 @attributes.shape\set i, j, defs.Shape[j] and defs.Shape[j][i] == 1
 
         @attributes.rotational = defs.Rotational
+        @attributes.shape.rotational = defs.Rotational
 
     render: =>
         bounds = @parent.bounds

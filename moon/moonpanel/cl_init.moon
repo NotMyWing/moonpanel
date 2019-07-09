@@ -37,6 +37,13 @@ Moonpanel.requestControl = (ent, x, y) =>
     net.WriteUInt y, 10
     net.SendToServer!
 
+Moonpanel.requestData = (ent) =>
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.RequestData, 8
+
+    net.WriteEntity ent
+    net.SendToServer!
+
 Moonpanel.getControlledPanel = () =>
     return LocalPlayer!\GetNW2Entity "TheMP Controlled Panel"
 
@@ -198,7 +205,7 @@ net.Receive "TheMP Flow", () ->
 
     switch flowType
         when Moonpanel.Flow.PuzzleStart
-            if not panel.PuzzleStart or not panel.synchronized
+            if not panel.Moonpanel or not panel.synchronized
                 return
 
             _nodeA, nodeB = {
@@ -229,7 +236,7 @@ net.Receive "TheMP Flow", () ->
                     panel\PuzzleStart nodeA, nodeB
         
         when Moonpanel.Flow.ApplyDeltas
-            if not panel.ApplyDeltas or not panel.synchronized
+            if not panel.Moonpanel or not panel.synchronized
                 return
 
             x, y = net.ReadFloat!, net.ReadFloat!
@@ -237,27 +244,24 @@ net.Receive "TheMP Flow", () ->
             panel\ApplyDeltas x, y
 
         when Moonpanel.Flow.PuzzleFinish
-            if not panel.PuzzleFinish or not panel.synchronized
+            if not panel.Moonpanel or not panel.synchronized
                 return
 
-            ply = net.ReadEntity!
             len = net.ReadUInt 32
             data = util.JSONToTable(util.Decompress(net.ReadData(len)) or "{}") or {}
 
-            panel\PuzzleFinish ply, data
+            panel\PuzzleFinish data
 
         when Moonpanel.Flow.PanelData
-            if not panel.SetupData
+            if not panel.Moonpanel or panel.synchronized
                 return
 
             length = net.ReadUInt 32
             raw = net.ReadData length
 
             data = util.JSONToTable((util.Decompress raw) or "{}") or {}
- 
-            panel\SetupData data.tileData
-            PrintTable data.tileData
-            panel.synchronized = true
+
+            panel\SetupData data
 
 if Moonpanel.__initialized
     Moonpanel\init!
@@ -287,7 +291,7 @@ Moonpanel.render.drawTexturedRect = (x, y, w, h, color) ->
 	render.DrawQuad quad_v1, quad_v2, quad_v3, quad_v4, color
 
 Moonpanel.render.drawThickLine = (x1, y1, x2, y2, width) ->
-    angle = math.deg math.atan2 (y2 - y1), (x2 - x1)
+    angle = math.Round math.deg math.atan2 (y2 - y1), (x2 - x1)
     dist = math.sqrt (y2 - y1)^2 + (x2 - x1)^2
 
     matrix = Matrix!

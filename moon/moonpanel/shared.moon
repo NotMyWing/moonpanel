@@ -24,43 +24,43 @@ export MOONPANEL_OBJECT_TYPES = {
 
 export MOONPANEL_DEFAULT_RESOLUTIONS = {
     {
-        innerScreenRatio: 1
+        innerScreenRatio: 0.8
+        barWidth: 0.055
+    }
+    {
+        innerScreenRatio: 0.8
         barWidth: 0.05
     }
     {
-        innerScreenRatio: 0.95
+        innerScreenRatio: 0.8
+        barWidth: 0.05
+    }
+    {
+        innerScreenRatio: 0.8
+        barWidth: 0.05
+    }
+    {
+        innerScreenRatio: 0.8
         barWidth: 0.04
     }
     {
-        innerScreenRatio: 0.925
-        barWidth: 0.04
-    }
-    {
-        innerScreenRatio: 0.9
-        barWidth: 0.04
-    }
-    {
-        innerScreenRatio: 0.9
-        barWidth: 0.04
-    }
-    {
-        innerScreenRatio: 0.95
+        innerScreenRatio: 0.8
         barWidth: 0.03
     }
     {
-        innerScreenRatio: 0.97
+        innerScreenRatio: 0.8
         barWidth: 0.03
     }
     {
-        innerScreenRatio: 0.98
+        innerScreenRatio: 0.8
         barWidth: 0.02
     }
     {
-        innerScreenRatio: 0.98
+        innerScreenRatio: 0.8
         barWidth: 0.02
     }
     {
-        innerScreenRatio: 0.98
+        innerScreenRatio: 0.8
         barWidth: 0.02
     }
 }
@@ -86,6 +86,7 @@ Moonpanel.Flow = {
     PuzzleFinish: 3
     PuzzleStart: 4
     RequestControl: 5
+    RequestData: 6
 }
 
 Moonpanel.Color = {
@@ -116,6 +117,7 @@ Moonpanel.DefaultColors = {
     Background: Color 80, 77, 255, 255
     Untraced: Color 40, 22, 186
     Traced: Color 255, 255, 255, 255
+    Finished: Color 255, 255, 255, 255
     Vignette: Color 255, 255, 255, 160
     Errored: Color 0, 0, 0, 0
 }

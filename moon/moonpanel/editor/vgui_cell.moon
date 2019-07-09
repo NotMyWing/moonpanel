@@ -7,6 +7,7 @@ white = Color 255, 255, 255
 cell.Init = () =>
     @type = MOONPANEL_OBJECT_TYPES.CELL
 
+polyocell = Material "moonpanel/polyomino_cell.png", "smooth"
 triangle = Material "moonpanel/triangle.png"
 cell.RenderTriangles = (w, h, count) =>
     surface.SetDrawColor Moonpanel.Colors[@attributes.color or Moonpanel.Color.Yellow]
@@ -58,8 +59,8 @@ cell.RenderPolyo = (w, h) =>
     offsetY = (h / 2) - ((squareWidth * polyheight) + ((polyheight - 1) * spacing)) / 2
 
     if data.shape.rotational
-        render.PushFilterMag TEXFILTER.ANISOTROPIC
-	    render.PushFilterMin TEXFILTER.ANISOTROPIC
+        render.PushFilterMag TEXFILTER.LINEAR
+	    render.PushFilterMin TEXFILTER.LINEAR
         v = Vector w / 2, h / 2, 0
 
         matrix = Matrix!
@@ -74,12 +75,14 @@ cell.RenderPolyo = (w, h) =>
 
         cam.PushModelMatrix matrix 
         
+    surface.SetMaterial polyocell
     for j = 1, polyheight
         for i = 1, polywidth
             if data.shape[j] and data.shape[j][i]
                 x = offsetX + (i - 1) * spacing + (i - 1) * squareWidth 
                 y = offsetY + (j - 1) * spacing + (j - 1) * squareWidth 
-                draw.RoundedBox 4, x, y, squareWidth, squareWidth, Moonpanel.Colors[data.color]
+                --draw.RoundedBox 4, x, y, squareWidth, squareWidth, Moonpanel.Colors[data.color]
+                surface.DrawTexturedRect x, y, squareWidth, squareWidth, Moonpanel.Colors[data.color]
     
     if data.shape.rotational
         cam.PopModelMatrix!

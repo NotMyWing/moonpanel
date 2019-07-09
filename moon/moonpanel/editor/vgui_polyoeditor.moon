@@ -9,6 +9,8 @@ polyoeditor.Setup = (@data) =>
         for i = 1, #children
             children[i].checked = @data[j] and @data[j][i]
 
+    @rotationalCheckbox\SetValue @data.rotational
+
 polyoeditor.Paint = (w, h) =>
     if not @headerH
         return
@@ -65,8 +67,8 @@ polyoeditor.Init = () =>
     fixedRow\SetTall 28
     @rows[#@rows + 1] = fixedRow
 
-    checkbox = vgui.Create "DCheckBoxLabel", fixedRow 
-    with checkbox
+    @rotationalCheckbox = vgui.Create "DCheckBoxLabel", fixedRow 
+    with @rotationalCheckbox
         \SetText "Rotational"
         \Dock BOTTOM
         \SizeToContents!

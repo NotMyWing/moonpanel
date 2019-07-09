@@ -115,14 +115,24 @@ class Intersection extends Element
         return @cachedBottom
 
     render: =>
-        angle = (not @getLeft! and not @getTop!) and 0 or
-            (not @getRight! and not @getTop!) and 90 or
-            (not @getRight! and not @getBottom!) and 180 or
-            (not @getBottom! and not @getLeft!) and 270 or -1
+        if not @angle
+            dsjZero = @tile and @tile.tileData and @tile.tileData.Dimensions and (@tile.tileData.Dimensions.DisjointLength == 1)
+
+            dsj = MOONPANEL_ENTITY_TYPES.DISJOINT
+
+            notLeft   = (not @getLeft!)   or ((@getLeft!   and @getLeft!.entity   and @getLeft!.entity.type   == dsj) and dsjZero)
+            notRight  = (not @getRight!)  or ((@getRight!  and @getRight!.entity  and @getRight!.entity.type  == dsj) and dsjZero)
+            notTop    = (not @getTop!)    or ((@getTop!    and @getTop!.entity    and @getTop!.entity.type    == dsj) and dsjZero)
+            notBottom = (not @getBottom!) or ((@getBottom! and @getBottom!.entity and @getBottom!.entity.type == dsj) and dsjZero)
+
+            @angle = (notLeft and notTop) and 0 or
+                (notRight and notTop) and 90 or
+                (notRight and notBottom) and 180 or
+                (notBottom and notLeft) and 270 or -1
 
         surface.SetDrawColor @tile.colors.untraced
-        if angle ~= -1
-            surface.SetMaterial corners[angle]
+        if @angle ~= -1
+            surface.SetMaterial corners[@angle]
             surface.DrawTexturedRect @bounds.x, @bounds.y, @bounds.width, @bounds.height
             draw.NoTexture!
         else

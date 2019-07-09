@@ -41,7 +41,6 @@ resource.AddSingleFile "materials/moonpanel/hex_layer1.png"
 resource.AddSingleFile "materials/moonpanel/hex_layer2.png"
 resource.AddSingleFile "materials/moonpanel/hexagon.png"
 resource.AddSingleFile "materials/moonpanel/panel_transparent.png"
-resource.AddSingleFile "materials/moonpanel/panel_transparent_a.png"
 resource.AddSingleFile "materials/moonpanel/polyo.png"
 resource.AddSingleFile "materials/moonpanel/polyomino_cell.png"
 resource.AddSingleFile "materials/moonpanel/qcirc64.png"
@@ -59,6 +58,11 @@ resource.AddSingleFile "materials/moonpanel/corner64/0.png"
 resource.AddSingleFile "materials/moonpanel/corner64/90.png"
 resource.AddSingleFile "materials/moonpanel/corner64/180.png"
 resource.AddSingleFile "materials/moonpanel/corner64/270.png"
+resource.AddSingleFile "materials/moonpanel/vignette.png"
+resource.AddSingleFile "materials/moonpanel/editor_bucket.png"
+resource.AddSingleFile "materials/moonpanel/editor_brush.png"
+resource.AddSingleFile "materials/moonpanel/editor_eraser.png"
+resource.AddSingleFile "materials/moonpanel/icon16_windmill.png"
 resource.AddSingleFile "sound/moonpanel/eraser_apply.ogg"
 resource.AddSingleFile "sound/moonpanel/focus_on.ogg"
 resource.AddSingleFile "sound/moonpanel/focus_off.ogg"
@@ -113,12 +117,11 @@ Moonpanel.requestControl = (ply, ent, x, y, force) =>
             if ent\StartPuzzle ply, x, y
                 ply\SetNW2Entity "TheMP Controlled Panel", ent
 
-Moonpanel.broadcastFinish = (panel, ply, data) =>
+Moonpanel.broadcastFinish = (panel, data) =>
     net.Start "TheMP Flow"
     net.WriteUInt Moonpanel.Flow.PuzzleFinish, 8
     net.WriteEntity panel
 
-    net.WriteEntity ply
     raw = util.Compress util.TableToJSON data
     net.WriteUInt #raw, 32
     net.WriteData raw, #raw
@@ -164,28 +167,6 @@ Moonpanel.broadcastDeltas = (ply, panel, x, y) =>
     net.WriteFloat y
     net.SendOmit ply
 
-Moonpanel.sendData = (panel, ply) =>
-    if ply and not IsValid ply
-        return
-
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.PanelData, 8
-    net.WriteEntity panel
-
-    data = {
-        tileData: panel.tileData
-    }
-
-    raw = util.Compress util.TableToJSON data
-
-    net.WriteUInt #raw, 32
-    net.WriteData raw, #raw
-
-    if IsValid ply
-        net.Send ply
-    else
-        net.Broadcast!
-
 hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
     tr = ply\GetEyeTrace!
 
@@ -220,12 +201,12 @@ net.Receive "TheMP Flow", (len, ply) ->
     
     switch flowType
         when Moonpanel.Flow.RequestControl
-            ent = net.ReadEntity!
+            panel = net.ReadEntity!
 
             x = net.ReadUInt 10
             y = net.ReadUInt 10
 
-            Moonpanel\requestControl ply, ent, x, y
+            Moonpanel\requestControl ply, panel, x, y
 
         when Moonpanel.Flow.ApplyDeltas
             panel = ply\GetNW2Entity "TheMP Controlled Panel"
@@ -234,6 +215,36 @@ net.Receive "TheMP Flow", (len, ply) ->
                 y = net.ReadFloat!
 
                 panel\ApplyDeltas x, y
+
+        when Moonpanel.Flow.RequestData
+            panel = net.ReadEntity!
+            if not panel.pathFinder
+                return
+
+            data = {
+                tileData: panel.tileData
+                cursors: panel.pathFinder.cursors
+                lastSolution: panel.lastSolution
+            }
+
+            data.stacks = {}
+            for _, nodeStack in pairs panel.pathFinder.nodeStacks
+                stack = {}
+                data.stacks[#data.stacks + 1] = stack
+
+                for _, node in pairs nodeStack
+                    stack[#stack + 1] = panel.pathFinder.nodeIds[node]
+
+            raw = util.Compress util.TableToJSON data
+
+            net.Start "TheMP Flow"
+            net.WriteUInt Moonpanel.Flow.PanelData, 8
+
+            net.WriteEntity panel
+            net.WriteUInt #raw, 32
+            net.WriteData raw, #raw
+
+            net.Send ply
 
 net.Receive "TheMP EditorData", (len, ply) ->
     pending = nil
@@ -256,8 +267,11 @@ net.Receive "TheMP EditorData", (len, ply) ->
 
     length = net.ReadUInt 32
     raw = net.ReadData length
+    
+    data = util.JSONToTable((util.Decompress raw) or "{}") or {}
+    data = Moonpanel\sanitizeTileData data
 
-    pending.callback raw, length
+    pending.callback data
 
 Moonpanel.pendingEditorData = {}
 pendingEditorData = Moonpanel.pendingEditorData
@@ -283,3 +297,153 @@ Moonpanel.requestEditorConfig = (ply, callback, errorcallback) =>
                 table.remove pendingEditorData, i
                 break
 
+sanitizeColor = (clr, template) ->
+    clr or= {}
+    out = {}
+
+    r = clr.r and tonumber(clr.r)
+    out.r = (r and math.Clamp(r, 0, 255)) or template.r or 255
+
+    g = clr.g and tonumber(clr.g)
+    out.g = (g and math.Clamp(g, 0, 255)) or template.g or 255
+
+    b = clr.b and tonumber(clr.b)
+    out.b = (b and math.Clamp(b, 0, 255)) or template.b or 255
+
+    a = clr.a and tonumber(clr.a)
+    out.a = (a and math.Clamp(a, 0, 255)) or template.a or 255
+
+    return Color out.r, out.g, out.b, out.a
+
+sanitizeNumber = (num, default) ->
+    return tonumber(num) and tonumber(num) or default
+
+Moonpanel.sanitizeTileData = (input) =>
+    input or= {}
+    input.Tile or= {}
+    input.Dimensions or= {}
+    input.HPaths or= {}
+    input.VPaths or= {}
+    input.Intersections or= {}
+    input.Cells or= {}
+    input.Colors or= {}
+
+    sanitized = {
+        Tile: {
+            Title: input.Tile.Title and string.sub(input.Tile.Title, 1, 64) or nil
+            Width: math.Clamp((sanitizeNumber input.Tile.Width, 3), 1, 10)
+            Height: math.Clamp((sanitizeNumber input.Tile.Height, 3), 1, 10)
+        }
+        Dimensions: {
+            BarWidth: input.Dimensions.BarWidth and
+                math.Clamp((sanitizeNumber input.Dimensions.BarWidth, 3), 0, 1)
+
+            InnerScreenRatio: input.Dimensions.InnerScreenRatio and
+                math.Clamp((sanitizeNumber input.Dimensions.InnerScreenRatio, 3), 0, 1)
+
+            MaxBarLength: input.Dimensions.MaxBarLength and
+                math.Clamp((sanitizeNumber input.Dimensions.MaxBarLength, 3), 0, 1)
+
+            DisjointLength: input.Dimensions.DisjointLength and
+                math.Clamp((sanitizeNumber input.Dimensions.DisjointLength, 3), 0, 1)
+        }
+        Cells: {}
+        Intersections: {}
+        VPaths: {}
+        HPaths: {}
+    }
+
+    colors = input.Colors or {}
+    defaults = Moonpanel.DefaultColors
+
+    sanitized.Colors = {}
+    sanitized.Colors.Untraced   = sanitizeColor colors.Untraced, defaults.Untraced
+    sanitized.Colors.Traced     = sanitizeColor colors.Traced, defaults.Traced
+    sanitized.Colors.Finished   = sanitizeColor colors.Finished, defaults.Finished
+    sanitized.Colors.Errored    = sanitizeColor colors.Errored, defaults.Errored
+    sanitized.Colors.Background = sanitizeColor colors.Background, defaults.Background
+    sanitized.Colors.Vignette   = sanitizeColor colors.Vignette, defaults.Vignette
+
+    MAXENT = 9
+    MAXCOLOR = 9
+
+    w, h = sanitized.Tile.Width, sanitized.Tile.Height
+    for j = 1, h + 1
+        for i = 1, w + 1
+            si, sj = i, j
+
+            if input.Cells and j <= h and i <= w and input.Cells[sj] and input.Cells[sj][si]
+                cell = input.Cells[sj][si]
+                atts = cell.Attributes or {}
+
+                sanitized.Cells[sj] or= {}
+                sanitized.Cells[sj][si] = {
+                    Type: math.floor math.Clamp((sanitizeNumber cell.Type, 1), 0, MAXENT)
+                }
+
+                newAtts = {
+                    Color: math.floor math.Clamp((sanitizeNumber atts.Color, 1), 1, #Moonpanel.Colors)
+                    Count: atts.Count and (math.floor math.Clamp((sanitizeNumber atts.Count, 1), 1, 3))
+                }
+
+                sanitized.Cells[sj][si].Attributes = newAtts
+
+                if atts.Shape
+                    maxlen = nil 
+                    for _j, row in pairs atts.Shape
+                        if not maxlen or #row > maxlen
+                            maxlen = #row
+                    
+                    if maxlen and maxlen > 0
+                        maxlen = math.Clamp maxlen, 1, 5
+
+                        shape = {}
+                        
+                        atLeastOneTrue = false
+                        for _j, row in pairs atts.Shape
+                            shape[_j] = {}
+                            for _i = 1, maxlen
+                                shape[_j][_i] = (row[_i] == 1) and 1 or 0
+                                atLeastOneTrue = true
+                        
+                        if atLeastOneTrue
+                            newAtts.Shape = shape
+                            newAtts.Rotational = atts.Rotational and true or false
+
+            if input.HPaths and i <= w and input.HPaths[sj] and input.HPaths[sj][si]
+                hbar = input.HPaths[sj][si]
+                atts = hbar.Attributes or {}
+
+                sanitized.HPaths[sj] or= {}
+                sanitized.HPaths[sj][si] = {
+                    Type: math.floor math.Clamp((sanitizeNumber hbar.Type, 1), 0, MAXENT)
+                    Attributes: {
+                        Color: math.floor math.Clamp((sanitizeNumber atts.Color, 1), 1, #Moonpanel.Colors)
+                    }
+                }
+
+            if input.VPaths and j <= h and input.VPaths[sj] and input.VPaths[sj][si]
+                vbar = input.VPaths[sj][si]
+                atts = vbar.Attributes or {}
+
+                sanitized.VPaths[sj] or= {}
+                sanitized.VPaths[sj][si] = {
+                    Type: math.floor math.Clamp((sanitizeNumber vbar.Type, 1), 0, MAXENT)
+                    Attributes: {
+                        Color: math.floor math.Clamp((sanitizeNumber atts.Color, 1), 1, #Moonpanel.Colors)
+                    }
+                }
+
+            if input.Intersections and input.Intersections[sj] and input.Intersections[sj][si]
+                int = input.Intersections[sj][si]
+                atts = int.Attributes or {}
+
+                sanitized.Intersections[sj] or= {}
+                sanitized.Intersections[sj][si] = {
+                    Type: math.floor math.Clamp((sanitizeNumber int.Type, 1), 0, MAXENT)
+                    Attributes: {
+                        Color: math.floor math.Clamp((sanitizeNumber atts.Color, 1), 1, #Moonpanel.Colors)
+                    }
+                }
+
+    return sanitized

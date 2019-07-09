@@ -3,10 +3,7 @@ const { spawn } = require('child_process');
 const through2 = require('through2');
 const luamin = require('luamin');
 const del = require('del');
-
-function clean() {
-	return del(['lua/**/*']);
-}
+const gulp = require('gulp');
 
 const _compileMoonScript = () => through2.obj((file, _, cb) => {
 	if (file.isBuffer()) {
@@ -31,7 +28,7 @@ const _compileMoonScript = () => through2.obj((file, _, cb) => {
 		moonc.on('close', () => {
 			if (stderr) cb(stderr);
 			else {
-				file.path = file.path.substr(0, file.path.lastIndexOf('.')) + '.txt';
+				file.path = file.path.substr(0, file.path.lastIndexOf('.')) + '.lua';
 				// file.contents = Buffer.from(header + luamin.minify(stdout));
 				file.contents = Buffer.from(header + stdout);
 				cb(null, file);
@@ -51,24 +48,31 @@ const _moveLuaFiles = () => through2.obj((file, _, cb) => {
 		}
 
 		file.contents = Buffer.from(header + luamin.minify(file.contents.toString()));
-		file.path = file.path.substr(0, file.path.lastIndexOf('.')) + '.txt';
+		file.path = file.path.substr(0, file.path.lastIndexOf('.')) + '.lua';
 		cb(null, file);
 	}
 });
 
-function moon() {
-	del(['moonpanel/**/*']).then(() => {
-		src('moon/**/*.lua')
-			.pipe(_moveLuaFiles())
-			.pipe(dest('moonpanel'));
+function rmrf(cb) {
+	del(['lua/**/*']).then(() => {
+		cb();
 	});
+}
+
+function lua() {
+	return src('moon/**/*.lua')
+		.pipe(_moveLuaFiles())
+		.pipe(dest('lua'));
+}
+
+function moon() {
 	return src('moon/**/*.moon')
 		.pipe(_compileMoonScript())
-		.pipe(dest('moonpanel'));
+		.pipe(dest('lua'));
 }
 
 function _watch() {
-	watch(['moon/**/*.moon'], moon);
+	return watch(['moon/**/*.lua', 'moon/**/*.moon'], gulp.series(lua, moon));
 }
 
 exports.moon = moon;

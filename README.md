@@ -1,22 +1,35 @@
-# StarfallEX-Moonpanel
-It's a panel, written in moon language. As inspired by The Witness, a game by Thekla Inc.
+# The Moonpanel
 
-Important notice: this panel DOES NOT support negative polyominoes. All other elements, including polyominoes, Y-symbols, coloured squares, suns and triangles, are supported. You can also import [The Windmill puzzles](https://windmill.thefifthmatt.com) if you want to! Currently this requires a bit of preparation though.
+Puzzle panels, written in moon language. As inspired by The Witness, a game by Thekla Inc.
+Initially written for Starfall/StarfallEx, now a separate addon.
 
-![hi](https://media.discordapp.net/attachments/403032923508310017/591472190914822154/unknown.png?width=1087&height=678)
+If you don't understand the puzzle mechanics, then perhaps you should play The Witness.
 
-# How do I X?
+## Getting Started
 
-Obviously, the first thing you'll need is [StarfallEx](https://github.com/thegrb93/StarfallEx). I haven't tested it with vanilla Starfall, but if you do, let me know if it works.
+TBA.
 
-If you want to just screw around, navigate to Releases section and steal the latest release. Unzip the archive somewhere, navigate to your garry's mod folder, search for the `/garrysmod/data/starfall` directory and plop the `moonpanel` folder there.
+## Built With
 
-If you want some presets, there is a bunch of them in the `moonpanelPresets` folder. Drop it into the starfall directory as well and spawn a chip.
+* [Node.js](https://nodejs.org/)
+* [Moonscript](https://moonscript.org)
 
-# How do I X: Advanced stuff
+## Contributing
 
-To get started, install Node.js, and run `npm install` in this directory. Either via cmd, or bash, or you using a shell of your choice.
+TBA.
 
-To download a puzzle from The Windmill, type `node windmillDownloader.js`.
+## Authors
 
-If you want to contribute, run `gulp moon` to compile the code, and just `gulp` to watch.
+* **Not My Wing** - [Neeve01](https://github.com/Neeve01)
+
+See also the list of [contributors](https://github.com/your/project/contributors) who participated in this project.
+
+## License
+
+TBA.
+
+## Acknowledgments
+
+* [Soojin Nam](https://github.com/sjnam/lua-dancing-links) - *Lua Dancing Links*
+* [thegrb93 and contributors](https://github.com/thegrb93/StarfallEx/) - *StarfallEX and the panel rendering codebase*
+* [BytewaveMLP](https://github.com/BytewaveMLP) - *Buildscript*

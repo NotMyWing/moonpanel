@@ -1,4 +1,4 @@
-node_modules/**
-moonpanel/**
-moon/itc/**
+node_modules/
+moon/itc/
 downloaded/
+lua/

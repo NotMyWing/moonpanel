@@ -1,0 +1,159 @@
+TOOL.Category		= "Neeve's Addons"
+TOOL.Name			= "The Witness - The Moonpanel"
+TOOL.Command		= nil
+TOOL.ConfigName		= ""
+
+-- ------------------------------- Sending / Receiving ------------------------------- --
+
+TOOL.ClientConVar["Model"] = "models/hunter/plates/plate2x2.mdl"
+TOOL.ClientConVar["Type"] = 1
+cleanup.Register("moonpanels")
+
+if SERVER
+	CreateConVar "sbox_maxmoonpanels", 3, { FCVAR_REPLICATED, FCVAR_NOTIFY, FCVAR_ARCHIVE }
+
+	export MakeComponent = (cl, pl, pos, ang, model, tileData, g) ->
+		if not (pl\CheckLimit "moonpanels")
+            return false
+
+		sf = ents.Create cl
+		if not IsValid(sf)
+            return false
+
+        with sf
+		    \SetAngles ang
+		    \SetPos pos
+		    \SetModel model
+		    \Spawn!
+
+		if tileData
+			sf\SetupData tileData
+
+		pl\AddCount "moonpanels", sf
+		pl\AddCleanup "moonpanels", sf
+
+		return sf
+
+    fn = (...) ->
+        MakeComponent "moonpanel", ...
+
+	duplicator.RegisterEntityClass("moonpanel", fn, "Pos", "Ang", "Model", "TheMoonpanelTileData")
+
+else
+	language.Add "Tool.moonpanel.name", "The Moonpanel"
+	language.Add "Tool.moonpanel.desc", "Spawns a Moonpanel."
+	language.Add "sboxlimit_moonpanels", "You've hit the Moonpanel limit!"
+	language.Add "undone_moonpanel", "Undone Moonpanel"
+	language.Add "Cleanup_moonpanel", "Moonpanels"
+	TOOL.Information = {
+		{ name: "left", stage: 0, text: "Spawn/update a Moonpanel" },
+		{ name: "right_0", stage: 0, text: "Open the editor" },
+	}
+	for _, info in pairs(TOOL.Information)
+		language.Add("Tool.moonpanel." .. info.name, info.text)
+
+TOOL.LeftClick = (trace) =>
+	if not trace.HitPos
+        return false
+	if trace.Entity\IsPlayer! or trace.Entity\IsNPC!
+        return false
+	if CLIENT
+        return true
+
+	ply = @GetOwner!
+
+	Ang = trace.HitNormal\Angle!
+	Ang.pitch = Ang.pitch + 90
+
+    model = @GetClientInfo "Model"
+    if not ((util.IsValidModel model) and (util.IsValidProp model))
+        return false
+
+    sf = MakeComponent "moonpanel", ply, Vector(), Ang, model
+    if not sf
+        return false
+
+    min = sf\OBBMins!
+    sf\SetPos trace.HitPos - trace.HitNormal * min.z
+
+    const = nil
+    phys = sf\GetPhysicsObject()
+    if trace.Entity\IsValid!
+        const = constraint.Weld sf, trace.Entity, 0, trace.PhysicsBone, 0, true, true
+        if phys\IsValid! 
+            phys\EnableCollisions(false) 
+            sf.nocollide = true
+    else
+        if phys\IsValid()
+            phys\EnableMotion(false)
+
+    undo.Create("moonpanel")
+    undo.AddEntity(sf)
+    if const
+        undo.AddEntity(const)
+    undo.SetPlayer(ply)
+    undo.Finish()
+
+	success = (data) ->
+		if IsValid sf
+			sf\SetupData data
+			sf.ready = true
+
+	err = () ->
+		print "err"
+
+	Moonpanel\requestEditorConfig @GetOwner!, success, err
+
+    return true
+
+TOOL.RightClick = (trace) =>
+	if SERVER 
+		net.Start "TheMP Editor"
+		net.Send @GetOwner!
+
+TOOL.Reload = (trace) =>
+
+TOOL.DrawHUD = () =>
+
+TOOL.Think = () =>
+	model = @GetClientInfo("Model")
+
+	if (not IsValid(self.GhostEntity) or self.GhostEntity\GetModel! ~= model) then
+		@MakeGhostEntity model, Vector(0, 0, 0), Angle(0, 0, 0)
+
+	trace = util.TraceLine(util.GetPlayerTrace(self\GetOwner!))
+	if (not trace.Hit)
+        return
+
+	ent = self.GhostEntity
+
+	if not IsValid(ent)
+        return
+
+	Ang = trace.HitNormal\Angle!
+	Ang.pitch = Ang.pitch + 90
+
+	min = ent\OBBMins!
+	ent\SetPos trace.HitPos - trace.HitNormal * min.z
+	ent\SetAngles Ang
+
+if CLIENT
+	TOOL.BuildCPanel = (panel) ->
+		panel\AddControl("Header", { Text: "#Tool.moonpanel.name", Description: "#Tool.moonpanel.desc" })
+
+		modelPanel = vgui.Create("DPanelSelect", panel)
+		modelPanel\EnableVerticalScrollbar()
+		modelPanel\SetTall(66 * 5 + 2)
+		t = (scripted_ents.GetStored("moonpanel").t.Monitor_Offsets) or {}
+		for model, v in pairs(t)
+			icon = vgui.Create("SpawnIcon")
+			icon\SetModel(model)
+			icon.Model = model
+			icon\SetSize(64, 64)
+			icon\SetTooltip(model)
+			modelPanel\AddPanel(icon, { ["moonpanel_Model"]: model })
+
+		modelPanel\SortByMember("Model", false)
+		panel\AddPanel(modelPanel)
+
+		panel\AddControl("Label", { Text: "" })

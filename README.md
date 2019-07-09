@@ -1,19 +1,34 @@
-# StarfallEX-Moonpanel
-It's a panel, written in moon language. As inspired by The Witness, a game by Thekla Inc.
+# The Moonpanel
 
-Currently supports suns, colors, triangles, hexagons and disjoints. Allows for symmetry puzzles. 
+Puzzle panels, written in moon language. As inspired by The Witness, a game by Thekla Inc.
+Initially written for Starfall/StarfallEx, now a separate addon.
 
-Right now it doesn't understand neither the Polyomino rule, nor the Y-symbol rule. This is yet to be implemented in future!
+If you don't understand the puzzle mechanics, then perhaps you should play The Witness.
 
-![hi](https://media.discordapp.net/attachments/439029143078830081/587952524376408080/unknown.png)
+## Getting Started
 
-To install, get Node.js, and run `npm install` in this directory.
-Make sure you have gulp-cli installed globally.
+TBA.
 
-To build, run `gulp moon`.
-To watch, run `gulp watch`.
+## Built With
 
-To run, copy the entire `moonpanel` directory into your garrysmod/data/starfall folder, load a test panel and try it out.
+* [Node.js](https://nodejs.org/)
+* [Moonscript](https://moonscript.org)
 
-Thanks to Bytewave for making the buildscript.
-I guess.
+## Contributing
+
+TBA.
+
+## Authors
+
+* **Not My Wing** - [Neeve01](https://github.com/Neeve01)
+
+See also the list of [contributors](https://github.com/your/project/contributors) who participated in this project.
+
+## License
+
+TBA.
+
+## Acknowledgments
+
+* [Soojin Nam](https://github.com/sjnam/lua-dancing-links) - *Lua Dancing Links*
+* [thegrb93 and contributors](https://github.com/thegrb93/StarfallEx/) - *StarfallEX and the panel rendering codebase*

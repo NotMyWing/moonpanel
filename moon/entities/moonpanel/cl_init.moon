@@ -360,7 +360,6 @@ ENT.SetupDataClient = (data) =>
 	@colors.vignette   or= defs.Vignette
 	@colors.errored    or= defs.Errored
 
-	print @colors.background
 	@SetBackgroundColor @colors.background
 
 	tr = @colors.traced

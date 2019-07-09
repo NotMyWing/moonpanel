@@ -60,7 +60,7 @@ cell.RenderPolyo = (w, h) =>
 
     if data.shape.rotational
         render.PushFilterMag TEXFILTER.LINEAR
-	    render.PushFilterMin TEXFILTER.LINEAR
+        render.PushFilterMin TEXFILTER.LINEAR
         v = Vector w / 2, h / 2, 0
 
         matrix = Matrix!

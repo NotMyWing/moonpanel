@@ -276,19 +276,19 @@ quad_v1, quad_v2, quad_v3, quad_v4 = Vector(0,0,0), Vector(0,0,0), Vector(0,0,0)
 Moonpanel.render = {}
 
 makeQuad = (x, y, w, h) ->
-	right, bot = x + w, y + h
-	quad_v1.x = x
-	quad_v1.y = y
-	quad_v2.x = right
-	quad_v2.y = y
-	quad_v3.x = right
-	quad_v3.y = bot
-	quad_v4.x = x
-	quad_v4.y = bot
+    right, bot = x + w, y + h
+    quad_v1.x = x
+    quad_v1.y = y
+    quad_v2.x = right
+    quad_v2.y = y
+    quad_v3.x = right
+    quad_v3.y = bot
+    quad_v4.x = x
+    quad_v4.y = bot
 
 Moonpanel.render.drawTexturedRect = (x, y, w, h, color) ->
-	makeQuad x, y, w, h
-	render.DrawQuad quad_v1, quad_v2, quad_v3, quad_v4, color
+    makeQuad x, y, w, h
+    render.DrawQuad quad_v1, quad_v2, quad_v3, quad_v4, color
 
 Moonpanel.render.drawThickLine = (x1, y1, x2, y2, width) ->
     angle = math.Round math.deg math.atan2 (y2 - y1), (x2 - x1)
@@ -334,61 +334,61 @@ Moonpanel.render.drawRipple = (ripple, frame, color) ->
     Moonpanel.render.drawArc f.arc
 
 Moonpanel.render.precacheArc = (cx,cy,radius,thickness,startang,endang,roughness) ->
-	triarc = {}
-	-- local deg2rad = math.pi / 180
-	
-	-- Define step
-	roughness = math.max(roughness or 1, 1)
-	step = roughness
-	
-	-- Correct start/end ang
-	startang,endang = startang or 0, endang or 0
-	
-	if startang > endang
-		step = math.abs(step) * -1
-	
-	-- Create the inner circle's points.
-	inner = {}
-	r = radius - thickness
-	for deg=startang, endang, step
-		rad = math.rad(deg)
-		-- local rad = deg2rad * deg
-		ox, oy = cx+(math.cos(rad)*r), cy+(-math.sin(rad)*r)
-		table.insert(inner, {
-			x: ox,
-			y: oy,
-			u: (ox-cx)/radius + .5,
-			v: (oy-cy)/radius + .5,
-		})
-	
-	-- Create the outer circle's points.
-	outer = {}
-	for deg=startang, endang, step
-		rad = math.rad(deg)
-		-- local rad = deg2rad * deg
-		ox, oy = cx+(math.cos(rad)*radius), cy+(-math.sin(rad)*radius)
-		table.insert(outer, {
-			x: ox,
-			y: oy,
-			u: (ox-cx)/radius + .5,
-			v: (oy-cy)/radius + .5,
-		})
+    triarc = {}
+    -- local deg2rad = math.pi / 180
+    
+    -- Define step
+    roughness = math.max(roughness or 1, 1)
+    step = roughness
+    
+    -- Correct start/end ang
+    startang,endang = startang or 0, endang or 0
+    
+    if startang > endang
+        step = math.abs(step) * -1
+    
+    -- Create the inner circle's points.
+    inner = {}
+    r = radius - thickness
+    for deg=startang, endang, step
+        rad = math.rad(deg)
+        -- local rad = deg2rad * deg
+        ox, oy = cx+(math.cos(rad)*r), cy+(-math.sin(rad)*r)
+        table.insert(inner, {
+            x: ox,
+            y: oy,
+            u: (ox-cx)/radius + .5,
+            v: (oy-cy)/radius + .5,
+        })
+    
+    -- Create the outer circle's points.
+    outer = {}
+    for deg=startang, endang, step
+        rad = math.rad(deg)
+        -- local rad = deg2rad * deg
+        ox, oy = cx+(math.cos(rad)*radius), cy+(-math.sin(rad)*radius)
+        table.insert(outer, {
+            x: ox,
+            y: oy,
+            u: (ox-cx)/radius + .5,
+            v: (oy-cy)/radius + .5,
+        })
 
-	-- Triangulize the points.
-	for tri=1,#inner*2 -- twice as many triangles as there are degrees.
-		p1,p2,p3
-		p1 = outer[math.floor(tri/2)+1]
-		p3 = inner[math.floor((tri+1)/2)+1]
-		if tri%2 == 0 --if the number is even use outer.
-			p2 = outer[math.floor((tri+1)/2)]
-		else
-			p2 = inner[math.floor((tri+1)/2)]
+    -- Triangulize the points.
+    for tri=1,#inner*2 -- twice as many triangles as there are degrees.
+        p1,p2,p3
+        p1 = outer[math.floor(tri/2)+1]
+        p3 = inner[math.floor((tri+1)/2)+1]
+        if tri%2 == 0 --if the number is even use outer.
+            p2 = outer[math.floor((tri+1)/2)]
+        else
+            p2 = inner[math.floor((tri+1)/2)]
 
-		table.insert(triarc, {p1,p2,p3})
+        table.insert(triarc, {p1,p2,p3})
 
-	-- Return a table of triangles to draw.
-	return triarc
+    -- Return a table of triangles to draw.
+    return triarc
 
 Moonpanel.render.drawArc = (arc) ->
-	for k,v in ipairs(arc)
-		surface.DrawPoly(v)
+    for k,v in ipairs(arc)
+        surface.DrawPoly(v)

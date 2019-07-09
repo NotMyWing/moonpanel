@@ -126,7 +126,7 @@ Moonpanel.broadcastFinish = (panel, data) =>
     net.WriteUInt #raw, 32
     net.WriteData raw, #raw
 
-	net.Broadcast!
+    net.Broadcast!
 
 Moonpanel.broadcastStart = (panel, node, symmNode) =>
     net.Start "TheMP Flow"

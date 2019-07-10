@@ -113,18 +113,18 @@ ENT.CheckSolution = (errors) =>
     height = @tileData.Tile.Height
 
     grayOut = {
-        [MOONPANEL_OBJECT_TYPES.CELL]: {}
-        [MOONPANEL_OBJECT_TYPES.INTERSECTION]: {}
-        [MOONPANEL_OBJECT_TYPES.VPATH]: {}
-        [MOONPANEL_OBJECT_TYPES.HPATH]: {}
+        [Moonpanel.ObjectTypes.Cell]: {}
+        [Moonpanel.ObjectTypes.Intersection]: {}
+        [Moonpanel.ObjectTypes.VPath]: {}
+        [Moonpanel.ObjectTypes.HPath]: {}
     }
 
     redOut = {
         errored: false
-        [MOONPANEL_OBJECT_TYPES.CELL]: {}
-        [MOONPANEL_OBJECT_TYPES.INTERSECTION]: {}
-        [MOONPANEL_OBJECT_TYPES.VPATH]: {}
-        [MOONPANEL_OBJECT_TYPES.HPATH]: {}
+        [Moonpanel.ObjectTypes.Cell]: {}
+        [Moonpanel.ObjectTypes.Intersection]: {}
+        [Moonpanel.ObjectTypes.VPath]: {}
+        [Moonpanel.ObjectTypes.HPath]: {}
     }
 
     for i = 1, width
@@ -244,8 +244,8 @@ ENT.CheckSolution = (errors) =>
                 
                 grayOut[element.type][element.y] or= {}
                 grayOut[element.type][element.y][element.x] = true
-                grayOut[MOONPANEL_OBJECT_TYPES.CELL][nextYSymbol.y] or= {}
-                grayOut[MOONPANEL_OBJECT_TYPES.CELL][nextYSymbol.y][nextYSymbol.x] = true
+                grayOut[Moonpanel.ObjectTypes.Cell][nextYSymbol.y] or= {}
+                grayOut[Moonpanel.ObjectTypes.Cell][nextYSymbol.y][nextYSymbol.x] = true
 
                 element.solutionData.inactive = true
                 nextYSymbol.solutionData.inactive = true
@@ -307,7 +307,7 @@ ENT.CheckSolution = (errors) =>
             minx, miny, maxx, maxy = nil, nil, nil, nil
             countPositives = 0
             for _, v in pairs area
-                if v.type == MOONPANEL_OBJECT_TYPES.CELL
+                if v.type == Moonpanel.ObjectTypes.Cell
                     if not maxx or v.x > maxx
                         maxx = v.x
                     if not minx or v.x < minx
@@ -323,7 +323,7 @@ ENT.CheckSolution = (errors) =>
             areaMatrix = Moonpanel.BitMatrix maxx-minx + 1, maxy-miny + 1
 
             for _, v in pairs area
-                if v.type == MOONPANEL_OBJECT_TYPES.CELL
+                if v.type == Moonpanel.ObjectTypes.Cell
                     areaMatrix\set v.x - minx + 1, v.y - miny + 1, 1
 
             negativePolyos = { areaMatrix }
@@ -380,7 +380,7 @@ ENT.CheckSolution = (errors) =>
                 if not element.solutionData.inactive and element.entity and element.entity\getClassName! == "Sun"
                     count = 1
                     for _, otherElement in pairs area
-                        if otherElement.type == MOONPANEL_OBJECT_TYPES.CELL and
+                        if otherElement.type == Moonpanel.ObjectTypes.Cell and
                             element ~= otherElement and otherElement.entity and otherElement.entity.attributes and
                             not otherElement.solutionData.inactive and
                             otherElement.entity.attributes.color == element.entity.attributes.color
@@ -409,7 +409,7 @@ ENT.StartPuzzle = (ply, x, y) =>
             if not nodeA
                 return
 
-            if @tileData.Tile.Symmetry
+            if @tileData.Tile.Symmetry ~= Moonpanel.Symmetry.None
                 nodeB = @pathFinder\getSymmetricalNode nodeA
                 if not nodeB
                     return

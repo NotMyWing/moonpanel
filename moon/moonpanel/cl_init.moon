@@ -11,11 +11,11 @@ SOUND_FOCUS_OFF = Sound "moonpanel/focus_off.ogg"
 FOCUSING_TIME = 0.6
 
 export MOONPANEL_ENTITY_GRAPHICS = {
-    [MOONPANEL_ENTITY_TYPES.HEXAGON]: (Material "moonpanel/hexagon.png", "noclamp smooth")
-    [MOONPANEL_ENTITY_TYPES.SUN]: (Material "moonpanel/sun.png", "noclamp smooth")
-    [MOONPANEL_ENTITY_TYPES.TRIANGLE]: (Material "moonpanel/triangle.png", "noclamp smooth")
-    [MOONPANEL_ENTITY_TYPES.COLOR]: (Material "moonpanel/color.png", "noclamp smooth") 
-    [MOONPANEL_ENTITY_TYPES.ERASER]: (Material "moonpanel/eraser.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Hexagon]: (Material "moonpanel/hexagon.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Sun]: (Material "moonpanel/sun.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Triangle]: (Material "moonpanel/triangle.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Color]: (Material "moonpanel/color.png", "noclamp smooth") 
+    [Moonpanel.EntityTypes.Eraser]: (Material "moonpanel/eraser.png", "noclamp smooth")
 }
 
 export Moonpanel = Moonpanel or {}
@@ -104,8 +104,10 @@ hook.Add "CreateMove", "TheMP Control", (cmd) ->
                 Moonpanel.__nextMovementSend = CurTime! + 0.01
                 Moonpanel\sendMouseDeltas x, y
                 panel\ApplyDeltas x, y
+        
+        if IsValid panel
+            cmd\ClearMovement!
 
-        cmd\ClearMovement!
         use = cmd\KeyDown IN_USE
         cmd\ClearButtons!
         cmd\SetButtons use and IN_USE or 0
@@ -208,7 +210,7 @@ net.Receive "TheMP Flow", () ->
             if not panel.Moonpanel or not panel.synchronized
                 return
 
-            _nodeA, nodeB = {
+            _nodeA, _nodeB = {
                 x: net.ReadFloat!
                 y: net.ReadFloat!
             }, nil

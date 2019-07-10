@@ -1,11 +1,11 @@
 cell = {}
 
-types = MOONPANEL_ENTITY_TYPES
+types = Moonpanel.EntityTypes
 graphics = MOONPANEL_ENTITY_GRAPHICS
 white = Color 255, 255, 255
 
 cell.Init = () =>
-    @type = MOONPANEL_OBJECT_TYPES.CELL
+    @type = Moonpanel.ObjectTypes.Cell
 
 polyocell = Material "moonpanel/polyomino_cell.png", "smooth"
 triangle = Material "moonpanel/triangle.png"
@@ -98,10 +98,10 @@ cell.Paint = (w, h) =>
     else
         surface.SetDrawColor white
 
-    if @entity == types.POLYOMINO
+    if @entity == types.Polyomino
         @RenderPolyo w, h
         
-    elseif @entity == types.TRIANGLE
+    elseif @entity == types.Triangle
         @RenderTriangles w, h, @attributes.count
 
     elseif graphics[@entity]

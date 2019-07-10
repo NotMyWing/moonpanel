@@ -3,17 +3,17 @@ hpath = {}
 white = Color 255, 255, 255
 
 hpath.Init = () =>
-    @type = MOONPANEL_OBJECT_TYPES.HPATH
+    @type = Moonpanel.ObjectTypes.HPath
 
-types = MOONPANEL_ENTITY_TYPES
+types = Moonpanel.EntityTypes
 hexagon = Material "moonpanel/hexagon.png"
 
 hpath.Paint = (w, h) =>
     surface.SetDrawColor @panel.data.colors.untraced or Moonpanel.DefaultColors.Untraced
-    if @entity == types.HEXAGON or not @entity
+    if @entity == types.Hexagon or not @entity
         surface.DrawRect 0, 0, w, h
 
-        if @entity == types.HEXAGON        
+        if @entity == types.Hexagon      
             innerw = math.min w, h
             innerh = innerw
 
@@ -21,7 +21,7 @@ hpath.Paint = (w, h) =>
             surface.SetMaterial hexagon
             surface.DrawTexturedRect (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh
 
-    elseif @entity == types.DISJOINT
+    elseif @entity == types.Disjoint
         pct = @panel.data.disjointLength or 0.25
 
         innerwidth = w * pct

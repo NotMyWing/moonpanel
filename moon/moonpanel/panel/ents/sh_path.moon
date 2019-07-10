@@ -41,8 +41,8 @@ class VBroken extends PathEntity
     overridesRender: true
     background: true
     populatePathMap: (pathMap) =>
-        gap = @parent.bounds.height * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
-        height = @parent.bounds.height / 2 - gap / 2
+        gap = math.ceil @parent.bounds.height * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
+        height = math.ceil @parent.bounds.height / 2 - gap / 2
 
         topIntersection = @parent\getTop!
         bottomIntersection = @parent\getBottom!
@@ -75,8 +75,8 @@ class VBroken extends PathEntity
         return true
 
     render: =>
-        gap = @parent.bounds.height * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
-        height = @parent.bounds.height / 2 - gap / 2
+        gap = math.ceil @parent.bounds.height * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
+        height = math.ceil @parent.bounds.height / 2 - gap / 2
         
         surface.SetDrawColor @parent.tile.colors.untraced
         surface.DrawRect @parent.bounds.x, @parent.bounds.y, @parent.bounds.width, height
@@ -88,8 +88,8 @@ class HBroken extends PathEntity
     overridesRender: true
     background: true
     populatePathMap: (pathMap) =>
-        gap = @parent.bounds.width * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
-        width = @parent.bounds.width / 2 - gap / 2
+        gap = math.ceil @parent.bounds.width * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
+        width = math.ceil @parent.bounds.width / 2 - gap / 2
 
         leftIntersection = @parent\getLeft!
         rightIntersection = @parent\getRight!
@@ -123,8 +123,8 @@ class HBroken extends PathEntity
         return true
 
     render: =>
-        gap = @parent.bounds.width * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
-        width = @parent.bounds.width / 2 - gap / 2
+        gap = math.ceil @parent.bounds.width * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
+        width = math.ceil @parent.bounds.width / 2 - gap / 2
         
         surface.SetDrawColor @parent.tile.colors.untraced
         surface.DrawRect @parent.bounds.x, @parent.bounds.y, width, @parent.bounds.height
@@ -135,11 +135,11 @@ class HBroken extends PathEntity
 Moonpanel.Entities or= {}
 
 Moonpanel.Entities.HPath = {
-    [MOONPANEL_ENTITY_TYPES.HEXAGON]: Hexagon
-    [MOONPANEL_ENTITY_TYPES.DISJOINT]: HBroken
+    [Moonpanel.EntityTypes.Hexagon]: Hexagon
+    [Moonpanel.EntityTypes.Disjoint]: HBroken
 }
 
 Moonpanel.Entities.VPath = {
-    [MOONPANEL_ENTITY_TYPES.HEXAGON]: Hexagon
-    [MOONPANEL_ENTITY_TYPES.DISJOINT]: VBroken
+    [Moonpanel.EntityTypes.Hexagon]: Hexagon
+    [Moonpanel.EntityTypes.Disjoint]: VBroken
 }

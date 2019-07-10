@@ -82,15 +82,15 @@ TOOL_GRAPHICS = {
 }
 
 ENTITY_GRAPHICS = {
-    [MOONPANEL_ENTITY_TYPES.POLYOMINO]: (Material "moonpanel/polyo.png", "noclamp smooth")
-    [MOONPANEL_ENTITY_TYPES.SUN]: (Material "moonpanel/sun.png", "noclamp smooth")
-    [MOONPANEL_ENTITY_TYPES.TRIANGLE]: (Material "moonpanel/triangle.png", "noclamp smooth")
-    [MOONPANEL_ENTITY_TYPES.COLOR]: (Material "moonpanel/color.png", "noclamp smooth") 
-    [MOONPANEL_ENTITY_TYPES.ERASER]: (Material "moonpanel/eraser.png", "noclamp smooth")
-    [MOONPANEL_ENTITY_TYPES.START]: (Material "moonpanel/start.png", "noclamp smooth")
-    [MOONPANEL_ENTITY_TYPES.END]: (Material "moonpanel/end.png", "noclamp smooth")
-    [MOONPANEL_ENTITY_TYPES.DISJOINT]: (Material "moonpanel/disjoint.png", "noclamp smooth")
-    [MOONPANEL_ENTITY_TYPES.HEXAGON]: {
+    [Moonpanel.EntityTypes.Polyomino]: (Material "moonpanel/polyo.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Sun]: (Material "moonpanel/sun.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Triangle]: (Material "moonpanel/triangle.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Color]: (Material "moonpanel/color.png", "noclamp smooth") 
+    [Moonpanel.EntityTypes.Eraser]: (Material "moonpanel/eraser.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Start]: (Material "moonpanel/start.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.End]: (Material "moonpanel/end.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Disjoint]: (Material "moonpanel/disjoint.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Hexagon]: {
         (Material "moonpanel/hex_layer1.png", "noclamp smooth")
         (Material "moonpanel/hex_layer2.png", "noclamp smooth")
     }
@@ -159,69 +159,69 @@ TOOLSET_ENTITIES = {
     ------------------------
     {
         tooltip: "Color"
-        entity: MOONPANEL_ENTITY_TYPES.COLOR
-        target: MOONPANEL_OBJECT_TYPES.CELL
+        entity: Moonpanel.EntityTypes.Color
+        target: Moonpanel.ObjectTypes.Cell
 
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.COLOR]
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Color]
             surface.DrawTexturedRect 0, 0, w, h
 
         set: (button, gridElement, color) ->
-            if gridElement.attributes.color == color and gridElement.entity == MOONPANEL_ENTITY_TYPES.COLOR
+            if gridElement.attributes.color == color and gridElement.entity == Moonpanel.EntityTypes.Color
                 gridElement.entity = nil
             else
                 gridElement.attributes.color = color
-                gridElement.entity = MOONPANEL_ENTITY_TYPES.COLOR 
+                gridElement.entity = Moonpanel.EntityTypes.Color 
     }
     ------------------------
     -- Tool: sun entity   --
     ------------------------
     {
         tooltip: "Sun / Star"
-        entity: MOONPANEL_ENTITY_TYPES.SUN
-        target: MOONPANEL_OBJECT_TYPES.CELL
+        entity: Moonpanel.EntityTypes.Sun
+        target: Moonpanel.ObjectTypes.Cell
 
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.SUN]
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Sun]
             surface.DrawTexturedRect 0, 0, w, h
 
         set: (button, gridElement, color) ->
-            if gridElement.attributes.color == color and gridElement.entity == MOONPANEL_ENTITY_TYPES.SUN
+            if gridElement.attributes.color == color and gridElement.entity == Moonpanel.EntityTypes.Sun
                 gridElement.entity = nil
 
             else
                 gridElement.attributes.color = color
-                gridElement.entity = MOONPANEL_ENTITY_TYPES.SUN 
+                gridElement.entity = Moonpanel.EntityTypes.Sun 
     }
     -------------------------
     -- Tool: eraser entity --
     -------------------------
     {
         tooltip: "Y-Symbol / Eraser"
-        entity: MOONPANEL_ENTITY_TYPES.ERASER
-        target: MOONPANEL_OBJECT_TYPES.CELL
+        entity: Moonpanel.EntityTypes.Eraser
+        target: Moonpanel.ObjectTypes.Cell
 
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.ERASER]
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Eraser]
             surface.DrawTexturedRect 0, 0, w, h
 
         set: (button, gridElement, color) ->
-            if gridElement.attributes.color == color and gridElement.entity == MOONPANEL_ENTITY_TYPES.ERASER
+            if gridElement.attributes.color == color and gridElement.entity == Moonpanel.EntityTypes.Eraser
                 gridElement.entity = nil
             else
                 gridElement.attributes.color = color
-                gridElement.entity = MOONPANEL_ENTITY_TYPES.ERASER 
+                gridElement.entity = Moonpanel.EntityTypes.Eraser 
     }
     ------------------------
     -- Tool: polyo entity --
     ------------------------
     {
         tooltip: "Polyomino / Tetris"
-        entity: MOONPANEL_ENTITY_TYPES.POLYOMINO
-        target: MOONPANEL_OBJECT_TYPES.CELL
+        entity: Moonpanel.EntityTypes.Polyomino
+        target: Moonpanel.ObjectTypes.Cell
 
         copy: (button, editor, gridElement) ->
             table.Empty POLYOMINO_EDITOR_DATA
@@ -229,7 +229,7 @@ TOOLSET_ENTITIES = {
 
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.POLYOMINO]
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Polyomino]
             surface.DrawTexturedRect 0, 0, w, h
 
         click: (button, wasSelected) ->
@@ -257,7 +257,7 @@ TOOLSET_ENTITIES = {
 
             if not norm or 
                 (gridElement.attributes.color == color and 
-                    gridElement.entity == MOONPANEL_ENTITY_TYPES.POLYOMINO and
+                    gridElement.entity == Moonpanel.EntityTypes.Polyomino and
                     gridElement.attributes.shape and
                     (comparePolyos norm, gridElement.attributes.shape)
                 )
@@ -266,15 +266,15 @@ TOOLSET_ENTITIES = {
                 gridElement.attributes.color = color
 
                 gridElement.attributes.shape = norm
-                gridElement.entity = MOONPANEL_ENTITY_TYPES.POLYOMINO 
+                gridElement.entity = Moonpanel.EntityTypes.Polyomino 
     }
     ---------------------------
     -- Tool: triangle entity --
     ---------------------------
     {
         tooltip: "Triangle (Click again to change the count)"
-        entity: MOONPANEL_ENTITY_TYPES.TRIANGLE
-        target: MOONPANEL_OBJECT_TYPES.CELL
+        entity: Moonpanel.EntityTypes.Triangle
+        target: Moonpanel.ObjectTypes.Cell
 
         copy: (button, editor, gridElement) ->
             button.count = gridElement.attributes.count
@@ -282,7 +282,7 @@ TOOLSET_ENTITIES = {
         render: (w, h, color, button) ->
             button.count or= 1
             surface.SetDrawColor color
-            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.TRIANGLE]
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Triangle]
             innerw = w * 0.275
             innerh = h * 0.275
 
@@ -317,12 +317,12 @@ TOOLSET_ENTITIES = {
         set: (button, gridElement, color) ->
             count = button.count
             if gridElement.attributes.color == color and 
-                gridElement.attributes.count == count and gridElement.entity == MOONPANEL_ENTITY_TYPES.TRIANGLE
+                gridElement.attributes.count == count and gridElement.entity == Moonpanel.EntityTypes.Triangle
                 gridElement.entity = nil
             else
                 gridElement.attributes.color = color
                 gridElement.attributes.count = count
-                gridElement.entity = MOONPANEL_ENTITY_TYPES.TRIANGLE 
+                gridElement.entity = Moonpanel.EntityTypes.Triangle 
     }
 }
 
@@ -332,80 +332,80 @@ TOOLSET_PATHENTITIES = {
     ------------------------
     {
         tooltip: "Entrance / Start"
-        entity: MOONPANEL_ENTITY_TYPES.START
-        target: MOONPANEL_OBJECT_TYPES.INTERSECTION
+        entity: Moonpanel.EntityTypes.Start
+        target: Moonpanel.ObjectTypes.Intersection
 
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.START]
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Start]
             surface.DrawTexturedRect 0, 0, w, h
 
         set: (button, gridElement, color) ->
-            if gridElement.entity == MOONPANEL_ENTITY_TYPES.START
+            if gridElement.entity == Moonpanel.EntityTypes.Start
                 gridElement.entity = nil
             else
-                gridElement.entity = MOONPANEL_ENTITY_TYPES.START 
+                gridElement.entity = Moonpanel.EntityTypes.Start 
     }
     -----------------------
     -- Tool: exit entity --
     -----------------------
     {
         tooltip: "Exit / End"
-        entity: MOONPANEL_ENTITY_TYPES.END
-        target: MOONPANEL_OBJECT_TYPES.INTERSECTION
+        entity: Moonpanel.EntityTypes.End
+        target: Moonpanel.ObjectTypes.Intersection
 
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.END]
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.End]
             surface.DrawTexturedRect 0, 0, w, h
 
         set: (button, gridElement, color) ->
-            if gridElement.entity == MOONPANEL_ENTITY_TYPES.END
+            if gridElement.entity == Moonpanel.EntityTypes.End
                 gridElement.entity = nil
             else
-                gridElement.entity = MOONPANEL_ENTITY_TYPES.END 
+                gridElement.entity = Moonpanel.EntityTypes.End 
     }
     ---------------------------
     -- Tool: disjoint entity --
     ---------------------------
     {
         tooltip: "Break / Disjoint"
-        entity: MOONPANEL_ENTITY_TYPES.DISJOINT
-        target: { MOONPANEL_OBJECT_TYPES.HPATH, MOONPANEL_OBJECT_TYPES.VPATH }
+        entity: Moonpanel.EntityTypes.Disjoint
+        target: { Moonpanel.ObjectTypes.HPath, Moonpanel.ObjectTypes.VPath }
 
         render: (w, h, color) ->
             surface.SetDrawColor color
-            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.DISJOINT]
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Disjoint]
             surface.DrawTexturedRect 0, 0, w, h
 
         set: (button, gridElement, color) ->
-            if gridElement.entity == MOONPANEL_ENTITY_TYPES.DISJOINT
+            if gridElement.entity == Moonpanel.EntityTypes.Disjoint
                 gridElement.entity = nil
             else
-                gridElement.entity = MOONPANEL_ENTITY_TYPES.DISJOINT 
+                gridElement.entity = Moonpanel.EntityTypes.Disjoint 
     }
     --------------------------
     -- Tool: hexagon entity --
     --------------------------
     {
         tooltip: "Dot / Hexagon"
-        entity: MOONPANEL_ENTITY_TYPES.HEXAGON
-        target: { MOONPANEL_OBJECT_TYPES.HPATH, MOONPANEL_OBJECT_TYPES.VPATH, MOONPANEL_OBJECT_TYPES.INTERSECTION }
+        entity: Moonpanel.EntityTypes.Hexagon
+        target: { Moonpanel.ObjectTypes.HPath, Moonpanel.ObjectTypes.VPath, Moonpanel.ObjectTypes.Intersection }
 
         render: (w, h, bgColor, entColor) ->
             surface.SetDrawColor bgColor
-            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.HEXAGON][1]
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Hexagon][1]
             surface.DrawTexturedRect 0, 0, w, h
             surface.SetDrawColor entColor
-            surface.SetMaterial ENTITY_GRAPHICS[MOONPANEL_ENTITY_TYPES.HEXAGON][2]
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Hexagon][2]
             surface.DrawTexturedRect 0, 0, w, h
 
         set: (button, gridElement, color) ->
-            if gridElement.attributes.color == color and gridElement.entity == MOONPANEL_ENTITY_TYPES.HEXAGON
+            if gridElement.attributes.color == color and gridElement.entity == Moonpanel.EntityTypes.Hexagon
                 gridElement.entity = nil
             else
                 gridElement.attributes.color = color
-                gridElement.entity = MOONPANEL_ENTITY_TYPES.HEXAGON 
+                gridElement.entity = Moonpanel.EntityTypes.Hexagon 
     }
 }
 
@@ -824,14 +824,19 @@ editor.Init = () =>
         left = with vgui.Create "DPanel", widthHeight
             \Dock LEFT
             .Paint = nil
-        
+
         right = with vgui.Create "DPanel", widthHeight
             \Dock RIGHT
             .Paint = nil
 
+        center = with vgui.Create "DPanel", widthHeight
+            \Dock FILL
+            .Paint = nil
+
         widthHeight.PerformLayout = (_, w, h) ->
-            left\SetWide w/2
-            right\SetWide w/2
+            left\SetWide w/3
+            center\SetWide w/3
+            right\SetWide w/3
 
         with vgui.Create "DLabel", left
             \DockMargin 5, 0, 5, 2
@@ -846,7 +851,33 @@ editor.Init = () =>
             \SetValue 3
             .OnSelect = (_, index, value) ->
                 data = @Serialize!
+                if not data
+                    return
+
                 data.Tile.Width = value
+                @Deserialize data
+                @OnChange!
+
+            for i = 1, 10
+                \AddChoice i
+
+        with vgui.Create "DLabel", center
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetText "Height:"
+
+        @comboBox_heightCombo = with vgui.Create "DComboBox", center
+            \SetSortItems false
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetValue 3
+            .OnSelect = (_, index, value) ->
+                data = @Serialize!
+                if not data
+                    return
+
+                data.Tile.Height = value
                 @Deserialize data
                 @OnChange!
 
@@ -857,23 +888,29 @@ editor.Init = () =>
             \SetColor Color 0, 0, 0, 255
             \DockMargin 5, 0, 5, 2
             \Dock TOP
-            \SetText "Height:"
+            \SetText "Symmetry:"
 
-        @comboBox_heightCombo = with vgui.Create "DComboBox", right
+        @comboBox_symmetryCombo = with vgui.Create "DComboBox", right
             \SetSortItems false
             \DockMargin 5, 0, 5, 2
             \Dock TOP
-            \SetValue 3
-            .OnSelect = (_, index, value) ->
+            \AddChoice "None", 0
+            \AddChoice "Horizontal", Moonpanel.Symmetry.Horizontal
+            \AddChoice "Vertical", Moonpanel.Symmetry.Vertical
+            \AddChoice "Rotational", Moonpanel.Symmetry.Rotational
+
+            \ChooseOptionID 1
+            .OnSelect = (_, index, value, d) ->
                 data = @Serialize!
-                data.Tile.Height = value
+                if not data
+                    return
+
+                data.Tile.Symmetry = d
                 @Deserialize data
                 @OnChange!
 
-            for i = 1, 10
-                \AddChoice i
-
         left\SizeToContents true, true
+        center\SizeToContents true, true
         right\SizeToContents true, true
 
         with widthHeight
@@ -1286,6 +1323,10 @@ editor.SetupGrid = (data) =>
     @moonpanel_grid\Setup @data, click, copy
 
 editor.Serialize = () =>
+    if @__serializing
+        return
+    @__serializing = true
+
     data_colors = @data.colors or {}
 
     outputData = {
@@ -1293,6 +1334,7 @@ editor.Serialize = () =>
             Title: @data.title
             Width: @data.w
             Height: @data.h
+            Symmetry: (@data.symmetry and @data.symmetry ~= 0) and @data.symmetry
         }
         Dimensions: {
             BarWidth: @data.barWidth
@@ -1356,10 +1398,10 @@ editor.Serialize = () =>
                     Color: element.attributes.color
                 }
                 switch t.Type
-                    when MOONPANEL_ENTITY_TYPES.TRIANGLE
+                    when Moonpanel.EntityTypes.Triangle
                         t.Attributes.Count = element.attributes.count or 1
 
-                    when MOONPANEL_ENTITY_TYPES.POLYOMINO
+                    when Moonpanel.EntityTypes.Polyomino
                         t.Attributes.Shape = {}
                         for j = 1, element.attributes.shape.h
                             t.Attributes.Shape[j] = {}
@@ -1368,9 +1410,15 @@ editor.Serialize = () =>
                         
                         t.Attributes.Rotational = element.attributes.shape.rotational
 
+    @__serializing = false
     return outputData
 
 editor.Deserialize = (input) =>
+    if @__serializing
+        return
+    @__serializing = true
+    input or={}
+
     input_tile = input.Tile or {}
     input_dimensions = input.Dimensions or {}
 
@@ -1378,6 +1426,7 @@ editor.Deserialize = (input) =>
         title: input_tile.Title
         w: input_tile.Width or 3
         h: input_tile.Height or 3
+        symmetry: input_tile.Symmetry or 0
         
         barWidth: input_dimensions.BarWidth
         innerScreenRatio: input_dimensions.InnerScreenRatio
@@ -1398,6 +1447,7 @@ editor.Deserialize = (input) =>
 
     @comboBox_widthCombo\SetText newData.w
     @comboBox_heightCombo\SetText newData.h
+    @comboBox_symmetryCombo\SetText @comboBox_symmetryCombo\GetOptionTextByData newData.symmetry
 
     w, h = newData.w, newData.h
     for j = 1, h + 1
@@ -1473,6 +1523,8 @@ editor.Deserialize = (input) =>
     table.CopyFromTo newData, @data
 
     @SetupGrid @data
+
+    @__serializing = false
 
 editor.SetOpenedFile = (fileName, path = "DATA") =>
     @__openedFileName = fileName

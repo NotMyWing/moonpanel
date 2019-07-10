@@ -116,7 +116,7 @@ panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
                     if @data.intersections and @data.intersections[y] and @data.intersections[y][x]
                         entity = @data.intersections[y][x].entity
 
-                        if entity == MOONPANEL_ENTITY_TYPES.END
+                        if entity == Moonpanel.EntityTypes.End
                             if (i > 1) and (j > 1) and (i < @data.w * 2) and (j < @data.h * 2)
                                 entity = nil
 

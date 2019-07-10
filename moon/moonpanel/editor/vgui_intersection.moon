@@ -4,11 +4,11 @@ corner = Material "moonpanel/corner256.png", "noclamp smooth mips"
 circle = Material "moonpanel/circ256.png", "noclamp smooth mips"
 
 white = Color 255, 255, 255
-types = MOONPANEL_ENTITY_TYPES
+types = Moonpanel.EntityTypes
 hexagon = Material "moonpanel/hexagon.png"
 
 intersection.Init = () =>
-    @type = MOONPANEL_OBJECT_TYPES.INTERSECTION
+    @type = Moonpanel.ObjectTypes.Intersection
 
 intersection.getAngle = (x, y, w, h) =>
     if (x == 1)
@@ -25,13 +25,13 @@ intersection.getAngle = (x, y, w, h) =>
 intersection.Paint = (w, h) =>
     surface.SetDrawColor @panel.data.colors.untraced or Moonpanel.DefaultColors.Untraced
 
-    if @entity == MOONPANEL_ENTITY_TYPES.START
+    if @entity == Moonpanel.EntityTypes.Start
         surface.DisableClipping true
         surface.SetMaterial circle
         surface.DrawTexturedRectRotated math.floor(w/2), math.floor(h/2), w * 2.5, h * 2.5, 0 
         surface.DisableClipping false
     
-    elseif @entity == MOONPANEL_ENTITY_TYPES.END
+    elseif @entity == Moonpanel.EntityTypes.End
         angle = @getAngle @i, @j, @panel.data.w + 1, @panel.data.h + 1 
         if angle ~= -1
             surface.DisableClipping true
@@ -66,7 +66,7 @@ intersection.Paint = (w, h) =>
             surface.SetMaterial corner
             surface.DrawTexturedRectRotated math.floor(w/2), math.floor(h/2), w + 1, h + 1, (@corner - 1) * 90
 
-        if @entity == types.HEXAGON        
+        if @entity == types.Hexagon      
             innerw = math.min w, h
             innerh = innerw
 

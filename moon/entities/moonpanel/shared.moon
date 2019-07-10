@@ -37,9 +37,9 @@ class PathFinder
         if not @symmetry or not a or not b
             return false
 
-        rotational = (@symmetry == ROTATIONAL_SYMMETRY) and (a.x == -b.x) and (a.y == -b.y)
-        vertical = (@symmetry == VERTICAL_SYMMETRY) and (a.x == b.x) and (a.y == -b.y)
-        horizontal = (@symmetry == HORIZONTAL_SYMMETRY) and (a.x == -b.x) and (a.y == b.y)
+        rotational = (@symmetry == Moonpanel.Symmetry.Rotational) and (a.x == -b.x) and (a.y == -b.y)
+        vertical = (@symmetry == Moonpanel.Symmetry.Vertical) and (a.x == b.x) and (a.y == -b.y)
+        horizontal = (@symmetry == Moonpanel.Symmetry.Horizontal) and (a.x == -b.x) and (a.y == b.y)
 
         return rotational or vertical or horizontal
 
@@ -55,34 +55,6 @@ class PathFinder
             if node.clickable and @checkSymmetry node, firstNode
                 return node
 
-    runCursorCallback: (cursorData) =>
-        if @cursorCallback
-            @cursorCallback cursorData
-
-    compareCursorData: (data, otherData) =>
-        if not otherData or not data
-            return false
-
-        return data.id == otherData.id and
-            data.pointId == otherData.pointId and
-            data.dx == otherData.dx and
-            data.dy == otherData.dy
-
-    packAndCallback: () =>
-        if @updateCallback
-            packed = {}
-            for k, nodeStack in pairs @nodeStacks
-                nodeTable = {}
-                for _, node in pairs nodeStack
-                    table.insert nodeTable, {
-                        sx: node.screenX
-                        sy: node.screenY
-                    }
-
-                table.insert packed, nodeTable
-        
-            @updateCallback packed
-
     think: () =>
         if not @nodeStacks or not @cursors
             return
@@ -90,24 +62,12 @@ class PathFinder
         toInsert = {}
         toRemove = {}
 
-        shouldUpdateCursor = true
-        pendingCursorUpdates = {}
-
         for _, nodeStack in pairs @nodeStacks
             nodeCursor = @cursors[_]
             mouseX = nodeCursor.x
             mouseY = nodeCursor.y
 
             last = nodeStack[#nodeStack]
-            
-            if nodeStack == @nodeStacks[2]
-                if @symmetry == VERTICAL_SYMMETRY
-                    mouseX = @screenHeight - mouseX
-                elseif @symmetry == HORIZONTAL_SYMMETRY
-                    mouseX = @screenWidth - mouseX
-                elseif @symmetry == ROTATIONAL_SYMMETRY
-                    mouseX = @screenWidth - mouseX
-                    mouseY = @screenHeight - mouseY
 
             localMouseX = mouseX - last.screenX
             localMouseY = mouseY - last.screenY
@@ -120,10 +80,15 @@ class PathFinder
             for k, to in pairs last.neighbors
                 vec = Vector to.screenX - last.screenX, to.screenY - last.screenY, 0
 
-                radius = 0
-                if to ~= nodeStack[#nodeStack - 1]
-                    radius = (@isFirst(to) and @barWidth * 1.75) or (@hasNode(to) and @barWidth * 1) or 0
-                vecLength = vec\Length! - radius
+                vecLength = vec\Length!
+
+                otherStack = @nodeStacks[1 - (_ - 1) + 1]
+                if @symmetry and otherStack and to == otherStack[#otherStack]
+                    vecLength /= 2
+                    vecLength -= @barWidth / 2
+
+                elseif to ~= nodeStack[#nodeStack - 1]
+                    vecLength -= (@isFirst(to) and @barWidth * 1.75) or (@hasNode(to) and @barWidth) or 0
 
                 unitVector = vec\GetNormalized!
 
@@ -134,8 +99,6 @@ class PathFinder
             
                     dotVector = (unitVector * mDot)
                     toMouseVec = mouseVector - dotVector
-                    
-                    shouldCorrect = false
 
                     tx, ty = last.screenX + dotVector.x, last.screenY + dotVector.y
                     angle = math.atan2 (last.screenY - ty), (last.screenX - tx)
@@ -160,7 +123,7 @@ class PathFinder
                     mDot = math.min mDot, vecLength
 
                     dotVector = (unitVector * mDot)
-                    if mDot > maxMDot
+                    if mDot >= maxMDot
                         maxVecLength = vecLength
                         maxMDot = mDot
                         maxDotVector = dotVector
@@ -172,8 +135,6 @@ class PathFinder
                             table.insert toRemove, #nodeStack
                         else
                             table.remove nodeStack, #nodeStack
-
-                        shouldUpdateCursor = false
                         break
 
                     elseif not @hasNode to
@@ -181,20 +142,12 @@ class PathFinder
                             table.insert toInsert, to
                         else
                             table.insert nodeStack, to
-
-                        shouldUpdateCursor = false
                         break
-                        
-            if shouldUpdateCursor and maxNode
+      
+            if maxNode and nodeStack[#nodeStack] == last
                 nodeCursor.x = nodeStack[#nodeStack].screenX + maxDotVector.x
                 nodeCursor.y = nodeStack[#nodeStack].screenY + maxDotVector.y
 
-                cursorData = {
-                    id: _
-                    dx: maxDotVector.x
-                    dy: maxDotVector.y
-                    pointId: #nodeStack
-                }
             else
                 nodeCursor.x = nodeStack[#nodeStack].screenX
                 nodeCursor.y = nodeStack[#nodeStack].screenY
@@ -204,7 +157,6 @@ class PathFinder
                     table.insert toRemove, #nodeStack
                 else
                     table.remove nodeStack, #nodeStack
-                shouldUpdateCursor = false
 
         if @symmetry and #toInsert > 1 and toInsert[1] ~= toInsert[2]
             a = toInsert[1]
@@ -230,23 +182,45 @@ class PathFinder
         if not @cursors
             return
 
-        @cursors[1].x += x
-        @cursors[1].y += y
+        @cursors[1].x = math.floor @cursors[1].x + x
+        @cursors[1].y = math.floor @cursors[1].y + y
+
+        if @cursors[2]
+            dx = @cursors[1].x - @cursors[1].ix
+            dy = @cursors[1].y - @cursors[1].iy
+            if @symmetry == Moonpanel.Symmetry.Rotational
+                @cursors[2].x = math.ceil @cursors[2].ix - dx
+                @cursors[2].y = math.ceil @cursors[2].iy - dy
+
+            if @symmetry == Moonpanel.Symmetry.Vertical
+                @cursors[2].x = math.floor @cursors[2].ix + dx
+                @cursors[2].y = math.ceil @cursors[2].iy - dy
+
+            if @symmetry == Moonpanel.Symmetry.Horizontal
+                @cursors[2].x = math.ceil @cursors[2].ix - dx
+                @cursors[2].y = math.floor @cursors[2].iy + dy
+
         @think!
 
-    restart: (firstNode, secondNode) =>
-        @cursorDatas = {{},{}}
+    restart: (firstNode, secondNode) => 
         @nodeStacks = { {firstNode} }
-        if secondNode 
-            table.insert @nodeStacks, { secondNode }
-        
         @cursors = {
             {
                 x: firstNode.screenX
                 y: firstNode.screenY
+                ix: firstNode.screenX
+                iy: firstNode.screenY
             }
         }
-        @packAndCallback!
+
+        if secondNode
+            table.insert @nodeStacks, { secondNode }
+            @cursors[#@cursors + 1] = {
+                x: secondNode.screenX
+                y: secondNode.screenY
+                ix: secondNode.screenX
+                iy: secondNode.screenY
+            }
 
     new: (@nodeMap, @data, @updateCallback, @cursorCallback) =>
         with @data
@@ -254,7 +228,7 @@ class PathFinder
             @barWidth = .barWidth
             @screenWidth = .screenWidth
             @screenHeight = .screenHeight
-            @symmetry = .symmetry
+            @symmetry = (.symmetry and .symmetry ~= Moonpanel.Symmetry.None) and .symmetry or false
 
         -- Cache the nodemap IDs so we can communicate them easily.
         -- This is highly unsafe since nodemaps might end up
@@ -280,8 +254,7 @@ ENT.BuildPathMap = () =>
             translatedY = (j - 1) - (cellsH / 2)
             intersection = @elements.intersections[i][j]
             
-            clickable = (intersection.entity and intersection.entity.type == MOONPANEL_ENTITY_TYPES.START) and true or false
-            
+            clickable = (intersection.entity and intersection.entity.type == Moonpanel.EntityTypes.Start) and true or false
             node = {
                 x: translatedX
                 y: translatedY

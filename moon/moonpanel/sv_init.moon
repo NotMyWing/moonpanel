@@ -136,6 +136,7 @@ Moonpanel.broadcastStart = (panel, node, symmNode) =>
     net.WriteFloat node.x
     net.WriteFloat node.y
     net.WriteBool symmNode and true or false
+
     if symmNode
         net.WriteFloat symmNode.x
         net.WriteFloat symmNode.y
@@ -333,6 +334,7 @@ Moonpanel.sanitizeTileData = (input) =>
             Title: input.Tile.Title and string.sub(input.Tile.Title, 1, 64) or nil
             Width: math.Clamp((sanitizeNumber input.Tile.Width, 3), 1, 10)
             Height: math.Clamp((sanitizeNumber input.Tile.Height, 3), 1, 10)
+            Symmetry: input.Tile.Symmetry and (math.floor math.Clamp((sanitizeNumber input.Tile.Symmetry, 0), 0, 3)) or 0
         }
         Dimensions: {
             BarWidth: input.Dimensions.BarWidth and

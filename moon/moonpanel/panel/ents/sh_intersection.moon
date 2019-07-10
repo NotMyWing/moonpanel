@@ -150,7 +150,7 @@ class Exit extends IntersectionEntity
 Moonpanel.Entities or= {}
 
 Moonpanel.Entities.Intersection = {
-    [MOONPANEL_ENTITY_TYPES.START]: Entrance
-    [MOONPANEL_ENTITY_TYPES.END]: Exit
-    [MOONPANEL_ENTITY_TYPES.HEXAGON]: Hexagon
+    [Moonpanel.EntityTypes.Start]: Entrance
+    [Moonpanel.EntityTypes.End]: Exit
+    [Moonpanel.EntityTypes.Hexagon]: Hexagon
 }

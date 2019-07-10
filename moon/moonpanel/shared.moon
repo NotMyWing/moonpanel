@@ -1,27 +1,6 @@
 _moonpanel = Moonpanel or {}
 export Moonpanel = _moonpanel
 
-export MOONPANEL_ENTITY_TYPES = {
-    NONE: 0
-    START: 1
-    END: 2
-    HEXAGON: 3
-    TRIANGLE: 4
-    POLYOMINO: 5
-    SUN: 6
-    ERASER: 7
-    COLOR: 8
-    DISJOINT: 9
-}
-
-export MOONPANEL_OBJECT_TYPES = {
-    NONE: 0
-    CELL: 1
-    VPATH: 2
-    HPATH: 3
-    INTERSECTION: 4
-}
-
 export MOONPANEL_DEFAULT_RESOLUTIONS = {
     {
         innerScreenRatio: 0.8
@@ -74,6 +53,34 @@ export MOONPANEL_DEFAULTEST_RESOLUTION = {
 -- Globals --
 -------------
 
+Moonpanel.EntityTypes = {
+    None: 0
+    Start: 1
+    End: 2
+    Hexagon: 3
+    Triangle: 4
+    Polyomino: 5
+    Sun: 6
+    Eraser: 7
+    Color: 8
+    Disjoint: 9
+}
+
+Moonpanel.ObjectTypes = {
+    None: 0
+    Cell: 1
+    VPath: 2
+    HPath: 3
+    Intersection: 4
+}
+
+Moonpanel.Symmetry = {
+    None: 0
+    Rotational: 1
+    Vertical: 2
+    Horizontal: 3
+}
+
 Moonpanel.PanelState = {
     None: 1
     BeingUsed: 2
@@ -119,7 +126,7 @@ Moonpanel.DefaultColors = {
     Traced: Color 255, 255, 255, 255
     Finished: Color 255, 255, 255, 255
     Vignette: Color 255, 255, 255, 160
-    Errored: Color 0, 0, 0, 0
+    Errored: Color 0, 0, 0, 255
 }
 
 ---------------------------

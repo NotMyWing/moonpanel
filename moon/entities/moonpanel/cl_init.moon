@@ -243,7 +243,7 @@ ENT.PuzzleStart = (nodeA, nodeB) =>
     @rendertargets.foreground.dirty = true
 
     tr = @colors.traced
-    @pen = Color tr.r, tr.g, tr.b, 255
+    @pen = Color tr.r, tr.g, tr.b, tr.a or 255
 
     @EmitSound SOUND_PANEL_START
 
@@ -258,7 +258,7 @@ ENT.PuzzleStart = (nodeA, nodeB) =>
 
 ENT.PenFade = (interval, clr, delta = 5) =>
     if clr
-        @pen = Color clr.r, clr.g, clr.b, 255
+        @pen = Color clr.r, clr.g, clr.b, clr.a or 255
 
     timer.Create @GetTimerName("penFade"), interval, 0, () ->
         if not IsValid @
@@ -304,10 +304,10 @@ ENT.PuzzleFinish = (data) =>
             if not data.sync
                 @EmitSound SOUND_PANEL_POTENTIAL_FAILURE
 
-            _oldPen = ColorAlpha @pen, 255
+            _oldPen = ColorAlpha @pen, @pen.a or 255
             err = @colors.errored
 
-            @PenFade 0.05, Color err.r, err.g, err.b, 255
+            @PenFade 0.05, Color err.r, err.g, err.b, err.a or 255
             timer.Create @GetTimerName("grayOut"), 0.75, 1, () ->
                 timer.Remove @GetTimerName "penFade"
                 @redOut = nil
@@ -323,7 +323,7 @@ ENT.PuzzleFinish = (data) =>
 
     elseif not aborted
         err = @colors.errored
-        @pen = Color err.r, err.g, err.b, 255
+        @pen = Color err.r, err.g, err.b, err.a or 255
 
         if _grayOut.grayedOut
             if not data.sync
@@ -344,7 +344,7 @@ ENT.PuzzleFinish = (data) =>
             @EmitSound SOUND_PANEL_ABORT
 
         if @pen
-            @PenFade 0.05, Color @pen.r, @pen.g, @pen.b, 255
+            @PenFade 0.05, Color @pen.r, @pen.g, @pen.b, @pen.a or 255
     
     @shouldRepaintTrace = true
 
@@ -363,7 +363,7 @@ ENT.SetupDataClient = (data) =>
     @SetBackgroundColor @colors.background
 
     tr = @colors.traced
-    @pen = Color tr.r, tr.g, tr.b, 255
+    @pen = Color tr.r, tr.g, tr.b, tr.a or 255
 
     cellsW = @tileData.Tile.Width
     cellsH = @tileData.Tile.Height
@@ -374,9 +374,9 @@ ENT.SetupDataClient = (data) =>
         for i = 1, cellsW + 1
             int = @elements.intersections[i][j]
             if int and int.entity
-                if int.entity.type == MOONPANEL_ENTITY_TYPES.START
+                if int.entity.type == Moonpanel.EntityTypes.Start
                     @startRipples[#@startRipples + 1] = int.entity.ripple
-                if int.entity.type == MOONPANEL_ENTITY_TYPES.END
+                if int.entity.type == Moonpanel.EntityTypes.End
                     @endRipples[#@endRipples + 1] = int.entity.ripple
 
     @synchronized = true
@@ -529,7 +529,6 @@ ENT.DrawTrace = () =>
                     prev = stack[k - 1]
                     Moonpanel.render.drawThickLine prev.screenX, prev.screenY, v.screenX, v.screenY, barWidth
 
-        activeUser = @GetNW2Entity "ActiveUser"
         if cursors and #cursors > 0
             for stackid, cur in pairs cursors
                 stack = nodeStacks[stackid]

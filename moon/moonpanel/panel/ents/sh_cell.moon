@@ -171,9 +171,9 @@ class Triangle extends CellEntity
 Moonpanel.Entities or= {}
 
 Moonpanel.Entities.Cell = {
-    [MOONPANEL_ENTITY_TYPES.COLOR]: Color
-    [MOONPANEL_ENTITY_TYPES.POLYOMINO]: Polyomino
-    [MOONPANEL_ENTITY_TYPES.SUN]: Sun
-    [MOONPANEL_ENTITY_TYPES.ERASER]: Y
-    [MOONPANEL_ENTITY_TYPES.TRIANGLE]: Triangle
+    [Moonpanel.EntityTypes.Color]: Color
+    [Moonpanel.EntityTypes.Polyomino]: Polyomino
+    [Moonpanel.EntityTypes.Sun]: Sun
+    [Moonpanel.EntityTypes.Eraser]: Y
+    [Moonpanel.EntityTypes.Triangle]: Triangle
 }

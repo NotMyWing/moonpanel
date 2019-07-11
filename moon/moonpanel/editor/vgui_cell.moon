@@ -89,10 +89,10 @@ cell.RenderPolyo = (w, h) =>
         render.PopFilterMag!
         render.PopFilterMin!
 
-cell.Paint = (w, h) =>
+cell.Paint = (w, h) =>  
     if not @entity
         return
-        
+
     if @attributes.color
         surface.SetDrawColor Moonpanel.Colors[@attributes.color]
     else

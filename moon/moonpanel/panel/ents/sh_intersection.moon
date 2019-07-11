@@ -1,6 +1,7 @@
 import Rect from Moonpanel
 
 class IntersectionEntity
+    erasable: false
     new: (@parent) =>
     checkSolution: (@areaData) =>
         return true
@@ -40,6 +41,7 @@ class Entrance extends IntersectionEntity
         render.SetColorMaterial!
 
 class Hexagon extends IntersectionEntity
+    erasable: true
     new: (@parent, defs) =>
         @attributes = {
             color: defs.Color or Moonpanel.Color.Black

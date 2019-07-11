@@ -8,19 +8,25 @@ backgroundImages = {
     }
 }
 
+vignette = Material "moonpanel/vignette.png"
 panel.Init = () =>
     @centerPanel = vgui.Create "DPanel", @
-    @centerPanel.Paint = (w, h) =>
-        surface.SetDrawColor 60, 100, 210
+    @centerPanel.Paint = (_, w, h) -> 
+        surface.SetDrawColor (@data and @data.colors and @data.colors.background) or Moonpanel.DefaultColors.Background
         neww = math.min w, h
         surface.DrawRect (w/2) - (neww/2), (h/2) - (neww/2), neww, neww
+
+        surface.SetDrawColor (@data and @data.colors and @data.colors.vignette) or Moonpanel.DefaultColors.Vignette
+        surface.SetMaterial vignette
+        surface.DrawTexturedRect (w/2) - (neww/2), (h/2) - (neww/2), neww, neww
+
     @centerPanel\SetZPos -2
 
     @centerPanel.PerformLayout = (_, w, h) ->
         if not w or not h or not @background or not @data or not @rows or not @puzzlePanel
             return
 
-        dims = Moonpanel\calculateDimensionsShared {
+        @calculatedDimensions = Moonpanel\calculateDimensionsShared {
             screenW: w
             screenH: h
             cellsW: @data.w
@@ -30,27 +36,40 @@ panel.Init = () =>
             barWidth: @data.barWidth
         }
 
-        @puzzlePanel\SetWide dims.innerWidth
-        @puzzlePanel\SetTall dims.innerHeight
+        @puzzlePanel\SetWide @calculatedDimensions.innerWidth
+        @puzzlePanel\SetTall @calculatedDimensions.innerHeight
 
         @puzzlePanel\Center!
 
         for j, row in pairs @rows
             if j % 2 == 0
-                row\SetTall dims.barLength
+                row\SetTall @calculatedDimensions.barLength
             else
-                row\SetTall dims.barWidth
+                row\SetTall @calculatedDimensions.barWidth
             for i, child in pairs row\GetChildren!
                 if i % 2 == 0
-                    child\SetWide dims.barLength
+                    child\SetWide @calculatedDimensions.barLength
                 else
-                    child\SetWide dims.barWidth
+                    child\SetWide @calculatedDimensions.barWidth
 
         for j, row in pairs @rows
             row\InvalidateLayout!
 
     @puzzlePanel = vgui.Create "DPanel", @centerPanel
-    @puzzlePanel.Paint = nil
+    @puzzlePanel.Paint = (_, w, h) ->
+        surface.SetDrawColor @data.colors.cell
+        draw.NoTexture!
+        if @cells
+            for _, cell in pairs @cells
+                surface.DisableClipping true
+                barw = @calculatedDimensions.barWidth
+                cx, cy, cw, ch = cell\GetBounds!
+                rx, ry = cell.row\GetPos!
+                rx += cx
+                ry += cy
+
+                surface.DrawRect rx - barw / 2, ry - barw / 2, cw + barw, ch + barw
+                surface.DisableClipping false
 
 panel.Paint = (w, h) =>
     if @background and @background.path
@@ -77,14 +96,18 @@ panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
         @rows[i]\Dock TOP
         @rows[i].Paint = () ->
 
+    @cells = {}
     for j, row in pairs @rows
         for i = 1, (@data.w * 2) + 1
             element = nil
             if j % 2 == 0
                 if i % 2 == 0
                     element = vgui.CreateFromTable (include "moonpanel/editor/vgui_cell.lua"), row
+                    @cells[#@cells + 1] = element
 
                     x, y = i / 2, j / 2
+                    element.x, element.y = x, y
+
                     if @data.cells and @data.cells[y] and @data.cells[y][x]
                         element.entity = @data.cells[y][x].entity
                         element.attributes = @data.cells[y][x].attributes
@@ -92,6 +115,7 @@ panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
                     element = vgui.CreateFromTable (include "moonpanel/editor/vgui_vpath.lua"), row
 
                     x, y = math.floor(i / 2) + 1, j / 2
+                    element.x, element.y = x, y
                     if @data.vpaths and @data.vpaths[y] and @data.vpaths[y][x]
                         element.entity = @data.vpaths[y][x].entity
                         element.attributes = @data.vpaths[y][x].attributes
@@ -100,6 +124,8 @@ panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
                     element = vgui.CreateFromTable (include "moonpanel/editor/vgui_hpath.lua"), row
 
                     x, y = i / 2, math.floor(j / 2) + 1
+                    element.x, element.y = x, y
+
                     if @data.hpaths and @data.hpaths[y] and @data.hpaths[y][x]
                         element.entity = @data.hpaths[y][x].entity
                         element.attributes = @data.hpaths[y][x].attributes
@@ -113,6 +139,8 @@ panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
                     element.i, element.j = math.floor(i / 2) + 1, math.floor(j / 2) + 1
 
                     x, y = math.floor(i / 2) + 1, math.floor(j / 2) + 1
+                    element.x, element.y = x, y
+
                     if @data.intersections and @data.intersections[y] and @data.intersections[y][x]
                         entity = @data.intersections[y][x].entity
 
@@ -126,6 +154,7 @@ panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
 
             element\SetText ""
             element.panel = @
+            element.row = row
             element.attributes or= {}
             element.DoClick = (_) ->
                 if @.clickCallback
@@ -135,7 +164,7 @@ panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
                     @.copyCallback _
             element\Dock LEFT
 
-    @centerPanel\InvalidateLayout! 
+    @centerPanel\InvalidateLayout!
 
 panel.Think = () =>
 

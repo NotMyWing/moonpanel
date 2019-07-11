@@ -125,8 +125,32 @@ Moonpanel.DefaultColors = {
     Untraced: Color 40, 22, 186
     Traced: Color 255, 255, 255, 255
     Finished: Color 255, 255, 255, 255
-    Vignette: Color 255, 255, 255, 160
+    Vignette: Color 255, 255, 255, 200
     Errored: Color 0, 0, 0, 255
+    Cell: Color 0, 0, 0, 0
+}
+
+Moonpanel.Presets = {
+    ["Default"]: {
+        Background: Moonpanel.DefaultColors.Background
+        Untraced: Moonpanel.DefaultColors.Untraced
+        Traced: Moonpanel.DefaultColors.Traced
+        Finished: Moonpanel.DefaultColors.Finished
+        Vignette: Moonpanel.DefaultColors.Vignette
+        Errored: Moonpanel.DefaultColors.Errored
+        Cell: Moonpanel.DefaultColors.Cell
+    }
+    ["The Challenge Triangles"]: {
+        Background: Color 30, 30, 30, 255
+        Traced: Color 250, 160, 10, 255
+        Untraced: Color 125, 110, 50, 255
+    }
+    ["The Quarry Gray"]: {
+        Background: Color 70, 70, 70, 255
+        Traced: Color 255, 255, 255, 255
+        Untraced: Color 90, 140, 130
+        Cell: Color 0, 0, 0, 255
+    }
 }
 
 ---------------------------

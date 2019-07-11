@@ -13,9 +13,27 @@ TIPLABEL_TIPS = {
 --                               --
 -----------------------------------
 
+sanitizeColor = (clr, template) ->
+    clr or= {}
+    out = {}
+
+    r = clr.r and tonumber(clr.r)
+    out.r = (r and math.Clamp(r, 0, 255)) or template.r or 255
+
+    g = clr.g and tonumber(clr.g)
+    out.g = (g and math.Clamp(g, 0, 255)) or template.g or 255
+
+    b = clr.b and tonumber(clr.b)
+    out.b = (b and math.Clamp(b, 0, 255)) or template.b or 255
+
+    a = clr.a and tonumber(clr.a)
+    out.a = (a and math.Clamp(a, 0, 255)) or template.a or 255
+
+    return Color out.r, out.g, out.b, out.a
+
 prettifyFileName = (fileName) ->
-    s, e = string.find fileName, "/"
-    if s
+    s, e = string.find fileName, "moonpanel/"
+    if s == 1
         fileName = string.sub fileName, e + 1, -1
 
     return string.StripExtension fileName
@@ -809,14 +827,16 @@ editor.Init = () =>
     @sheet_toolSheet = with vgui.Create "DPropertySheet", @panel_middleContainer
         \Dock FILL
 
-    panel_controls = with vgui.Create "DScrollPanel", @sheet_toolSheet
+    @panel_controls = with vgui.Create "DScrollPanel", @sheet_toolSheet
         \Dock FILL
         \DockMargin 6, 0, 6, 6
 
-    @sheet_toolSheet\AddSheet "Panel", panel_controls, "icon16/pencil.png"
+    @sheet_toolSheet\AddSheet "Panel", @panel_controls, "icon16/pencil.png"
 
     do
-        widthHeight = with vgui.Create "DPanel", panel_controls
+        panel_colorfulSymmetry = nil
+
+        widthHeight = with vgui.Create "DPanel", @panel_controls
             \Dock TOP
             \SetTall 120
             .Paint = nil
@@ -906,6 +926,17 @@ editor.Init = () =>
                     return
 
                 data.Tile.Symmetry = d
+                if IsValid panel_colorfulSymmetry
+                    if data.Tile.Symmetry ~= 0
+                        panel_colorfulSymmetry\Show!
+                        panel_colorfulSymmetry\SetTall panel_colorfulSymmetry.InitialTall
+                    else
+                        panel_colorfulSymmetry\Hide!
+                        panel_colorfulSymmetry\SetTall 0
+
+                    @InvalidateChildren!
+                    @InvalidateLayout!
+
                 @Deserialize data
                 @OnChange!
 
@@ -918,8 +949,113 @@ editor.Init = () =>
             \SetTall widthHeight\GetTall! + 20
             \InvalidateChildren!
             \InvalidateLayout!
+
+        @panel_colorfulSymmetry = with vgui.Create "DPanel", @panel_controls
+            \DockMargin 5, 8, 5, 2
+            \Dock TOP
+            \SetTall 100
+            .InitialTall = 100
+            .Paint = nil
+
+        panel_checkBoxContainer = with vgui.Create "DPanel", @panel_colorfulSymmetry
+            \DockMargin 0, 0, 0, 0
+            \Dock TOP
+            \SetTall 20
+            .Paint = nil
+
+        @checkbox_colorfulSymmetry = with vgui.Create "DCheckBoxLabel", panel_checkBoxContainer
+            \DockMargin 5, 2, 5, 2
+            \Dock FILL
+            \SetTall 20
+            \SetText "Colorful Symmetry"
+            \SetTextColor Color 0, 0, 0
+            \SizeToContents!
+            .OnChange = (_, value) ->
+                data.symmetry.colorful = value
+
+        panel_checkBoxContainer\SizeToContents!
+        panel_checkBoxContainer\InvalidateChildren!
+        panel_checkBoxContainer\InvalidateLayout!
+
+        symLeft = with vgui.Create "DPanel", @panel_colorfulSymmetry
+            \DockMargin 2, 2, 2, 2
+            \Dock LEFT
+            \SetBackgroundColor Color 255, 255, 255, 64
+
+        symRight = with vgui.Create "DPanel", @panel_colorfulSymmetry
+            \DockMargin 2, 2, 2, 2
+            \Dock RIGHT
+            \SetBackgroundColor Color 255, 255, 255, 64
+
+        @panel_colorfulSymmetry.PerformLayout = (_, w, h) ->
+            symLeft\SetWide w/2.05
+            symRight\SetWide w/2.05
+
+        symLeft\SizeToContents true, true
+        symRight\SizeToContents true, true
+        @panel_colorfulSymmetry\SizeToContents!
+        @panel_colorfulSymmetry\InvalidateChildren!
+        @panel_colorfulSymmetry\InvalidateLayout!
+
+        with vgui.Create "DLabel", symLeft
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetText "Main trace"
+            \SetContentAlignment 5
+
+        @button_mainTraceColor = with vgui.Create "DButton", symLeft
+            \DockMargin 8, 2, 8, 2
+            \SetTooltip "Choose a color and press this to change."
+            \SetText ""
+            \Dock FILL
+            .Paint = (_, w, h) ->
+                draw.RoundedBox 8, 0, 0, w, h, Moonpanel.Colors[Moonpanel.Color.Cyan]  
+
+        panel_mainInvisibleCheckBoxContainer = with vgui.Create "DPanel", symLeft
+            \DockMargin 5, 2, 5, 2
+            \Dock BOTTOM
+            \SetTall 20
+            .Paint = nil
+
+        @checkbox_secondaryTraceInvisible = with vgui.Create "DCheckBoxLabel", panel_mainInvisibleCheckBoxContainer
+            \DockMargin 5, 2, 5, 2
+            \Dock FILL
+            \SetTall 20
+            \SetText "Invisible"
+            \SetTextColor Color 0, 0, 0
+            \SizeToContents!
+
+        with vgui.Create "DLabel", symRight
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetText "Secondary trace"
+            \SetContentAlignment 5
+
+        @button_secondaryTraceColor = with vgui.Create "DButton", symRight
+            \DockMargin 8, 2, 8, 2
+            \SetTooltip "Choose a color and press this to change."
+            \SetText ""
+            \Dock FILL
+            .Paint = (_, w, h) ->
+                draw.RoundedBox 8, 0, 0, w, h, Moonpanel.Colors[Moonpanel.Color.Orange]  
+
+        panel_secondaryInvisibleCheckBoxContainer = with vgui.Create "DPanel", symRight
+            \DockMargin 5, 2, 5, 2
+            \Dock BOTTOM
+            \SetTall 20
+            .Paint = nil
+
+        @checkbox_secondaryTraceInvisible = with vgui.Create "DCheckBoxLabel", panel_secondaryInvisibleCheckBoxContainer
+            \DockMargin 5, 2, 5, 2
+            \Dock FILL
+            \SetTall 20
+            \SetText "Invisible"
+            \SetTextColor Color 0, 0, 0
+            \SizeToContents!
  
-    with @slider_barWidth = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), panel_controls
+    with @slider_barWidth = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), @panel_controls
         \DockMargin 5, 8, 5, 2
         \Dock TOP
         \SetText "Bar Width"
@@ -945,7 +1081,7 @@ editor.Init = () =>
 
         \SetValue 0
 
-    with @slider_innerScreenRatio = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), panel_controls
+    with @slider_innerScreenRatio = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), @panel_controls
         \DockMargin 5, 0, 5, 2
         \Dock TOP
         \SetValue 0
@@ -971,7 +1107,7 @@ editor.Init = () =>
                 __editor.moonpanel_grid\InvalidateLayout!
                 __editor\OnChange!
 
-    with @slider_maxBarLength = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), panel_controls
+    with @slider_maxBarLength = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), @panel_controls
         \DockMargin 5, 0, 5, 2
         \Dock TOP
         \SetText "Max Bar Length"
@@ -997,7 +1133,7 @@ editor.Init = () =>
 
         \SetValue 0
 
-    with @slider_disjointLength = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), panel_controls
+    with @slider_disjointLength = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), @panel_controls
         \DockMargin 5, 0, 5, 2
         \Dock TOP
         \SetText "Disjoint Length"
@@ -1035,13 +1171,13 @@ editor.Init = () =>
     do
         @__toolset_tools = {}
 
-        with vgui.Create "DLabel", panel_controls
+        with vgui.Create "DLabel", @panel_controls
             \SetColor Color 0, 0, 0, 255
             \DockMargin 5, 8, 5, 2
             \Dock TOP
             \SetText "Tool:"
 
-        toolLayout = with vgui.Create "DIconLayout", panel_controls
+        toolLayout = with vgui.Create "DIconLayout", @panel_controls
             \DockMargin 5, 0, 5, 2
             \Dock TOP
             \SetSpaceX 4
@@ -1088,13 +1224,13 @@ editor.Init = () =>
     -----------------------------------
     do
         @__toolset_colors = {}
-        with vgui.Create "DLabel", panel_controls
+        with vgui.Create "DLabel", @panel_controls
             \SetColor Color 0, 0, 0, 255
             \DockMargin 5, 8, 5, 2
             \Dock TOP
             \SetText "Color:"
 
-        colorLayout = with vgui.Create "DIconLayout", panel_controls
+        colorLayout = with vgui.Create "DIconLayout", @panel_controls
             \DockMargin 5, 0, 5, 0
             \Dock TOP
             \SetSpaceX 4
@@ -1134,13 +1270,13 @@ editor.Init = () =>
     do
         @__toolset_entities = {}
 
-        with vgui.Create "DLabel", panel_controls
+        with vgui.Create "DLabel", @panel_controls
             \SetColor Color 0, 0, 0, 255
             \DockMargin 5, 8, 5, 2
             \Dock TOP
             \SetText "Cell:"
 
-        entLayout = with vgui.Create "DIconLayout", panel_controls
+        entLayout = with vgui.Create "DIconLayout", @panel_controls
             \DockMargin 5, 0, 5, 2
             \Dock TOP
             \SetSpaceX 4
@@ -1187,13 +1323,13 @@ editor.Init = () =>
     do
         @__toolset_path_entities = {}
 
-        with vgui.Create "DLabel", panel_controls
+        with vgui.Create "DLabel", @panel_controls
             \SetColor Color 0, 0, 0, 255
             \DockMargin 5, 8, 5, 2
             \Dock TOP
             \SetText "Path / Intersection:"
 
-        pathEntLayout = with vgui.Create "DIconLayout", panel_controls
+        pathEntLayout = with vgui.Create "DIconLayout", @panel_controls
             \DockMargin 5, 0, 5, 2
             \Dock TOP
             \SetSpaceX 4
@@ -1255,16 +1391,159 @@ editor.Init = () =>
         \Dock TOP
         \SetText "Presets:"
 
-    with vgui.Create "DComboBox", panel_palette
+    presets = with vgui.Create "DComboBox", panel_palette
         \SetSortItems false
         \DockMargin 5, 0, 5, 2
         \Dock TOP
-        \SetValue "Default"
+        \SetValue "Custom"
+        \SetSortItems false
+
+        for name, preset in pairs Moonpanel.Presets
+            \AddChoice name, preset
+            
+        .OnSelect = (_, id, name, preset) ->
+            if type(preset) ~= "table"
+                return
+
+            @data.colors.background = sanitizeColor preset.Background, Moonpanel.DefaultColors.Background
+            @data.colors.vignette = sanitizeColor preset.Vignette, Moonpanel.DefaultColors.Vignette
+            @data.colors.cell = sanitizeColor preset.Cell, Moonpanel.DefaultColors.Cell
+            @data.colors.traced = sanitizeColor preset.Traced, Moonpanel.DefaultColors.Traced
+            @data.colors.untraced = sanitizeColor preset.Untraced, Moonpanel.DefaultColors.Untraced
+            @data.colors.finished = sanitizeColor preset.Finished, Moonpanel.DefaultColors.Finished
+            @data.colors.errored = sanitizeColor preset.Errored, Moonpanel.DefaultColors.Errored
+            @OnChange! 
+              
+    do
+        with vgui.Create "DLabel", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetText "Background:"
+
+        label_spacing = 16
+        palette_height = 100
+
+        @color_background = with vgui.Create "DColorMixer", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetPalette false
+            \SetTall palette_height
+            .ValueChanged = (_, color) ->
+                @data.colors.background = color
+                @OnChange!
+                presets\SetValue "Custom"
+
+        with vgui.Create "DLabel", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, label_spacing, 5, 2
+            \Dock TOP
+            \SetText "Vignette:"
+
+        @color_vignette = with vgui.Create "DColorMixer", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetPalette false
+            \SetTall palette_height
+            .ValueChanged = (_, color) ->
+                @data.colors.vignette = color
+                @OnChange!
+                presets\SetValue "Custom"
+
+        with vgui.Create "DLabel", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, label_spacing, 5, 2
+            \Dock TOP
+            \SetText "Cell background:"
+
+        @color_cell = with vgui.Create "DColorMixer", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetPalette false
+            \SetTall palette_height
+            .ValueChanged = (_, color) ->
+                @data.colors.cell = color
+                @OnChange!
+                presets\SetValue "Custom"
+
+        with vgui.Create "DLabel", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, label_spacing, 5, 2
+            \Dock TOP
+            \SetText "Trace:"
+    
+        @color_traced = with vgui.Create "DColorMixer", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetPalette false
+            \SetTall palette_height
+            .ValueChanged = (_, color) ->
+                @data.colors.traced = color
+                @OnChange!
+                presets\SetValue "Custom"
+
+        with vgui.Create "DLabel", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, label_spacing, 5, 2
+            \Dock TOP
+            \SetText "Grid:"
+    
+        @color_untraced = with vgui.Create "DColorMixer", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetPalette false
+            \SetTall palette_height
+            .ValueChanged = (_, color) ->
+                @data.colors.untraced = color
+                @OnChange!
+                presets\SetValue "Custom"
+
+        with vgui.Create "DLabel", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, label_spacing, 5, 2
+            \Dock TOP
+            \SetText "Errored trace:"
+    
+        @color_errored = with vgui.Create "DColorMixer", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetPalette false
+            \SetTall palette_height
+            .ValueChanged = (_, color) ->
+                @data.colors.errored = color
+                @OnChange!    
+                presets\SetValue "Custom"
+
+        with vgui.Create "DLabel", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, label_spacing, 5, 2
+            \Dock TOP
+            \SetText "Successful trace:"
+    
+        @color_finished = with vgui.Create "DColorMixer", panel_palette
+            \SetColor Color 0, 0, 0, 255
+            \DockMargin 5, 0, 5, 2
+            \Dock TOP
+            \SetPalette false
+            \SetTall palette_height
+            .ValueChanged = (_, color) ->
+                @data.colors.finished = color
+                @OnChange!   
+                presets\SetValue "Custom" 
 
     @data = {
         w: 3
         h: 3
         colors: {
+
+        }
+        symmetry: {
 
         }
     }
@@ -1344,6 +1623,7 @@ editor.Serialize = () =>
         }
         Colors: {
             Untraced: data_colors.untraced
+            Vignette: data_colors.vignette
             Traced: data_colors.traced
             Finished: data_colors.finished
             Errored: data_colors.errored
@@ -1356,61 +1636,63 @@ editor.Serialize = () =>
         HPaths: {}
     }
 
-    for j, row in pairs @moonpanel_grid.rows
-        for i, element in pairs row\GetChildren!
-            t = nil
-            if not element.entity
-                continue
+    if @moonpanel_grid.rows
+        for j, row in pairs @moonpanel_grid.rows
+            for i, element in pairs row\GetChildren!
+                t = nil
+                if not element.entity
+                    continue
 
-            if j % 2 == 0
-                if i % 2 == 0
-                    x, y = i / 2, j / 2
+                if j % 2 == 0
+                    if i % 2 == 0
+                        x, y = i / 2, j / 2
 
-                    outputData.Cells[y] or= {}
-                    outputData.Cells[y][x] = {}
-                    t = outputData.Cells[y][x]
-                    
-                else
-                    x, y = math.floor(i / 2) + 1, j / 2
-
-                    outputData.VPaths[y] or= {}
-                    outputData.VPaths[y][x] = {}
-                    t = outputData.VPaths[y][x]
-                    
-            else
-                if i % 2 == 0
-                    x, y = i / 2, math.floor(j / 2) + 1
-                    
-                    outputData.HPaths[y] or= {}
-                    outputData.HPaths[y][x] = {}
-                    t = outputData.HPaths[y][x]
-                    
-                else
-                    x, y = math.floor(i / 2) + 1, math.floor(j / 2) + 1
-
-                    outputData.Intersections[y] or= {}
-                    outputData.Intersections[y][x] = {}
-                    t = outputData.Intersections[y][x]
-            
-            if t
-                t.Type = element.entity
-                t.Attributes = {
-                    Color: element.attributes.color
-                }
-                switch t.Type
-                    when Moonpanel.EntityTypes.Triangle
-                        t.Attributes.Count = element.attributes.count or 1
-
-                    when Moonpanel.EntityTypes.Polyomino
-                        t.Attributes.Shape = {}
-                        for j = 1, element.attributes.shape.h
-                            t.Attributes.Shape[j] = {}
-                            for i = 1, element.attributes.shape.w
-                                t.Attributes.Shape[j][i] = element.attributes.shape[j][i] and 1 or 0
+                        outputData.Cells[y] or= {}
+                        outputData.Cells[y][x] = {}
+                        t = outputData.Cells[y][x]
                         
-                        t.Attributes.Rotational = element.attributes.shape.rotational
+                    else
+                        x, y = math.floor(i / 2) + 1, j / 2
+
+                        outputData.VPaths[y] or= {}
+                        outputData.VPaths[y][x] = {}
+                        t = outputData.VPaths[y][x]
+                        
+                else
+                    if i % 2 == 0
+                        x, y = i / 2, math.floor(j / 2) + 1
+                        
+                        outputData.HPaths[y] or= {}
+                        outputData.HPaths[y][x] = {}
+                        t = outputData.HPaths[y][x]
+                        
+                    else
+                        x, y = math.floor(i / 2) + 1, math.floor(j / 2) + 1
+
+                        outputData.Intersections[y] or= {}
+                        outputData.Intersections[y][x] = {}
+                        t = outputData.Intersections[y][x]
+                
+                if t
+                    t.Type = element.entity
+                    t.Attributes = {
+                        Color: element.attributes.color
+                    }
+                    switch t.Type
+                        when Moonpanel.EntityTypes.Triangle
+                            t.Attributes.Count = element.attributes.count or 1
+
+                        when Moonpanel.EntityTypes.Polyomino
+                            t.Attributes.Shape = {}
+                            for j = 1, element.attributes.shape.h
+                                t.Attributes.Shape[j] = {}
+                                for i = 1, element.attributes.shape.w
+                                    t.Attributes.Shape[j][i] = element.attributes.shape[j][i] and 1 or 0
+                            
+                            t.Attributes.Rotational = element.attributes.shape.rotational
 
     @__serializing = false
+
     return outputData
 
 editor.Deserialize = (input) =>
@@ -1448,6 +1730,31 @@ editor.Deserialize = (input) =>
     @comboBox_widthCombo\SetText newData.w
     @comboBox_heightCombo\SetText newData.h
     @comboBox_symmetryCombo\SetText @comboBox_symmetryCombo\GetOptionTextByData newData.symmetry
+
+    @panel_colorfulSymmetry\SetVisible input_tile.Symmetry ~= 0
+    @panel_colorfulSymmetry\SetTall (input_tile.Symmetry and input_tile.Symmetry ~= 0) and @panel_colorfulSymmetry.InitialTall or 0
+
+    input.Colors or= {}
+    newData.colors.background = sanitizeColor input.Colors.Background, Moonpanel.DefaultColors.Background
+    @color_background\SetColor newData.colors.background
+
+    newData.colors.vignette = sanitizeColor input.Colors.Vignette, Moonpanel.DefaultColors.Vignette
+    @color_vignette\SetColor newData.colors.vignette
+
+    newData.colors.cell = sanitizeColor input.Colors.Cell, Moonpanel.DefaultColors.Cell
+    @color_cell\SetColor newData.colors.cell
+
+    newData.colors.traced = sanitizeColor input.Colors.Traced, Moonpanel.DefaultColors.Traced
+    @color_traced\SetColor newData.colors.traced
+
+    newData.colors.untraced = sanitizeColor input.Colors.Untraced, Moonpanel.DefaultColors.Untraced
+    @color_untraced\SetColor newData.colors.untraced
+
+    newData.colors.finished = sanitizeColor input.Colors.Finished, Moonpanel.DefaultColors.Finished
+    @color_finished\SetColor newData.colors.finished
+
+    newData.colors.errored = sanitizeColor input.Colors.Errored, Moonpanel.DefaultColors.Errored
+    @color_errored\SetColor newData.colors.errored
 
     w, h = newData.w, newData.h
     for j = 1, h + 1
@@ -1523,6 +1830,8 @@ editor.Deserialize = (input) =>
     table.CopyFromTo newData, @data
 
     @SetupGrid @data
+    @panel_controls\InvalidateChildren!
+    @panel_controls\InvalidateLayout!
 
     @__serializing = false
 
@@ -1560,13 +1869,13 @@ editor.OpenFile = (fileName, path = "DATA", silent) =>
         open!
 
 editor.SaveTo = (fileName) =>
-    fileName = "moonpanel/#{prettifyFileName(fileName)}.txt"
+    @SetOpenedFile fileName
+    fileName = fileName
+
     path = string.GetPathFromFilename fileName
 
     file.CreateDir path
     file.Write fileName, util.TableToJSON @Serialize!, true
-
-    @SetOpenedFile fileName
 
     notification.AddLegacy "Saved to #{prettifyFileName(fileName)}", NOTIFY_GENERIC, 5
     surface.PlaySound "ambient/water/drip3.wav"
@@ -1584,7 +1893,7 @@ editor.ShowSaveAsDialog = () =>
             for k, v in pairs(bad) do
                 fileName = string.gsub fileName, v, "_"
 
-            @SaveTo fileName
+            @SaveTo "moonpanel/" .. fileName .. ".txt"
             @UpdateTree!  
 
 editor.OnClose = () =>

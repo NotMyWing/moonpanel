@@ -1,4 +1,5 @@
 class CellEntity
+    erasable: true
     new: (@parent) =>
     checkSolution: (@areaData) =>
         return true

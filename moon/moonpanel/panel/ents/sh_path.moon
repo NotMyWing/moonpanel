@@ -4,6 +4,7 @@ circ = Material "moonpanel/circ128.png"
 hexagon = Material "moonpanel/hexagon.png"
 
 class PathEntity
+    erasable: false
     new: (@parent) =>
     checkSolution: (@areaData) =>
         return true
@@ -19,6 +20,7 @@ class PathEntity
     populatePathMap: (pathMap) => 
 
 class Hexagon extends PathEntity
+    erasable: true
     new: (@parent, defs) =>
         @attributes = {
             color: defs.Color or Moonpanel.Color.Black

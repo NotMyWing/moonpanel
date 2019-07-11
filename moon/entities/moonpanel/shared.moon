@@ -8,16 +8,20 @@ ENT.Purpose         = ""
 ENT.Instructions    = ""
 
 ENT.Spawnable       = false
+ENT.Moonpanel       = true
 
 ENT.TickRate        = 20
 ENT.ScreenSize      = 1024
-
 
 hasValue = (t, val) ->
     for k, v in pairs t
         if v == val
             return true
     return false
+
+trunc = (num, n) ->
+  mult = 10^(n or 0)
+  return math.floor(num * mult + 0.5) / mult
 
 class PathFinder
     nodeStacks: {}
@@ -83,11 +87,14 @@ class PathFinder
                 vecLength = vec\Length!
 
                 otherStack = @nodeStacks[1 - (_ - 1) + 1]
-                if @symmetry and otherStack and to == otherStack[#otherStack]
-                    vecLength /= 2
-                    vecLength -= @barWidth / 2
+                if @symmetry and otherStack
+                    otherLast = otherStack[#otherStack]
+                    
+                    if to == otherLast
+                        vecLength /= 2
+                        vecLength += @barWidth / 2
 
-                elseif to ~= nodeStack[#nodeStack - 1]
+                if to ~= nodeStack[#nodeStack - 1]
                     vecLength -= (@isFirst(to) and @barWidth * 1.75) or (@hasNode(to) and @barWidth) or 0
 
                 unitVector = vec\GetNormalized!
@@ -119,12 +126,11 @@ class PathFinder
                             mDot = mDot + toMouseVec\Length! * 0.25
                         else
                             mDot = mDot - toMouseVec\Length! * 0.25
-                    
-                    mDot = math.min mDot, vecLength
+
+                    mDot = math.min trunc(mDot, 3), vecLength
 
                     dotVector = (unitVector * mDot)
                     if mDot >= maxMDot
-                        maxVecLength = vecLength
                         maxMDot = mDot
                         maxDotVector = dotVector
                         maxNode = to
@@ -162,21 +168,21 @@ class PathFinder
             a = toInsert[1]
             b = toInsert[2]               
 
-            if not (a == @nodeStacks[1][1] or b == @nodeStacks[1][1] or
-                b == @nodeStacks[2][1] or a == @nodeStacks[2][1]) and @checkSymmetry a, b
+            --if not (a == @nodeStacks[1][1] or b == @nodeStacks[1][1] or
+            --    b == @nodeStacks[2][1] or a == @nodeStacks[2][1]) and @checkSymmetry a, b
 
-                table.insert @nodeStacks[1], toInsert[1]
-                table.insert @nodeStacks[2], toInsert[2]
+            table.insert @nodeStacks[1], toInsert[1]
+            table.insert @nodeStacks[2], toInsert[2]
 
         if @symmetry and #toRemove > 1 and toRemove[1] == toRemove[2]
             a = @nodeStacks[1][toRemove[1]]
             b = @nodeStacks[2][toRemove[2]]                 
 
-            if not (a == @nodeStacks[1][1] or b == @nodeStacks[1][1] or
-                b == @nodeStacks[2][1] or a == @nodeStacks[2][1]) and @checkSymmetry a, b
+            --if not (a == @nodeStacks[1][1] or b == @nodeStacks[1][1] or
+            --    b == @nodeStacks[2][1] or a == @nodeStacks[2][1]) and @checkSymmetry a, b
 
-                table.remove @nodeStacks[1], toRemove[1]
-                table.remove @nodeStacks[2], toRemove[2]
+            table.remove @nodeStacks[1], toRemove[1]
+            table.remove @nodeStacks[2], toRemove[2]
 
     applyDeltas: (x, y) =>
         if not @cursors
@@ -394,6 +400,10 @@ ENT.SetupData = (data) =>
 
     if CLIENT
         @SetupDataClient data
+    else
+        @SetupDataServer data
+        @SetNW2Bool "TheMP Errored", false
+        @SetNW2Bool "TheMP Powered", true
 
     @isPowered = true
 

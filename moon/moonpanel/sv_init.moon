@@ -72,8 +72,25 @@ resource.AddSingleFile "sound/moonpanel/panel_potential_failure.ogg"
 resource.AddSingleFile "sound/moonpanel/panel_scint.ogg"
 resource.AddSingleFile "sound/moonpanel/panel_start_tracing.ogg"
 resource.AddSingleFile "sound/moonpanel/panel_success.ogg"
+resource.AddSingleFile "sound/moonpanel/powered_on.ogg"
+resource.AddSingleFile "sound/moonpanel/powered_off.ogg"
 
 Moonpanel.setFocused = (player, state, force) =>
+    if state and (
+        player\KeyDown(IN_RUN) or 
+        player\KeyDown(IN_DUCK) or
+        player\KeyDown(IN_ATTACK) or
+        player\KeyDown(IN_ATTACK2) or
+        player\KeyDown(IN_ALT1) or
+        player\KeyDown(IN_ALT2) or
+        player\KeyDown(IN_WEAPON1) or
+        player\KeyDown(IN_WEAPON2) or
+        player\KeyDown(IN_BULLRUSH) or
+        player\KeyDown(IN_SPEED) or
+        player\KeyDown(IN_WALK)
+    ) 
+        return
+
     time = player.themp_lastfocuschange or 0
 
     if force or (CurTime! >= time and state ~= player\GetNW2Bool "TheMP Focused")
@@ -103,17 +120,20 @@ Moonpanel.getControlledPanel = (ply) =>
     return ply\GetNW2Entity "TheMP Controlled Panel" 
 
 Moonpanel.requestControl = (ply, ent, x, y, force) =>
+    if not IsValid ent
+        return
+
     if (ply.themp_nextrequest or 0) > CurTime!
         return
 
     if ply\GetNW2Entity("TheMP Controlled Panel") == ent
         ply.themp_nextrequest = CurTime! + 0.25
-        if ent.FinishPuzzle
-            ent\FinishPuzzle x, y
+        if ent.Moonpanel
+            ent\FinishPuzzle!
         ply\SetNW2Entity "TheMP Controlled Panel", nil
     else
         ply.themp_nextrequest = CurTime! + 0.25
-        if ent.StartPuzzle
+        if ent.Moonpanel
             if ent\StartPuzzle ply, x, y
                 ply\SetNW2Entity "TheMP Controlled Panel", ent
 
@@ -164,8 +184,9 @@ Moonpanel.broadcastDeltas = (ply, panel, x, y) =>
     net.WriteUInt Moonpanel.Flow.ApplyDeltas, 8
     net.WriteEntity panel
 
-    net.WriteFloat x
-    net.WriteFloat y
+    x, y = math.Clamp(math.floor(x), -100, 100), math.Clamp(math.floor(y), -100, 100)
+    net.WriteInt x, 8
+    net.WriteInt y, 8
     net.SendOmit ply
 
 hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
@@ -185,7 +206,10 @@ hook.Add "Think", "TheMP Think", () ->
     for k, v in pairs player.GetAll!
         panel = v\GetNW2Entity("TheMP Controlled Panel")
 
-        if not IsValid panel and panel
+        if not IsValid panel
+            v\SetNW2Entity("TheMP Controlled Panel", nil)
+
+        if IsValid(panel) and panel\GetNW2Entity("ActiveUser") ~= v
             v\SetNW2Entity("TheMP Controlled Panel", nil)
 
         if v\GetNW2Bool "TheMP Focused"
@@ -212,8 +236,8 @@ net.Receive "TheMP Flow", (len, ply) ->
         when Moonpanel.Flow.ApplyDeltas
             panel = ply\GetNW2Entity "TheMP Controlled Panel"
             if IsValid panel
-                x = net.ReadFloat!
-                y = net.ReadFloat!
+                x = net.ReadInt 8
+                y = net.ReadInt 8
 
                 panel\ApplyDeltas x, y
 
@@ -365,6 +389,7 @@ Moonpanel.sanitizeTileData = (input) =>
     sanitized.Colors.Errored    = sanitizeColor colors.Errored, defaults.Errored
     sanitized.Colors.Background = sanitizeColor colors.Background, defaults.Background
     sanitized.Colors.Vignette   = sanitizeColor colors.Vignette, defaults.Vignette
+    sanitized.Colors.Cell       = sanitizeColor colors.Cell, defaults.Cell
 
     MAXENT = 9
     MAXCOLOR = 9

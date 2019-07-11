@@ -20,12 +20,18 @@ export MOONPANEL_ENTITY_GRAPHICS = {
 
 export Moonpanel = Moonpanel or {}
 
+Moonpanel.applyDeltas = (panel, x = 0, y = 0) =>
+    x, y = math.Clamp(math.floor(x), -100, 100), math.Clamp(math.floor(y), -100, 100)
+
+    Moonpanel\sendMouseDeltas x, y
+    panel\ApplyDeltas x, y
+
 Moonpanel.sendMouseDeltas = (x, y) =>
     net.Start "TheMP Flow"
     net.WriteUInt Moonpanel.Flow.ApplyDeltas, 8
 
-    net.WriteFloat x
-    net.WriteFloat y
+    net.WriteInt x, 8
+    net.WriteInt y, 8
     net.SendToServer!
 
 Moonpanel.requestControl = (ent, x, y) =>
@@ -45,7 +51,8 @@ Moonpanel.requestData = (ent) =>
     net.SendToServer!
 
 Moonpanel.getControlledPanel = () =>
-    return LocalPlayer!\GetNW2Entity "TheMP Controlled Panel"
+    panel = LocalPlayer!\GetNW2Entity "TheMP Controlled Panel"
+    return panel
 
 Moonpanel.init = () =>
     @__initialized = true
@@ -85,13 +92,13 @@ hook.Add "CreateMove", "TheMP Control", (cmd) ->
         if CurTime! >= lastclick and clicked
             Moonpanel.__nextclick = CurTime! + 0.05
             ent = LocalPlayer!\GetEyeTrace!.Entity
-            if IsValid(panel)
-                Moonpanel\requestControl panel, 0, 0
-
-            elseif IsValid(ent) and ent\GetClass! == "moonpanel"
+            if IsValid(ent) and ent.Moonpanel
                 x, y = ent\GetCursorPos!
                 if x and y
                     Moonpanel\requestControl ent, x, y
+
+            elseif IsValid(panel) and panel.Moonpanel
+                Moonpanel\requestControl panel, 0, 0
 
         if IsValid(panel) and CurTime! >= (Moonpanel.__nextMovementSend or 0)
             y = -cmd\GetForwardMove!
@@ -102,8 +109,7 @@ hook.Add "CreateMove", "TheMP Control", (cmd) ->
 
             if x ~= 0 or y ~= 0
                 Moonpanel.__nextMovementSend = CurTime! + 0.01
-                Moonpanel\sendMouseDeltas x, y
-                panel\ApplyDeltas x, y
+                Moonpanel\applyDeltas panel, x, y
         
         if IsValid panel
             cmd\ClearMovement!
@@ -111,15 +117,16 @@ hook.Add "CreateMove", "TheMP Control", (cmd) ->
         use = cmd\KeyDown IN_USE
         cmd\ClearButtons!
         cmd\SetButtons use and IN_USE or 0
+        cmd\SetMouseX 0
+        cmd\SetMouseY 0
 
 hook.Add "InputMouseApply", "TheMP FocusMode", (cmd, x, y) ->
     if Moonpanel\isFocused! 
         panel = Moonpanel\getControlledPanel!
         if IsValid panel
             if x ~= 0 or y ~= 0
-                x, y = math.floor(x * 0.75), math.floor(y * 0.75)
-                Moonpanel\sendMouseDeltas x, y
-                panel\ApplyDeltas x, y
+                x, y = x * 0.75, y * 0.75
+                Moonpanel\applyDeltas panel, x, y
             cmd\SetMouseX 0
             cmd\SetMouseY 0
             return true
@@ -241,7 +248,7 @@ net.Receive "TheMP Flow", () ->
             if not panel.Moonpanel or not panel.synchronized
                 return
 
-            x, y = net.ReadFloat!, net.ReadFloat!
+            x, y = net.ReadInt(8), net.ReadInt(8)
 
             panel\ApplyDeltas x, y
 

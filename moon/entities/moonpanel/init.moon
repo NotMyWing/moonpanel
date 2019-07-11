@@ -8,6 +8,8 @@ ENT.Initialize = () =>
     self\SetSolid               SOLID_VPHYSICS
     self\SetUseType             SIMPLE_USE
 
+    @SetNW2Bool "TheMP Powered", true
+
 ENT.Use = (activator) =>
     Moonpanel\setFocused activator, true
 
@@ -103,7 +105,7 @@ ENT.CheckPolySolution = (polys, area) =>
 
 timeout = 0.5
 ENT.CheckSolution = (errors) =>
-    @__solutionCheckMaxTime = CurTime! + timeout
+    @__solutionCheckMaxTime = os.clock! + timeout
 
     paths = {}
     cells = {}
@@ -209,6 +211,9 @@ ENT.CheckSolution = (errors) =>
             traverse v, area
 
     while true do
+        if os.clock! >= @__solutionCheckMaxTime
+            error "Moonpanel ##{@EntIndex!}: area marking timed out."
+
         unmarked = {}
         area = {}
         for k, v in pairs everything
@@ -224,7 +229,7 @@ ENT.CheckSolution = (errors) =>
 
     totalErrors = {}
     for _, area in pairs areas
-        if CurTime! >= @__solutionCheckMaxTime
+        if os.clock! >= @__solutionCheckMaxTime
             error "Moonpanel ##{@EntIndex!}: solution check timed out."
 
         areaData = {}
@@ -354,8 +359,8 @@ ENT.CheckSolution = (errors) =>
                     else
                         successfulSolutions = {}
                         for k, v in pairs polyCombinations
-                            if CurTime! >= @__solutionCheckMaxTime
-                                error "Moonpanel ##{@EntIndex!}: solution check timed out."
+                            if os.clock! >= @__solutionCheckMaxTime
+                                error "Moonpanel ##{@EntIndex!}: polyomino solution check timed out."
 
                             if v[#v] == countNegatives
                                 table.remove v, #v
@@ -391,20 +396,35 @@ ENT.CheckSolution = (errors) =>
                     if count ~= 2
                         markAsError element
 
-        checkSuns!
-        for _, ySymbol in pairs ySymbols
-            markAsError ySymbol
-        checkSuns!
+        firstCheck = true
+        wasSingleYSymbol = false
+        while firstCheck or #ySymbols > 0
+            firstCheck = false
+
+            if os.clock! >= @__solutionCheckMaxTime
+                error "Moonpanel ##{@EntIndex!}: ySymbol elimination timed out."
+            checkSuns!
+            for _, ySymbol in pairs ySymbols
+                markAsError ySymbol
+
+            if wasSingleYSymbol
+                break
+            wasSingleYSymbol = #ySymbols == 1
 
     return grayOut, redOut
 
 ENT.StartPuzzle = (ply, x, y) =>
+    if IsValid @GetNW2Entity "ActiveUser"
+        return false
+
+    if @GetNW2Bool "TheMP Errored"
+        return false
+
     shouldStart = false
-    activeUser = @GetNW2Entity "ActiveUser"
 
     nodeA, nodeB = nil
-    if @pathFinder -- and @isPowered
-        if not IsValid(activeUser) and IsValid ply
+    if @pathFinder and @GetNW2Bool "TheMP Powered"
+        if IsValid ply
             nodeA = @pathFinder\getClosestNode x, y, @calculatedDimensions.barLength
             if not nodeA
                 return
@@ -426,13 +446,19 @@ ENT.StartPuzzle = (ply, x, y) =>
 
     return true
 
-ENT.FinishPuzzle = () =>
-    activeUser = @GetNW2Entity "ActiveUser"
-
-    if not IsValid activeUser
-        return false
-
+ENT.FinishPuzzle = (forceFail) =>
     @SetNW2Entity "ActiveUser", nil
+    
+    -- Serialize them stacks.
+    stacks = {}
+    for _, nodeStack in pairs @pathFinder.nodeStacks
+        stack = {}
+        stacks[#stacks + 1] = stack
+
+        for _, node in pairs nodeStack
+            stack[#stack + 1] = @pathFinder.nodeIds[node]
+
+    cursors = @pathFinder.cursors
 
     success, aborted = true, false
     grayOut = {}
@@ -445,23 +471,23 @@ ENT.FinishPuzzle = () =>
             success = false
 
     if success
-        grayOut, redOut = @CheckSolution!
+        func = () ->
+            @CheckSolution!
+
+        catch = (err) ->
+            print err
+
+        status, grayOut, redOut = xpcall func, catch 
+
+        if not status
+            @SetNW2Bool "TheMP Errored", true
+            @SetNW2Bool "TheMP Powered", false
+            return
 
         if redOut.errored
             success = false
     else
         aborted = true
-
-    -- Serialize them stacks.
-    stacks = {}
-    for _, nodeStack in pairs @pathFinder.nodeStacks
-        stack = {}
-        stacks[#stacks + 1] = stack
-
-        for _, node in pairs nodeStack
-            stack[#stack + 1] = @pathFinder.nodeIds[node]
-
-    cursors = @pathFinder.cursors
 
     Moonpanel\broadcastFinish @, {
         :success
@@ -470,6 +496,7 @@ ENT.FinishPuzzle = () =>
         :grayOut
         :stacks
         :cursors
+        :forceFail
     }
 
     @lastSolution = {
@@ -477,6 +504,7 @@ ENT.FinishPuzzle = () =>
         :aborted
         :redOut
         :grayOut
+        :forceFail
     }
 
 ENT.ServerThink = () =>
@@ -486,3 +514,19 @@ ENT.ServerThink = () =>
             @FinishPuzzle!
 
 ENT.ServerTickrateThink = () =>
+
+ENT.SetupDataServer = (data) =>
+    if WireLib
+        self.Inputs = WireLib.CreateInputs @, { "TurnOff" }
+        outputs = {}
+
+if WireLib
+    ENT.UpdateOutputs = (success, outputs, redOut, grayOut) =>
+
+
+    ENT.TriggerInput = (input, value) =>
+        if input == "TurnOff"
+            if (value == 1)
+                @SetNW2Entity "ActiveUser", nil
+
+            @SetNW2Bool "TheMP Powered", (value ~= 1) and true or false

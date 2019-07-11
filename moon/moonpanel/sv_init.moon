@@ -25,6 +25,7 @@ util.AddNetworkString "TheMP Flow"
 
 util.AddNetworkString "TheMP Editor"
 util.AddNetworkString "TheMP Focus"
+util.AddNetworkString "TheMP Notify"
 
 resource.AddSingleFile "materials/moonpanel/acirc128.png"
 resource.AddSingleFile "materials/moonpanel/circ64.png"
@@ -137,6 +138,13 @@ Moonpanel.requestControl = (ply, ent, x, y, force) =>
             if ent\StartPuzzle ply, x, y
                 ply\SetNW2Entity "TheMP Controlled Panel", ent
 
+Moonpanel.sendNotify = (ply, message, sound, type) =>
+    net.Start "TheMP Notify"
+    net.WriteString message
+    net.WriteString sound
+    net.WriteUInt type, 8
+    net.Send ply
+
 Moonpanel.broadcastFinish = (panel, data) =>
     net.Start "TheMP Flow"
     net.WriteUInt Moonpanel.Flow.PuzzleFinish, 8
@@ -188,6 +196,12 @@ Moonpanel.broadcastDeltas = (ply, panel, x, y) =>
     net.WriteInt x, 8
     net.WriteInt y, 8
     net.SendOmit ply
+
+Moonpanel.broadcastDesync = (panel) =>
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.Desync, 8
+    net.WriteEntity panel
+    net.Broadcast!
 
 hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
     tr = ply\GetEyeTrace!
@@ -391,7 +405,7 @@ Moonpanel.sanitizeTileData = (input) =>
     sanitized.Colors.Vignette   = sanitizeColor colors.Vignette, defaults.Vignette
     sanitized.Colors.Cell       = sanitizeColor colors.Cell, defaults.Cell
 
-    MAXENT = 9
+    MAXENT = 10
     MAXCOLOR = 9
 
     w, h = sanitized.Tile.Width, sanitized.Tile.Height

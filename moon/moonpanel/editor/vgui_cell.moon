@@ -9,6 +9,8 @@ cell.Init = () =>
 
 polyocell = Material "moonpanel/polyomino_cell.png", "smooth"
 triangle = Material "moonpanel/triangle.png"
+cross = Material "moonpanel/cross.png"
+
 cell.RenderTriangles = (w, h, count) =>
     surface.SetDrawColor Moonpanel.Colors[@attributes.color or Moonpanel.Color.Yellow]
     surface.SetMaterial triangle
@@ -103,6 +105,11 @@ cell.Paint = (w, h) =>
         
     elseif @entity == types.Triangle
         @RenderTriangles w, h, @attributes.count
+
+    elseif @entity == types.Invisible
+        surface.SetDrawColor white
+        surface.SetMaterial cross
+        surface.DrawTexturedRect 0, 0, w, h
 
     elseif graphics[@entity]
         surface.SetMaterial graphics[@entity]

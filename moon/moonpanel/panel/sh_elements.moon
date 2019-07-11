@@ -157,7 +157,7 @@ class Cell extends Element
         return @cachedBottom
 
     render: =>
-        if @tile.colors.cell
+        if @tile.colors.cell and not (@entity and @entity.type == Moonpanel.EntityTypes.Invisible)
             barw = @tile.calculatedDimensions.barWidth
             surface.SetDrawColor @tile.colors.cell
             surface.DrawRect @bounds.x - barw / 2, @bounds.y - barw / 2, @bounds.width + barw, @bounds.height + barw

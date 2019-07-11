@@ -19,6 +19,12 @@ class PathEntity
 
     populatePathMap: (pathMap) => 
 
+class Invisible extends PathEntity
+    background: true
+    overridesRender: true
+    populatePathMap: () =>
+        return true
+
 class Hexagon extends PathEntity
     erasable: true
     new: (@parent, defs) =>
@@ -139,9 +145,11 @@ Moonpanel.Entities or= {}
 Moonpanel.Entities.HPath = {
     [Moonpanel.EntityTypes.Hexagon]: Hexagon
     [Moonpanel.EntityTypes.Disjoint]: HBroken
+    [Moonpanel.EntityTypes.Invisible]: Invisible
 }
 
 Moonpanel.Entities.VPath = {
     [Moonpanel.EntityTypes.Hexagon]: Hexagon
     [Moonpanel.EntityTypes.Disjoint]: VBroken
+    [Moonpanel.EntityTypes.Invisible]: Invisible
 }

@@ -272,6 +272,23 @@ net.Receive "TheMP Flow", () ->
 
             panel\SetupData data
 
+        when Moonpanel.Flow.Desync
+            if not panel.Moonpanel
+                return
+
+            panel.synchronized = false
+
+net.Receive "TheMP Notify", () ->
+    message = net.ReadString!
+    sound = net.ReadString!
+    type = net.ReadUInt 8
+
+    if GAMEMODE and GAMEMODE.AddNotify
+        GAMEMODE\AddNotify message, type, 5
+    elseif notification.AddLegacy
+        notification.AddLegacy message, type, 5
+    surface.PlaySound sound
+
 if Moonpanel.__initialized
     Moonpanel\init!
 

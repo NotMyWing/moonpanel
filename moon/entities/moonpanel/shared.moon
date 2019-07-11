@@ -249,6 +249,7 @@ class PathFinder
 import Rect from Moonpanel
 
 ENT.BuildPathMap = () =>
+    PrintTable @tileData
     @pathMap = {}
     cellsW = @tileData.Tile.Width
     cellsH = @tileData.Tile.Height
@@ -257,10 +258,12 @@ ENT.BuildPathMap = () =>
     for j = 1, cellsH + 1
         translatedY = (j - 1) - (cellsH / 2)
         for i = 1, cellsW + 1
+            intersection = @elements.intersections[j][i]
+            if intersection.entity and intersection.entity.type == Moonpanel.EntityTypes.Invisible
+                continue
+
             translatedX = (i - 1) - (cellsW / 2)
 
-            intersection = @elements.intersections[j][i]
-            
             clickable = (intersection.entity and intersection.entity.type == Moonpanel.EntityTypes.Start) and true or false
 
             node = {
@@ -369,7 +372,7 @@ ENT.SetupData = (data) =>
                         hpath.entity.type = entDef.Type
                         
                         entities = @elements.hpaths.entities
-                        hpaths[#entities + 1] = hpath.entity
+                        entities[#entities + 1] = hpath.entity
                         @elements.entities[#@elements.entities + 1] = hpath.entity
 
             if j <= cellsH and i <= cellsW + 1

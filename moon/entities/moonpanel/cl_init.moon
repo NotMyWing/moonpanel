@@ -2,7 +2,7 @@ include("shared.lua")
 
 REDOUT_TIME = 10
 POWERSTATE_TIME = 1
-RESYNC_ATTEMPT_TIME = 2
+RESYNC_ATTEMPT_TIME = 0.5
 
 SOUND_PANEL_SCINT = Sound "moonpanel/panel_scint.ogg"
 SOUND_PANEL_FAILURE = Sound "moonpanel/panel_failure.ogg"
@@ -490,6 +490,10 @@ ENT.SetupDataClient = (data) =>
         @NW_OnPowered @GetNW2Bool("TheMP Powered")
         @SetNW2VarProxy "TheMP Powered", (_, _, _, state) ->
             @NW_OnPowered state
+
+    @rendertargets.background.dirty = true
+    @rendertargets.foreground.dirty = true
+    @rendertargets.trace.dirty = true
 
 ENT.DrawBackground = () =>
     Clear 0, 0, 0, 0

@@ -25,6 +25,9 @@ intersection.getAngle = (x, y, w, h) =>
 intersection.Paint = (w, h) =>
     surface.SetDrawColor @panel.data.colors.untraced or Moonpanel.DefaultColors.Untraced
 
+    if @entity == Moonpanel.EntityTypes.Invisible
+        return
+
     if @entity == Moonpanel.EntityTypes.Start
         surface.DisableClipping true
         surface.SetMaterial circle

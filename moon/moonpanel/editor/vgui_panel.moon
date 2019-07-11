@@ -59,8 +59,11 @@ panel.Init = () =>
     @puzzlePanel.Paint = (_, w, h) ->
         surface.SetDrawColor @data.colors.cell
         draw.NoTexture!
-        if @cells
-            for _, cell in pairs @cells
+        if @__flatCells
+            for _, cell in pairs @__flatCells
+                if cell.entity == Moonpanel.EntityTypes.Invisible
+                    continue
+
                 surface.DisableClipping true
                 barw = @calculatedDimensions.barWidth
                 cx, cy, cw, ch = cell\GetBounds!
@@ -96,16 +99,23 @@ panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
         @rows[i]\Dock TOP
         @rows[i].Paint = () ->
 
+    @__flatCells = {}
+
     @cells = {}
+    @vpaths = {}
+    @hpaths = {}
+    @intersections = {}
     for j, row in pairs @rows
         for i = 1, (@data.w * 2) + 1
             element = nil
             if j % 2 == 0
                 if i % 2 == 0
                     element = vgui.CreateFromTable (include "moonpanel/editor/vgui_cell.lua"), row
-                    @cells[#@cells + 1] = element
+                    @__flatCells[#@__flatCells + 1] = element
 
                     x, y = i / 2, j / 2
+                    @cells[y] or= {}
+                    @cells[y][x] = element
                     element.x, element.y = x, y
 
                     if @data.cells and @data.cells[y] and @data.cells[y][x]
@@ -115,7 +125,10 @@ panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
                     element = vgui.CreateFromTable (include "moonpanel/editor/vgui_vpath.lua"), row
 
                     x, y = math.floor(i / 2) + 1, j / 2
+                    @vpaths[y] or= {}
+                    @vpaths[y][x] = element
                     element.x, element.y = x, y
+
                     if @data.vpaths and @data.vpaths[y] and @data.vpaths[y][x]
                         element.entity = @data.vpaths[y][x].entity
                         element.attributes = @data.vpaths[y][x].attributes
@@ -124,6 +137,8 @@ panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
                     element = vgui.CreateFromTable (include "moonpanel/editor/vgui_hpath.lua"), row
 
                     x, y = i / 2, math.floor(j / 2) + 1
+                    @hpaths[y] or= {}
+                    @hpaths[y][x] = element
                     element.x, element.y = x, y
 
                     if @data.hpaths and @data.hpaths[y] and @data.hpaths[y][x]
@@ -139,14 +154,17 @@ panel.Setup = (@data = {}, __clickCallback, __copyCallback) =>
                     element.i, element.j = math.floor(i / 2) + 1, math.floor(j / 2) + 1
 
                     x, y = math.floor(i / 2) + 1, math.floor(j / 2) + 1
+                    @intersections[y] or= {}
+                    @intersections[y][x] = element
+
                     element.x, element.y = x, y
 
                     if @data.intersections and @data.intersections[y] and @data.intersections[y][x]
                         entity = @data.intersections[y][x].entity
 
-                        if entity == Moonpanel.EntityTypes.End
-                            if (i > 1) and (j > 1) and (i < @data.w * 2) and (j < @data.h * 2)
-                                entity = nil
+                        --if entity == Moonpanel.EntityTypes.End
+                        --    if (i > 1) and (j > 1) and (i < @data.w * 2) and (j < @data.h * 2)
+                        --        entity = nil
 
                         if entity
                             element.entity = entity

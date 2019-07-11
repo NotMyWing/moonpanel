@@ -14,6 +14,12 @@ class CellEntity
 
     populatePathMap: (pathMap) =>
 
+class Invisible extends CellEntity
+    background: true
+    overridesRender: true
+    populatePathMap: () =>
+        return true
+
 _color = Material "moonpanel/color.png" 
 class Color extends CellEntity
     new: (@parent, defs) =>
@@ -115,7 +121,6 @@ class Polyomino extends CellEntity
             cam.PopModelMatrix!
 
 triangle = Material "moonpanel/triangle.png"
-
 class Triangle extends CellEntity
     new: (@parent, defs) =>
         @attributes = {
@@ -177,4 +182,5 @@ Moonpanel.Entities.Cell = {
     [Moonpanel.EntityTypes.Sun]: Sun
     [Moonpanel.EntityTypes.Eraser]: Y
     [Moonpanel.EntityTypes.Triangle]: Triangle
+    [Moonpanel.EntityTypes.Invisible]: Invisible
 }

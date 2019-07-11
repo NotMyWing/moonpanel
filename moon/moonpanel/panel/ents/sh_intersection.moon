@@ -19,6 +19,12 @@ class IntersectionEntity
 circ = Material "moonpanel/circ128.png"
 hexagon = Material "moonpanel/hexagon.png"
 
+class Invisible extends IntersectionEntity
+    background: true
+    overridesRender: true
+    populatePathMap: () =>
+        return true
+
 class Entrance extends IntersectionEntity
     background: true
     overridesRender: true
@@ -63,7 +69,6 @@ class Hexagon extends IntersectionEntity
 class Exit extends IntersectionEntity
     circ: Material "moonpanel/circ128.png"
     background: true
-    overridesRender: true
     dirs: {
         [90]:   {x: -1, y:  0}
         [270]:  {x:  1, y:  0}
@@ -80,6 +85,24 @@ class Exit extends IntersectionEntity
         if (y == h)
             return 0
 
+        invis = Moonpanel.EntityTypes.Invisible
+
+        left = @parent\getLeft!
+        if not left or (left.entity and left.entity.type == invis)
+            return 90
+
+        right = @parent\getRight!
+        if not right or (right.entity and right.entity.type == invis)
+            return 270
+
+        top = @parent\getTop!
+        if not top or (top.entity and top.entity.type == invis)
+            return 180
+
+        bottom = @parent\getBottom!
+        if not bottom or (bottom.entity and bottom.entity.type == invis)
+            return 0
+
         return -1
 
     new: (@parent) =>
@@ -90,6 +113,7 @@ class Exit extends IntersectionEntity
             x, y, w, h = @parent.x, @parent.y, td.Width + 1, td.Height + 1
 
             dir = @dirs[@getAngle x, y, w, h]
+            print "ANgel:", x, y, w, h, (@getAngle x, y, w, h)
 
             if dir
                 x = bounds.x + bounds.width * dir.x + bounds.width / 2
@@ -155,4 +179,5 @@ Moonpanel.Entities.Intersection = {
     [Moonpanel.EntityTypes.Start]: Entrance
     [Moonpanel.EntityTypes.End]: Exit
     [Moonpanel.EntityTypes.Hexagon]: Hexagon
+    [Moonpanel.EntityTypes.Invisible]: Invisible
 }

@@ -62,46 +62,60 @@ TOOL.LeftClick = (trace) =>
 
     ply = @GetOwner!
 
-    Ang = trace.HitNormal\Angle!
-    Ang.pitch = Ang.pitch + 90
+    panel = (() -> 
+        if trace.Entity\IsValid! and trace.Entity.Moonpanel
+            if not trace.Entity\Desync!
+                return Moonpanel\sendNotify ply, "Please wait before sending an update again!", "buttons/button10.wav", NOTIFY_ERROR
+            else
+                return trace.Entity
 
-    model = @GetClientInfo "Model"
-    if not ((util.IsValidModel model) and (util.IsValidProp model))
+        else   
+            Ang = trace.HitNormal\Angle!
+            Ang.pitch = Ang.pitch + 90
+            model = @GetClientInfo "Model"
+            if not ((util.IsValidModel model) and (util.IsValidProp model))
+                return nil
+
+            sf = MakeComponent "moonpanel", ply, Vector(), Ang, model
+            if not sf
+                return nil
+
+            min = sf\OBBMins!
+            sf\SetPos trace.HitPos - trace.HitNormal * min.z
+
+            const = nil
+            phys = sf\GetPhysicsObject()
+            if trace.Entity\IsValid!
+                const = constraint.Weld sf, trace.Entity, 0, trace.PhysicsBone, 0, true, true
+                if phys\IsValid! 
+                    phys\EnableCollisions(false) 
+                    sf.nocollide = true
+            else
+                if phys\IsValid()
+                    phys\EnableMotion(false)
+
+            undo.Create("moonpanel")
+            undo.AddEntity(sf)
+            if const
+                undo.AddEntity(const)
+            undo.SetPlayer(ply)
+            undo.Finish()
+
+            return sf
+    )!
+
+    print panel
+    if not panel
         return false
-
-    sf = MakeComponent "moonpanel", ply, Vector(), Ang, model
-    if not sf
-        return false
-
-    min = sf\OBBMins!
-    sf\SetPos trace.HitPos - trace.HitNormal * min.z
-
-    const = nil
-    phys = sf\GetPhysicsObject()
-    if trace.Entity\IsValid!
-        const = constraint.Weld sf, trace.Entity, 0, trace.PhysicsBone, 0, true, true
-        if phys\IsValid! 
-            phys\EnableCollisions(false) 
-            sf.nocollide = true
-    else
-        if phys\IsValid()
-            phys\EnableMotion(false)
-
-    undo.Create("moonpanel")
-    undo.AddEntity(sf)
-    if const
-        undo.AddEntity(const)
-    undo.SetPlayer(ply)
-    undo.Finish()
 
     success = (data) ->
-        if IsValid sf
-            sf\SetupData data
-            sf.ready = true
+        if IsValid panel
+            panel\SetupData data
 
     err = () ->
         print "err"
 
+    print "REQUEEESTINNNNG"
     Moonpanel\requestEditorConfig @GetOwner!, success, err
 
     return true

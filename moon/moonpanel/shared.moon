@@ -64,6 +64,7 @@ Moonpanel.EntityTypes = {
     Eraser: 7
     Color: 8
     Disjoint: 9
+    Invisible: 10
 }
 
 Moonpanel.ObjectTypes = {
@@ -94,6 +95,7 @@ Moonpanel.Flow = {
     PuzzleStart: 4
     RequestControl: 5
     RequestData: 6
+    Desync: 7
 }
 
 Moonpanel.Color = {

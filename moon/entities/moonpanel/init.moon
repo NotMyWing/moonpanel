@@ -193,16 +193,31 @@ ENT.CheckSolution = (errors) =>
 
     areas = {}
 
+    isBridge = (element, next) ->
+        if element.entity and element.entity.type == Moonpanel.EntityTypes.Invisible
+            if not (next) or (next.entity and next.entity ~= Moonpanel.EntityTypes.Invisible)
+                return false
+            else
+                return true
+        else
+            return true
+
     traverse = (current, area) ->
         current.solutionData.area = area
         table.insert area, current
 
-        toTraverse = {
-            current\getLeft!
-            current\getRight!
-            current\getTop!
-            current\getBottom!
-        }
+        left    = current\getLeft!
+        right   = current\getRight!
+        top     = current\getTop!
+        bottom  = current\getBottom!
+
+        if current.type == Moonpanel.ObjectTypes.Cell and not (current.entity and current.entity.type ~= Moonpanel.EntityTypes.Invisible)
+            left    = left   and (isBridge left   , left\getLeft!    ) and left
+            right   = right  and (isBridge right  , right\getRight!  ) and right
+            top     = top    and (isBridge top    , top\getTop!      ) and top
+            bottom  = bottom and (isBridge bottom , bottom\getBottom!) and bottom
+
+        toTraverse = { left, right, top, bottom }
 
         for k, v in pairs toTraverse
             if not v or v.solutionData.area or v.solutionData.traced
@@ -328,7 +343,7 @@ ENT.CheckSolution = (errors) =>
             areaMatrix = Moonpanel.BitMatrix maxx-minx + 1, maxy-miny + 1
 
             for _, v in pairs area
-                if v.type == Moonpanel.ObjectTypes.Cell
+                if (v.type == Moonpanel.ObjectTypes.Cell) and not (v.entity and v.entity.type == Moonpanel.EntityTypes.Invisible)
                     areaMatrix\set v.x - minx + 1, v.y - miny + 1, 1
 
             negativePolyos = { areaMatrix }
@@ -406,6 +421,7 @@ ENT.CheckSolution = (errors) =>
             checkSuns!
             for _, ySymbol in pairs ySymbols
                 markAsError ySymbol
+            checkSuns!
 
             if wasSingleYSymbol
                 break
@@ -413,7 +429,24 @@ ENT.CheckSolution = (errors) =>
 
     return grayOut, redOut
 
+ENT.Desync = () =>
+    @__nextDesync or= 0
+    if CurTime! >= @__nextDesync
+        @tileData = nil
+        @pathFinder = nil
+
+        Moonpanel\broadcastDesync @
+
+        if WireLib
+            @UpdateOutputs!
+
+        @__nextDesync = CurTime! + 1
+        return true
+
 ENT.StartPuzzle = (ply, x, y) =>
+    if not @pathFinder or not @tileData
+        return false
+
     if IsValid @GetNW2Entity "ActiveUser"
         return false
 
@@ -517,9 +550,22 @@ ENT.ServerTickrateThink = () =>
 
 ENT.SetupDataServer = (data) =>
     if WireLib
-        self.Inputs = WireLib.CreateInputs @, { "TurnOff" }
+        @WireInputs = WireLib.CreateInputs @, { "TurnOff" }
+        @WireOutputs = WireLib.CreateOutputs @, { "Erased [ARRAY]" }
+        WireLib.TriggerOutput @, "Erased" , { 
+            { 1, 0, 0 }
+            { 1, 0, 0 }
+            { 1, 0, 0 }
+            { 1, 0, 0 }
+            { 1, 1, 0 }
+            { 0, 1, 0 }
+            { 0, 1, 0 }
+            { 0, 1, 0 }
+            { 0, 1, 0 }
+            { 0, 1, 0 }
+        }
         newOutputs = {}
-        for _, entity in pairs @
+        -- for _, entity in pairs @
 
 if WireLib
     ENT.UpdateOutputs = (success, outputs, redOut, grayOut) =>

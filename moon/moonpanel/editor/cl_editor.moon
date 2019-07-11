@@ -112,6 +112,13 @@ ENTITY_GRAPHICS = {
         (Material "moonpanel/hex_layer1.png", "noclamp smooth")
         (Material "moonpanel/hex_layer2.png", "noclamp smooth")
     }
+    [Moonpanel.EntityTypes.Invisible]: {
+        [1]: {
+            (Material "moonpanel/invisible_layer1.png", "noclamp smooth")
+            (Material "moonpanel/invisible_layer3.png", "noclamp smooth")
+        }
+        [2]: (Material "moonpanel/cell_nocalc3.png", "noclamp smooth")
+    }
 }
 
 TOOLSET_TOOLS = {
@@ -342,6 +349,25 @@ TOOLSET_ENTITIES = {
                 gridElement.attributes.count = count
                 gridElement.entity = Moonpanel.EntityTypes.Triangle 
     }
+    ------------------------
+    -- Tool: nocalc       --
+    ------------------------
+    {
+        tooltip: "Invisible (excludes a cell from calcultion)"
+        entity: Moonpanel.EntityTypes.Invisible
+        target: Moonpanel.ObjectTypes.Cell
+
+        render: (w, h, color) ->
+            surface.SetDrawColor COLOR_WHITE
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Invisible][2]
+            surface.DrawTexturedRect 0, 0, w, h
+
+        set: (button, gridElement, color) ->
+            if gridElement.entity == Moonpanel.EntityTypes.Invisible
+                gridElement.entity = nil
+            else
+                gridElement.entity = Moonpanel.EntityTypes.Invisible 
+    }
 }
 
 TOOLSET_PATHENTITIES = {
@@ -424,6 +450,28 @@ TOOLSET_PATHENTITIES = {
             else
                 gridElement.attributes.color = color
                 gridElement.entity = Moonpanel.EntityTypes.Hexagon 
+    }
+    ---------------------------------
+    -- Tool: invisible line entity --
+    ---------------------------------
+    {
+        tooltip: "Invisible Line"
+        entity: Moonpanel.EntityTypes.Hexagon
+        target: { Moonpanel.ObjectTypes.HPath, Moonpanel.ObjectTypes.VPath, Moonpanel.ObjectTypes.Intersection }
+
+        render: (w, h, bgColor, entColor) ->
+            surface.SetDrawColor bgColor
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Invisible][1][1]
+            surface.DrawTexturedRect 0, 0, w, h
+            surface.SetDrawColor Color 200, 30, 30
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Invisible][1][2]
+            surface.DrawTexturedRect 0, 0, w, h
+
+        set: (button, gridElement, color) ->
+            if gridElement.entity == Moonpanel.EntityTypes.Invisible
+                gridElement.entity = nil
+            else
+                gridElement.entity = Moonpanel.EntityTypes.Invisible 
     }
 }
 
@@ -1212,7 +1260,12 @@ editor.Init = () =>
                 .Paint = (_self, w, h) ->
                     draw.RoundedBox 8, 0, 0, w, h, (_self.selected and COLOR_TOOL_SELECTED or COLOR_TOOL_UNSELECTED)
                     color = Moonpanel.Colors[@selectedColor] or COLOR_WHITE 
+                   
+                    render.PushFilterMag TEXFILTER.ANISOTROPIC
+                    render.PushFilterMin TEXFILTER.ANISOTROPIC
                     v.render w, h, color, _self
+                    render.PopFilterMag!
+                    render.PopFilterMin!
 
                 if i == 1
                     \DoClick!
@@ -1311,7 +1364,12 @@ editor.Init = () =>
                 .Paint = (_self, w, h) ->
                     draw.RoundedBox 8, 0, 0, w, h, (_self.selected and COLOR_TOOL_SELECTED or COLOR_TOOL_UNSELECTED)
                     color = Moonpanel.Colors[@selectedColor] or 1 
+
+                    render.PushFilterMag TEXFILTER.ANISOTROPIC
+                    render.PushFilterMin TEXFILTER.ANISOTROPIC
                     v.render w, h, color, _self
+                    render.PopFilterMag!
+                    render.PopFilterMin!
                 if i == 1
                     \DoClick!
 
@@ -1368,8 +1426,11 @@ editor.Init = () =>
 
                     entColor = Moonpanel.Colors[@selectedColor] or 1
 
+                    render.PushFilterMag TEXFILTER.ANISOTROPIC
+                    render.PushFilterMin TEXFILTER.ANISOTROPIC
                     v.render w, h, bgColor, entColor
-
+                    render.PopFilterMag!
+                    render.PopFilterMin!
                 if i == 1
                     \DoClick!
 
@@ -1691,6 +1752,8 @@ editor.Serialize = () =>
                             
                             t.Attributes.Rotational = element.attributes.shape.rotational
 
+    if outputData
+        PrintTable outputData
     @__serializing = false
 
     return outputData

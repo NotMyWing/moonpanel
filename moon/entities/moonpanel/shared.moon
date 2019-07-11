@@ -254,13 +254,15 @@ ENT.BuildPathMap = () =>
     cellsH = @tileData.Tile.Height
     barWidth = @calculatedDimensions.barWidth
 
-    for i = 1, cellsW + 1
-        translatedX = (i - 1) - (cellsW / 2)
-        for j = 1, cellsH + 1
-            translatedY = (j - 1) - (cellsH / 2)
-            intersection = @elements.intersections[i][j]
+    for j = 1, cellsH + 1
+        translatedY = (j - 1) - (cellsH / 2)
+        for i = 1, cellsW + 1
+            translatedX = (i - 1) - (cellsW / 2)
+
+            intersection = @elements.intersections[j][i]
             
             clickable = (intersection.entity and intersection.entity.type == Moonpanel.EntityTypes.Start) and true or false
+
             node = {
                 x: translatedX
                 y: translatedY
@@ -279,12 +281,12 @@ ENT.BuildPathMap = () =>
 
     for i = 1, cellsW
         for j = 1, cellsH + 1
-            hpath = @elements.hpaths[i][j]
+            hpath = @elements.hpaths[j][i]
             hpath\populatePathMap @pathMap
 
     for i = 1, cellsW + 1
         for j = 1, cellsH
-            vpath = @elements.vpaths[i][j]
+            vpath = @elements.vpaths[j][i]
             vpath\populatePathMap @pathMap
 
 ENT.SetupData = (data) =>
@@ -318,73 +320,92 @@ ENT.SetupData = (data) =>
 
     @elements = {}
 
-    @elements.cells = {}
-    for i = 1, cellsW
-        @elements.cells[i] = {}
-        for j = 1, cellsH
-            cell = elementClasses.Cell @, i, j
-            x = offsetH + barWidth + (i - 1) * (barLength + barWidth)
-            y = offsetV + barWidth + (j - 1) * (barLength + barWidth)
-            cell.bounds = Rect x, y, barLength, barLength
+    @elements.cells = { entities: {} }
+    @elements.hpaths = { entities: {} }
+    @elements.vpaths = { entities: {} }
+    @elements.intersections = { entities: {} }
+    @elements.entities = {}
 
-            @elements.cells[i][j] = cell
+    for j = 1, cellsH + 1
+        @elements.intersections[j] = {}
+        if j <= cellsH + 1
+            @elements.hpaths[j] = {}
 
-            if @tileData.Cells and @tileData.Cells[j] and @tileData.Cells[j][i]
-                entDef = @tileData.Cells[j][i]
-                if Moonpanel.Entities.Cell[entDef.Type]
-                    cell.entity = Moonpanel.Entities.Cell[entDef.Type] cell, entDef.Attributes
-                    cell.entity.type = entDef.Type
+        if j <= cellsH
+            @elements.vpaths[j] = {}
+            @elements.cells[j] = {}
 
-    @elements.hpaths = {}
-    for i = 1, cellsW
-        @elements.hpaths[i] = {}
-        for j = 1, cellsH + 1
-            hpath = elementClasses.HPath @, i, j
-            x = offsetH + barWidth + (i - 1) * (barLength + barWidth)
-            y = offsetV + (j - 1) * (barLength + barWidth)
-            hpath.bounds = Rect x, y, barLength, barWidth
+        for i = 1, cellsW + 1
+            if j <= cellsH and i <= cellsW
+                cell = elementClasses.Cell @, i, j
+                x = offsetH + barWidth + (i - 1) * (barLength + barWidth)
+                y = offsetV + barWidth + (j - 1) * (barLength + barWidth)
+                cell.bounds = Rect x, y, barLength, barLength
 
-            @elements.hpaths[i][j] = hpath
+                @elements.cells[j][i] = cell
 
-            if @tileData.HPaths and @tileData.HPaths[j] and @tileData.HPaths[j][i]
-                entDef = @tileData.HPaths[j][i]
-                if Moonpanel.Entities.HPath[entDef.Type]
-                    hpath.entity = Moonpanel.Entities.HPath[entDef.Type] hpath, entDef.Attributes
-                    hpath.entity.type = entDef.Type
+                if @tileData.Cells and @tileData.Cells[j] and @tileData.Cells[j][i]
+                    entDef = @tileData.Cells[j][i]
+                    if Moonpanel.Entities.Cell[entDef.Type]
+                        cell.entity = Moonpanel.Entities.Cell[entDef.Type] cell, entDef.Attributes
+                        cell.entity.type = entDef.Type
 
-    @elements.vpaths = {}
-    for i = 1, cellsW + 1
-        @elements.vpaths[i] = {}
-        for j = 1, cellsH
-            vpath = elementClasses.VPath @, i, j
-            y = offsetV + barWidth + (j - 1) * (barLength + barWidth)
-            x = offsetH + (i - 1) * (barLength + barWidth)
-            vpath.bounds = Rect x, y, barWidth, barLength
+                        entities = @elements.cells.entities
+                        entities[#entities + 1] = cell.entity
+                        @elements.entities[#@elements.entities + 1] = cell.entity
 
-            @elements.vpaths[i][j] = vpath
+            if j <= cellsH + 1 and i <= cellsW
+                hpath = elementClasses.HPath @, i, j
+                x = offsetH + barWidth + (i - 1) * (barLength + barWidth)
+                y = offsetV + (j - 1) * (barLength + barWidth)
+                hpath.bounds = Rect x, y, barLength, barWidth
 
-            if @tileData.VPaths and @tileData.VPaths[j] and @tileData.VPaths[j][i]
-                entDef = @tileData.VPaths[j][i]
-                if Moonpanel.Entities.VPath[entDef.Type]
-                    vpath.entity = Moonpanel.Entities.VPath[entDef.Type] vpath, entDef.Attributes
-                    vpath.entity.type = entDef.Type
+                @elements.hpaths[j][i] = hpath
 
-    @elements.intersections = {}
-    for i = 1, cellsW + 1
-        @elements.intersections[i] = {}
-        for j = 1, cellsH + 1
+                if @tileData.HPaths and @tileData.HPaths[j] and @tileData.HPaths[j][i]
+                    entDef = @tileData.HPaths[j][i]
+                    if Moonpanel.Entities.HPath[entDef.Type]
+                        hpath.entity = Moonpanel.Entities.HPath[entDef.Type] hpath, entDef.Attributes
+                        hpath.entity.type = entDef.Type
+                        
+                        entities = @elements.hpaths.entities
+                        hpaths[#entities + 1] = hpath.entity
+                        @elements.entities[#@elements.entities + 1] = hpath.entity
+
+            if j <= cellsH and i <= cellsW + 1
+                vpath = elementClasses.VPath @, i, j
+                y = offsetV + barWidth + (j - 1) * (barLength + barWidth)
+                x = offsetH + (i - 1) * (barLength + barWidth)
+                vpath.bounds = Rect x, y, barWidth, barLength
+
+                @elements.vpaths[j][i] = vpath
+
+                if @tileData.VPaths and @tileData.VPaths[j] and @tileData.VPaths[j][i]
+                    entDef = @tileData.VPaths[j][i]
+                    if Moonpanel.Entities.VPath[entDef.Type]
+                        vpath.entity = Moonpanel.Entities.VPath[entDef.Type] vpath, entDef.Attributes
+                        vpath.entity.type = entDef.Type
+
+                        entities = @elements.vpaths.entities
+                        entities[#entities + 1] = vpath.entity
+                        @elements.entities[#@elements.entities + 1] = vpath.entity
+
             int = elementClasses.Intersection @, i, j
             x = offsetH + (i - 1) * (barLength + barWidth)
             y = offsetV + (j - 1) * (barLength + barWidth)
             int.bounds = Rect x, y, barWidth, barWidth
 
-            @elements.intersections[i][j] = int
+            @elements.intersections[j][i] = int
 
             if @tileData.Intersections and @tileData.Intersections[j] and @tileData.Intersections[j][i]
                 entDef = @tileData.Intersections[j][i]
                 if Moonpanel.Entities.Intersection[entDef.Type]
                     int.entity = Moonpanel.Entities.Intersection[entDef.Type] int, entDef.Attributes
                     int.entity.type = entDef.Type
+
+                    entities = @elements.intersections.entities
+                    entities[#entities + 1] = int.entity
+                    @elements.entities[#@elements.entities + 1] = int.entity
 
     @BuildPathMap!
 

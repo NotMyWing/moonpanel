@@ -1,6 +1,6 @@
 include("shared.lua")
 
-REDOUT_TIME = 4.5
+REDOUT_TIME = 10
 POWERSTATE_TIME = 1
 RESYNC_ATTEMPT_TIME = 2
 
@@ -27,6 +27,27 @@ gradient = (startColor, endColor, percentFade) ->
         (diffGreen * percentFade) + startColor.g,
         (diffBlue * percentFade) + startColor.b,
         (diffAlpha * percentFade) + startColor.a
+
+_err = Color 255, 0, 0, 255
+_errAlt = Color 0, 0, 0, 255
+
+ENT.ErrorifyColor = (color, alternate) =>
+    pctMod = 1
+    if @__finishTime
+        pctMod = 1 - ((CurTime! - (@__finishTime)) / REDOUT_TIME)
+
+    clr = _err
+    if color.r > 200 and color.b < 30 and color.g < 30
+        clr = _errAlt
+
+    time = CurTime!
+
+    pct = ((math.cos math.rad time * 500) + 1) / 2
+
+    if alternate
+        pct = 1 - pct
+
+    return gradient color, clr, pctMod * pct
 
 ENT.GetTimerName = (subname) =>
     index = tostring @EntIndex!
@@ -439,7 +460,7 @@ ENT.SetupDataClient = (data) =>
     @endRipples = {}
     for j = 1, cellsH + 1
         for i = 1, cellsW + 1
-            int = @elements.intersections[i][j]
+            int = @elements.intersections[j][i]
             if int and int.entity
                 if int.entity.type == Moonpanel.EntityTypes.Start
                     @startRipples[#@startRipples + 1] = int.entity.ripple
@@ -481,80 +502,47 @@ ENT.DrawBackground = () =>
         for i = 1, cellsW + 1
             toRender = {}
             if i <= cellsW and j <= cellsH
-                toRender[#toRender + 1] = @elements.cells[i][j]
+                toRender[#toRender + 1] = @elements.cells[j][i]
 
             if i <= cellsW and j <= cellsH + 1
-                toRender[#toRender + 1] = @elements.hpaths[i][j]
+                toRender[#toRender + 1] = @elements.hpaths[j][i]
 
             if i <= cellsW + 1 and j <= cellsH
-                toRender[#toRender + 1] = @elements.vpaths[i][j]
+                toRender[#toRender + 1] = @elements.vpaths[j][i]
 
-            toRender[#toRender + 1] = @elements.intersections[i][j]
+            toRender[#toRender + 1] = @elements.intersections[j][i]
             
             for _, obj in pairs toRender
                 if obj and not (obj.entity and obj.entity.overridesRender)
                     obj\render!
                 if obj and obj.entity and obj.entity.background
                     obj\renderEntity!
-
-_err = Color 255, 0, 0, 255
-_errAlt = Color 0, 0, 0, 255
-ENT.ErrorifyColor = (color, alternate) =>
-    pctMod = 1
-    if @__finishTime
-        pctMod = 1 - ((CurTime! - (@__finishTime)) / REDOUT_TIME)
-
-    clr = _err
-    if color.r > 200 and color.b < 30 and color.g < 30
-        clr = _errAlt
-
-    time = CurTime!
-
-    pct = ((math.cos math.rad time * 500) + 1) / 2
-
-    if alternate
-        pct = 1 - pct
-
-    return gradient color, clr, pctMod * pct
     
 ENT.DrawForeground = () =>
     Clear 0, 0, 0, 0
     ClearDepth!
 
-    cellsW = @tileData.Tile.Width
-    cellsH = @tileData.Tile.Height
+    grayOutAlpha = if @grayOut
+        255 * math.EaseInOut (1 - (math.Clamp (CurTime!- @grayOutStart) / 2, 0, 0.6)), 0.1, 0.1
 
-    for j = 1, cellsH + 1
-        for i = 1, cellsW + 1
-            toRender = {}
-            if i <= cellsW and j <= cellsH
-                toRender[#toRender + 1] = @elements.cells[i][j]
+    for _, entity in pairs @elements.entities
+        if entity.background
+            continue
 
-            if i <= cellsW and j <= cellsH + 1
-                toRender[#toRender + 1] = @elements.hpaths[i][j]
+        clr = Moonpanel.Colors[(entity.attributes and entity.attributes.color) or 1]
 
-            if i <= cellsW + 1 and j <= cellsH
-                toRender[#toRender + 1] = @elements.vpaths[i][j]
+        obj = entity.parent
+        if grayOutAlpha and @grayOut[obj.type] and @grayOut[obj.type][obj.y] and @grayOut[obj.type][obj.y][obj.x]
+            clr = ColorAlpha clr, grayOutAlpha
 
-            toRender[#toRender + 1] = @elements.intersections[i][j]
-            
-            for _, obj in pairs toRender
-                if obj.entity and not obj.entity.background
-                    clr = Moonpanel.Colors[(obj.entity.attributes and obj.entity.attributes.color) or 1]
-                    if @grayOut and @grayOut[obj.type] and @grayOut[obj.type][obj.y] and @grayOut[obj.type][obj.y][obj.x]
-                        pct = math.Clamp (CurTime!- @grayOutStart) / 2, 0, 0.6
-                        pct = 1 - pct
+        elseif @redOut and @redOut[obj.type] and @redOut[obj.type][obj.y] and @redOut[obj.type][obj.y][obj.x]
+            alternate = ((obj.y + obj.x) % 2 == 0) and true or false
+            clr = @ErrorifyColor clr, alternate
 
-                        clr = ColorAlpha clr, 255 * math.EaseInOut pct, 0.1, 0.1
-
-                    elseif @redOut and @redOut[obj.type] and @redOut[obj.type][j] and @redOut[obj.type][j][i]
-                        alternate = ((i + j) % 2 == 0) and true or false
-                        clr = @ErrorifyColor clr, alternate
-
-                    surface.SetDrawColor clr
-                    draw.NoTexture!
-                    render.SetColorMaterial!
-                    obj\renderEntity!
+        surface.SetDrawColor clr
+        draw.NoTexture!
+        render.SetColorMaterial!
+        entity\render!
 
 circ = Material "moonpanel/circ128.png"
 ENT.DrawTrace = () =>
@@ -564,6 +552,8 @@ ENT.DrawTrace = () =>
     if false
         for _, node in pairs @pathMap
             w, h = 32, 32
+            if node.clickable
+                w, h = w * 2, h * 2
             x, y = node.screenX - w/2, node.screenY - w/2
             render.SetMaterial circ
             Moonpanel.render.drawTexturedRect x, y, w, h, (Color 255, 0, 0)

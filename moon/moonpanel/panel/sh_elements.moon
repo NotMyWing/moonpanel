@@ -42,19 +42,19 @@ class VPath extends Path
             table.insert bottomNode.neighbors, topNode
 
     getLeft: =>
-        @cachedLeft or= (@tile.elements.cells[@x - 1] or EMPTY_TABLE)[@y]
+        @cachedLeft or= (@tile.elements.cells[@y] or EMPTY_TABLE)[@x - 1]
         return @cachedLeft
 
     getRight: =>
-        @cachedRight or= (@tile.elements.cells[@x] or EMPTY_TABLE)[@y]
+        @cachedRight or= (@tile.elements.cells[@y] or EMPTY_TABLE)[@x]
         return @cachedRight
 
     getTop: =>
-        @cachedTop or= (@tile.elements.intersections[@x] or EMPTY_TABLE)[@y]
+        @cachedTop or= (@tile.elements.intersections[@y] or EMPTY_TABLE)[@x]
         return @cachedTop
 
     getBottom: =>
-        @cachedBottom or= (@tile.elements.intersections[@x] or EMPTY_TABLE)[@y + 1]
+        @cachedBottom or= (@tile.elements.intersections[@y + 1] or EMPTY_TABLE)[@x]
         return @cachedBottom 
 
 class HPath extends Path
@@ -74,19 +74,19 @@ class HPath extends Path
             table.insert rightNode.neighbors, leftNode
 
     getLeft: =>
-        @cachedLeft or= (@tile.elements.intersections[@x] or EMPTY_TABLE)[@y]
+        @cachedLeft or= (@tile.elements.intersections[@y] or EMPTY_TABLE)[@x]
         return @cachedLeft
 
     getRight: =>
-        @cachedRight or= (@tile.elements.intersections[@x + 1] or EMPTY_TABLE)[@y]
+        @cachedRight or= (@tile.elements.intersections[@y] or EMPTY_TABLE)[@x + 1]
         return @cachedRight
 
     getTop: =>
-        @cachedTop or= (@tile.elements.cells[@x] or EMPTY_TABLE)[@y - 1]
+        @cachedTop or= (@tile.elements.cells[@y - 1] or EMPTY_TABLE)[@x]
         return @cachedTop
 
     getBottom: =>
-        @cachedBottom or= (@tile.elements.cells[@x] or EMPTY_TABLE)[@y]
+        @cachedBottom or= (@tile.elements.cells[@y] or EMPTY_TABLE)[@x]
         return @cachedBottom
 
 corners = {
@@ -99,19 +99,19 @@ corners = {
 class Intersection extends Element
     type: Moonpanel.ObjectTypes.Intersection
     getLeft: =>
-        @cachedLeft or= (@tile.elements.hpaths[@x - 1] or EMPTY_TABLE)[@y]
+        @cachedLeft or= (@tile.elements.hpaths[@y] or EMPTY_TABLE)[@x - 1]
         return @cachedLeft
 
     getRight: =>
-        @cachedRight or= (@tile.elements.hpaths[@x] or EMPTY_TABLE)[@y]
+        @cachedRight or= (@tile.elements.hpaths[@y] or EMPTY_TABLE)[@x]
         return @cachedRight
 
     getTop: =>
-        @cachedTop or= (@tile.elements.vpaths[@x] or EMPTY_TABLE)[@y - 1]
+        @cachedTop or= (@tile.elements.vpaths[@y - 1] or EMPTY_TABLE)[@x]
         return @cachedTop
 
     getBottom: =>
-        @cachedBottom or= (@tile.elements.vpaths[@x] or EMPTY_TABLE)[@y]
+        @cachedBottom or= (@tile.elements.vpaths[@y] or EMPTY_TABLE)[@x]
         return @cachedBottom
 
     render: =>
@@ -141,19 +141,19 @@ class Intersection extends Element
 class Cell extends Element
     type: Moonpanel.ObjectTypes.Cell
     getLeft: =>
-        @cachedLeft or= (@tile.elements.vpaths[@x] or EMPTY_TABLE)[@y]
+        @cachedLeft or= (@tile.elements.vpaths[@y] or EMPTY_TABLE)[@x]
         return @cachedLeft
         
     getRight: =>
-        @cachedRight or= (@tile.elements.vpaths[@x + 1] or EMPTY_TABLE)[@y]
+        @cachedRight or= (@tile.elements.vpaths[@y] or EMPTY_TABLE)[@x + 1]
         return @cachedRight
 
     getTop: =>
-        @cachedTop or= (@tile.elements.hpaths[@x] or EMPTY_TABLE)[@y]
+        @cachedTop or= (@tile.elements.hpaths[@y] or EMPTY_TABLE)[@x]
         return @cachedTop
 
     getBottom: =>
-        @cachedBottom or= (@tile.elements.hpaths[@x] or EMPTY_TABLE)[@y + 1]
+        @cachedBottom or= (@tile.elements.hpaths[@y + 1] or EMPTY_TABLE)[@x]
         return @cachedBottom
 
     render: =>

@@ -131,28 +131,28 @@ ENT.CheckSolution = (errors) =>
 
     for i = 1, width
         for j = 1, height + 1
-            hpath = @elements.hpaths[i][j]
+            hpath = @elements.hpaths[j][i]
             hpath.solutionData = {}
             table.insert everything, hpath
             table.insert paths, hpath
 
     for i = 1, width + 1
         for j = 1, height
-            vpath = @elements.vpaths[i][j]
+            vpath = @elements.vpaths[j][i]
             vpath.solutionData = {}
             table.insert everything, vpath
             table.insert paths, vpath
 
     for i = 1, width
         for j = 1, height
-            cell = @elements.cells[i][j]
+            cell = @elements.cells[j][i]
             cell.solutionData = {}
             table.insert cells, cell
             table.insert everything, cell
 
     for i = 1, width + 1
         for j = 1, height + 1
-            intersection = @elements.intersections[i][j]
+            intersection = @elements.intersections[j][i]
             intersection.solutionData = {}
             table.insert intersections, intersection
             table.insert everything, intersection
@@ -518,11 +518,12 @@ ENT.ServerTickrateThink = () =>
 ENT.SetupDataServer = (data) =>
     if WireLib
         self.Inputs = WireLib.CreateInputs @, { "TurnOff" }
-        outputs = {}
+        newOutputs = {}
+        for _, entity in pairs @
 
 if WireLib
     ENT.UpdateOutputs = (success, outputs, redOut, grayOut) =>
-
+        
 
     ENT.TriggerInput = (input, value) =>
         if input == "TurnOff"

@@ -1,6 +1,6 @@
 intersection = {}
 
-corner = Material "moonpanel/corner256.png", "noclamp smooth mips"
+corner = Material "moonpanel/corner128/0.png", "noclamp smooth mips"
 circle = Material "moonpanel/circ256.png", "noclamp smooth mips"
 
 white = Color 255, 255, 255
@@ -27,6 +27,9 @@ intersection.Paint = (w, h) =>
 
     if @entity == Moonpanel.EntityTypes.Invisible
         return
+        
+    render.PushFilterMag TEXFILTER.ANISOTROPIC
+    render.PushFilterMin TEXFILTER.ANISOTROPIC
 
     if @entity == Moonpanel.EntityTypes.Start
         surface.DisableClipping true
@@ -76,5 +79,8 @@ intersection.Paint = (w, h) =>
             surface.SetDrawColor Moonpanel.Colors[@attributes.color or Moonpanel.Color.Black]
             surface.SetMaterial hexagon
             surface.DrawTexturedRect (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh
+
+    render.PopFilterMag!
+    render.PopFilterMin!
 
 return vgui.RegisterTable intersection, "DButton"  

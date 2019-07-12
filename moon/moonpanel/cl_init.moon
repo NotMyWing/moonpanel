@@ -21,6 +21,14 @@ export MOONPANEL_ENTITY_GRAPHICS = {
 export Moonpanel = Moonpanel or {}
 
 Moonpanel.applyDeltas = (panel, x = 0, y = 0) =>
+    if false
+        ang = math.atan2 y, x
+        len = math.sqrt y^2 + x^2
+        
+        ang += math.pi + (math.pi / 4)
+        x = len * math.cos ang
+        y = len * math.sin ang
+
     x, y = math.Clamp(math.floor(x), -100, 100), math.Clamp(math.floor(y), -100, 100)
 
     Moonpanel\sendMouseDeltas x, y
@@ -76,6 +84,18 @@ Moonpanel.init = () =>
         @__focustime = CurTime!
 
     file.CreateDir "moonpanel"
+
+    Moonpanel.__oldhalo_Add or= halo.Add
+
+    halo.Add = (entities, ...) ->
+        if entities and type(entities) == "table"
+            newEntities = {}
+            for _, ent in pairs entities
+                if not ent.Moonpanel
+                    newEntities[#newEntities + 1] = ent
+            entities = newEntities
+
+        Moonpanel.__oldhalo_Add entities, ...
 
 Moonpanel.isFocused = () =>
     return LocalPlayer!\GetNW2Bool "TheMP Focused"

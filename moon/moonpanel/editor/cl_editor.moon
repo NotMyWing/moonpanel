@@ -115,9 +115,9 @@ ENTITY_GRAPHICS = {
     [Moonpanel.EntityTypes.Invisible]: {
         [1]: {
             (Material "moonpanel/invisible_layer1.png", "noclamp smooth")
-            (Material "moonpanel/invisible_layer3.png", "noclamp smooth")
+            (Material "moonpanel/invisible_layer2.png", "noclamp smooth")
         }
-        [2]: (Material "moonpanel/cell_nocalc3.png", "noclamp smooth")
+        [2]: (Material "moonpanel/cell_nocalc.png", "noclamp smooth")
     }
 }
 
@@ -1107,7 +1107,7 @@ editor.Init = () =>
         \DockMargin 5, 8, 5, 2
         \Dock TOP
         \SetText "Bar Width"
-        \SetMin 2
+        \SetMin 1
         \SetMax 8
         \GetChildren![3]\SetTextColor Color 0, 0, 0
         \GetTextArea!\SetTextColor Color 0, 0, 0
@@ -1752,8 +1752,6 @@ editor.Serialize = () =>
                             
                             t.Attributes.Rotational = element.attributes.shape.rotational
 
-    if outputData
-        PrintTable outputData
     @__serializing = false
 
     return outputData

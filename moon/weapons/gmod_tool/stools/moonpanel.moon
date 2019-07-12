@@ -104,7 +104,6 @@ TOOL.LeftClick = (trace) =>
             return sf
     )!
 
-    print panel
     if not panel
         return false
 
@@ -115,7 +114,6 @@ TOOL.LeftClick = (trace) =>
     err = () ->
         print "err"
 
-    print "REQUEEESTINNNNG"
     Moonpanel\requestEditorConfig @GetOwner!, success, err
 
     return true

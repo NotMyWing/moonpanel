@@ -195,7 +195,7 @@ ENT.CheckSolution = (errors) =>
 
     isBridge = (element, next) ->
         if element.entity and element.entity.type == Moonpanel.EntityTypes.Invisible
-            if not (next) or (next.entity and next.entity ~= Moonpanel.EntityTypes.Invisible)
+            if not (next) or (next.entity and next.entity == Moonpanel.EntityTypes.Invisible)
                 return false
             else
                 return true
@@ -432,6 +432,7 @@ ENT.CheckSolution = (errors) =>
 ENT.Desync = () =>
     @__nextDesync or= 0
     if CurTime! >= @__nextDesync
+        @lastSolution = nil
         @tileData = nil
         @pathFinder = nil
 
@@ -476,6 +477,9 @@ ENT.StartPuzzle = (ply, x, y) =>
     Moonpanel\broadcastStart @, nodeA, nodeB
     @pathFinder\restart nodeA, nodeB
     @__lastSolution = nil
+
+    if WireLib
+        timer.Remove @GetTimerName("WireOutput")
 
     return true
 
@@ -522,6 +526,9 @@ ENT.FinishPuzzle = (forceFail) =>
     else
         aborted = true
 
+    if WireLib
+        @UpdateOutputs success, redOut, grayOut
+
     Moonpanel\broadcastFinish @, {
         :success
         :aborted
@@ -551,25 +558,36 @@ ENT.ServerTickrateThink = () =>
 ENT.SetupDataServer = (data) =>
     if WireLib
         @WireInputs = WireLib.CreateInputs @, { "TurnOff" }
-        @WireOutputs = WireLib.CreateOutputs @, { "Erased [ARRAY]" }
-        WireLib.TriggerOutput @, "Erased" , { 
-            { 1, 0, 0 }
-            { 1, 0, 0 }
-            { 1, 0, 0 }
-            { 1, 0, 0 }
-            { 1, 1, 0 }
-            { 0, 1, 0 }
-            { 0, 1, 0 }
-            { 0, 1, 0 }
-            { 0, 1, 0 }
-            { 0, 1, 0 }
-        }
+        @WireOutputs = WireLib.CreateOutputs @, { "Success", "Erased [ARRAY]" }
+        
         newOutputs = {}
         -- for _, entity in pairs @
 
 if WireLib
-    ENT.UpdateOutputs = (success, outputs, redOut, grayOut) =>
-        
+    ENT.UpdateOutputs = (success = false, redOut = {}, grayOut = {}) =>
+        WireLib.TriggerOutput @, "Erased" , grayOut
+        if success
+            
+            if grayOut.grayedOut
+                WireLib.TriggerOutput @, "Success", 0
+                WireLib.TriggerOutput @, "Erased", {}
+
+                timer.Create @GetTimerName("WireOutput"), 0.75, 1, () ->
+                    if not IsValid @
+                        return
+
+                    WireLib.TriggerOutput @, "Success", 1
+                    erased = {}
+                    for k, types in pairs grayOut
+                        if type(types) == "table"
+                            for j, row in pairs types
+                                for i, state in pairs row
+                                    if state
+                                        erased[#erased + 1] = Vector i, j, k
+
+                    WireLib.TriggerOutput @, "Erased", erased
+            else
+                WireLib.TriggerOutput @, "Success", 1
 
     ENT.TriggerInput = (input, value) =>
         if input == "TurnOff"

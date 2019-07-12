@@ -95,6 +95,9 @@ cell.Paint = (w, h) =>
     if not @entity
         return
 
+    render.PushFilterMag TEXFILTER.ANISOTROPIC
+    render.PushFilterMin TEXFILTER.ANISOTROPIC
+
     if @attributes.color
         surface.SetDrawColor Moonpanel.Colors[@attributes.color]
     else
@@ -114,5 +117,8 @@ cell.Paint = (w, h) =>
     elseif graphics[@entity]
         surface.SetMaterial graphics[@entity]
         surface.DrawTexturedRect 0, 0, w, h
+
+    render.PopFilterMag!
+    render.PopFilterMin!
 
 return vgui.RegisterTable cell, "DButton"

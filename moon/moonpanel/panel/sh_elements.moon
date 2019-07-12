@@ -90,10 +90,10 @@ class HPath extends Path
         return @cachedBottom
 
 corners = {
-    [0]: Material "moonpanel/corner64/0.png"
-    [90]: Material "moonpanel/corner64/90.png"
-    [180]: Material "moonpanel/corner64/180.png"
-    [270]: Material "moonpanel/corner64/270.png"
+    [0]: Material "moonpanel/corner128/0.png"
+    [90]: Material "moonpanel/corner128/90.png"
+    [180]: Material "moonpanel/corner128/180.png"
+    [270]: Material "moonpanel/corner128/270.png"
 }
 
 class Intersection extends Element
@@ -119,11 +119,17 @@ class Intersection extends Element
             dsjZero = @tile and @tile.tileData and @tile.tileData.Dimensions and (@tile.tileData.Dimensions.DisjointLength == 1)
 
             dsj = Moonpanel.EntityTypes.Disjoint
+            invis = Moonpanel.EntityTypes.Invisible
 
-            notLeft   = (not @getLeft!)   or ((@getLeft!   and @getLeft!.entity   and @getLeft!.entity.type   == dsj) and dsjZero)
-            notRight  = (not @getRight!)  or ((@getRight!  and @getRight!.entity  and @getRight!.entity.type  == dsj) and dsjZero)
-            notTop    = (not @getTop!)    or ((@getTop!    and @getTop!.entity    and @getTop!.entity.type    == dsj) and dsjZero)
-            notBottom = (not @getBottom!) or ((@getBottom! and @getBottom!.entity and @getBottom!.entity.type == dsj) and dsjZero)
+            left = @getLeft!
+            right = @getRight!
+            top = @getTop!
+            bottom = @getBottom!
+
+            notLeft   = (not left)   or (left   and left.entity   and (left.entity.type   == invis or (left.entity.type   == dsj and dsjZero)))
+            notRight  = (not right)  or (right  and right.entity  and (right.entity.type  == invis or (right.entity.type  == dsj and dsjZero)))
+            notTop    = (not top)    or (top    and top.entity    and (top.entity.type    == invis or (top.entity.type    == dsj and dsjZero)))
+            notBottom = (not bottom) or (bottom and bottom.entity and (bottom.entity.type == invis or (bottom.entity.type == dsj and dsjZero)))
 
             @angle = (notLeft and notTop) and 0 or
                 (notRight and notTop) and 90 or

@@ -113,7 +113,6 @@ class Exit extends IntersectionEntity
             x, y, w, h = @parent.x, @parent.y, td.Width + 1, td.Height + 1
 
             dir = @dirs[@getAngle x, y, w, h]
-            print "ANgel:", x, y, w, h, (@getAngle x, y, w, h)
 
             if dir
                 x = bounds.x + bounds.width * dir.x + bounds.width / 2

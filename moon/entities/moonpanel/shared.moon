@@ -248,8 +248,11 @@ class PathFinder
 
 import Rect from Moonpanel
 
+ENT.GetTimerName = (subname) =>
+    index = tostring @EntIndex!
+    return "TheMP_Panel#{index}_#{subname}"
+
 ENT.BuildPathMap = () =>
-    PrintTable @tileData
     @pathMap = {}
     cellsW = @tileData.Tile.Width
     cellsH = @tileData.Tile.Height

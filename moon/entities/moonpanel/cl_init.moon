@@ -49,10 +49,6 @@ ENT.ErrorifyColor = (color, alternate) =>
 
     return gradient color, clr, pctMod * pct
 
-ENT.GetTimerName = (subname) =>
-    index = tostring @EntIndex!
-    return "TheMP_Panel#{index}_#{subname}"
-
 ENT.Initialize = () =>
     @BaseClass.Initialize @
 
@@ -63,10 +59,10 @@ ENT.Initialize = () =>
         size = maxs-mins
         info = {
             Name: ""
-            RS: ((size.y-1) / @ScreenSize) * 2
+            RS: ((math.max(size.x, size.y) - 1) / @ScreenSize) * 2
             RatioX: size.y / size.x
-            offset: @OBBCenter! + Vector 0, 0, maxs.z - 0.24
-            rot: Angle 0, 0, 180
+            offset: @OBBCenter! + Vector 0, 0, maxs.z
+            rot: Angle 0, 90, 180
             x1: 0
             x2: 0
             y1: 0
@@ -78,7 +74,7 @@ ENT.Initialize = () =>
 
     rotation\SetAngles          info.rot
     translation\SetTranslation  info.offset
-    translation2\SetTranslation Vector -512 / info.RatioX,  -512,       0
+    translation2\SetTranslation Vector -512,  -512,       0
     scale\SetScale              Vector info.RS / 2, info.RS / 2, info.RS / 2
 
     @ScreenMatrix = translation * rotation * scale * translation2
@@ -87,13 +83,13 @@ ENT.Initialize = () =>
     @Scale = info.RS / 2
     @Origin = info.offset
 
-    w, h = @ScreenSize / @Aspect, @ScreenSize
+    w, h = @ScreenSize, @ScreenSize
     @ScreenQuad = {
         Vector(0,0,0)
         Vector(w,0,0)
         Vector(w,h,0)
         Vector(0,h,0)
-        Color(0, 0, 0, 255)
+        Color(0, 0, 0, 0)
     }
 
     index = tostring @EntIndex!
@@ -137,6 +133,7 @@ ENT.CleanUp = () =>
     @rendertargets.trace.dirty = true
 
 ENT.Desynchronize = () =>
+    @CleanUp!
     @tileData = nil
     @synchronized = false
 
@@ -227,7 +224,7 @@ ENT.GetCursorPos = () =>
 
     B = Normal\Dot(Pos-Start) / A
     if (B >= 0)
-        w = @ScreenSize / screen.Aspect
+        w = @ScreenSize
         HitPos = screen.Transform\GetInverseTR! * (Start + Dir * B)
         x = HitPos.x / screen.Scale^2
         y = HitPos.y / screen.Scale^2
@@ -280,6 +277,7 @@ RT_Material = CreateMaterial "TheMP_RT", "UnlitGeneric", {
     ["$vertexcolor"]: 1,
     ["$vertexalpha"]: 1
     ["$noclamp"]: 1
+    ["$nocull"]: 1
 }
 
 ENT.NW_OnPowered = (state) =>
@@ -486,7 +484,7 @@ ENT.SetupDataClient = (data) =>
             for _, i in pairs inStack
                 stack[#stack + 1] = @pathFinder.nodeMap[i]
 
-    timer.Simple 0.1, () ->
+    timer.Simple 0.5, () ->
         @NW_OnPowered @GetNW2Bool("TheMP Powered")
         @SetNW2VarProxy "TheMP Powered", (_, _, _, state) ->
             @NW_OnPowered state
@@ -579,7 +577,7 @@ ENT.DrawTrace = () =>
 
         for stackId, stack in pairs nodeStacks 
             for k, v in pairs stack
-                Moonpanel.render.drawCircle v.screenX, v.screenY, ((k == 1) and barWidth * 1.25 or barWidth / 2) - 0.5
+                Moonpanel.render.drawCircle v.screenX, v.screenY, ((k == 1) and barWidth * 1.25 or barWidth / 2)
 
                 if k > 1
                     prev = stack[k - 1]
@@ -589,7 +587,7 @@ ENT.DrawTrace = () =>
             for stackid, cur in pairs cursors
                 stack = nodeStacks[stackid]
                 last = stack[#stack]
-                Moonpanel.render.drawCircle cur.x, cur.y, barWidth / 2  
+                Moonpanel.render.drawCircle cur.x, cur.y, barWidth / 2 + 0.5
                 Moonpanel.render.drawThickLine cur.x, cur.y, last.screenX, last.screenY, barWidth
 
 setRTTexture = (rt) ->

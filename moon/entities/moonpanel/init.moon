@@ -10,6 +10,10 @@ ENT.Initialize = () =>
 
     @SetNW2Bool "TheMP Powered", true
 
+    if WireLib and not @WireOutputs
+        @WireInputs = WireLib.CreateInputs @, { "TurnOff" }
+        @WireOutputs = WireLib.CreateOutputs @, { "Success", "Erased [ARRAY]" }
+
 ENT.Use = (activator) =>
     Moonpanel\setFocused activator, true
 
@@ -527,7 +531,8 @@ ENT.FinishPuzzle = (forceFail) =>
         aborted = true
 
     if WireLib
-        @UpdateOutputs success, redOut, grayOut
+        if not aborted
+            @UpdateOutputs success, redOut, grayOut
 
     Moonpanel\broadcastFinish @, {
         :success
@@ -556,18 +561,13 @@ ENT.ServerThink = () =>
 ENT.ServerTickrateThink = () =>
 
 ENT.SetupDataServer = (data) =>
-    if WireLib
-        @WireInputs = WireLib.CreateInputs @, { "TurnOff" }
-        @WireOutputs = WireLib.CreateOutputs @, { "Success", "Erased [ARRAY]" }
-        
-        newOutputs = {}
-        -- for _, entity in pairs @
 
 if WireLib
     ENT.UpdateOutputs = (success = false, redOut = {}, grayOut = {}) =>
-        WireLib.TriggerOutput @, "Erased" , grayOut
+        if success == nil
+            return -- noop
+ 
         if success
-            
             if grayOut.grayedOut
                 WireLib.TriggerOutput @, "Success", 0
                 WireLib.TriggerOutput @, "Erased", {}
@@ -588,6 +588,9 @@ if WireLib
                     WireLib.TriggerOutput @, "Erased", erased
             else
                 WireLib.TriggerOutput @, "Success", 1
+
+        else
+            WireLib.TriggerOutput @, "Success", 0
 
     ENT.TriggerInput = (input, value) =>
         if input == "TurnOff"

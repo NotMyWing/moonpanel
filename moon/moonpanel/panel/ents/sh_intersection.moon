@@ -154,11 +154,11 @@ class Exit extends Moonpanel.BaseEntity
         dir = @getAngle!
 
         if dir
-            bounds = @parent.bounds
+            bounds = @getBounds!
             x = bounds.x + bounds.width * dir.x + bounds.width / 2
             y = bounds.y + bounds.height * dir.y + bounds.height / 2
 
-            w = @parent.bounds.width
+            w = bounds.width
             parentNode = @parent.pathMapNode
             node = {
                 x: parentNode.x + (dir.x) * 0.25
@@ -179,7 +179,7 @@ class Exit extends Moonpanel.BaseEntity
         dir = @getAngle!
 
         if dir
-            bounds = @parent.bounds
+            bounds = @getBounds!
 
             surface.SetDrawColor @parent.tile.colors.untraced
             render.SetMaterial circ

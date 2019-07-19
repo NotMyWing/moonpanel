@@ -1,3 +1,5 @@
+AddCSLuaFile "cl_init.lua"
+
 include "shared.lua"
 DLX = include "moonpanel/sv_dlx.lua"
 

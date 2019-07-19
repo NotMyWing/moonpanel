@@ -43,7 +43,7 @@ class VBroken extends Moonpanel.BaseEntity
         topNode = topIntersection and topIntersection.pathMapNode
         bottomNode = bottomIntersection and bottomIntersection.pathMapNode
 
-        if topNode and bottomNode
+        if topNode
             nodeA = {
                 x: topNode.x
                 y: topNode.y + 0.25
@@ -52,9 +52,11 @@ class VBroken extends Moonpanel.BaseEntity
                 lowPriority: true
                 neighbors: { topNode }
             }
+
             table.insert topNode.neighbors, nodeA
             table.insert pathMap, nodeA
-
+        
+        if bottomNode
             nodeB = {
                 x: bottomNode.x
                 y: bottomNode.y - 0.25
@@ -63,17 +65,27 @@ class VBroken extends Moonpanel.BaseEntity
                 lowPriority: true
                 neighbors: { bottomNode }
             }
+
             table.insert bottomNode.neighbors, nodeB
             table.insert pathMap, nodeB
+
         return true
 
     render: =>
+        bounds = @getBounds!
+
         gap = math.ceil bounds.height * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
         height = math.ceil bounds.height / 2 - gap / 2
         
         surface.SetDrawColor @parent.tile.colors.untraced
-        surface.DrawRect bounds.x, bounds.y, bounds.width, height
-        surface.DrawRect bounds.x, bounds.y + gap + height, bounds.width, height
+        top = @parent\getTop!
+        bottom = @parent\getBottom!
+
+        if top and not (top and top.entity and top.entity.type == Moonpanel.EntityTypes.Invisible) 
+            surface.DrawRect bounds.x, bounds.y, bounds.width, height
+
+        if bottom and not (bottom and bottom.entity and bottom.entity.type == Moonpanel.EntityTypes.Invisible) 
+            surface.DrawRect bounds.x, bounds.y + gap + height, bounds.width, height
 
         return true
 
@@ -92,7 +104,7 @@ class HBroken extends Moonpanel.BaseEntity
         leftNode = leftIntersection and leftIntersection.pathMapNode
         rightNode = rightIntersection and rightIntersection.pathMapNode
 
-        if leftNode and rightNode
+        if leftNode
             nodeA = {
                 x: leftNode.x + 0.25
                 y: leftNode.y
@@ -104,6 +116,7 @@ class HBroken extends Moonpanel.BaseEntity
             table.insert leftNode.neighbors, nodeA
             table.insert pathMap, nodeA
 
+        if rightNode
             nodeB = {
                 x: rightNode.x - 0.25
                 y: rightNode.y
@@ -124,8 +137,14 @@ class HBroken extends Moonpanel.BaseEntity
         width = math.ceil bounds.width / 2 - gap / 2
         
         surface.SetDrawColor @parent.tile.colors.untraced
-        surface.DrawRect bounds.x, bounds.y, width, bounds.height
-        surface.DrawRect bounds.x + gap + width, bounds.y, width, bounds.height
+        left = @parent\getLeft!
+        right = @parent\getRight!
+
+        if left and not (left and left.entity and left.entity.type == Moonpanel.EntityTypes.Invisible) 
+            surface.DrawRect bounds.x, bounds.y, width, bounds.height
+
+        if right and not (right and right.entity and right.entity.type == Moonpanel.EntityTypes.Invisible) 
+            surface.DrawRect bounds.x + gap + width, bounds.y, width, bounds.height
         
         return true
 

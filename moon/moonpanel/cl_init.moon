@@ -1,3 +1,5 @@
+include "moonpanel/panel/sh_pathfinder.lua"
+
 setDrawColor = surface.SetDrawColor
 setScissor = render.SetScissorRect
 drawRect = surface.DrawRect

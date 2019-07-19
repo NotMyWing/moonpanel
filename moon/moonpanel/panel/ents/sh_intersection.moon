@@ -1,44 +1,30 @@
 import Rect from Moonpanel
 
-class IntersectionEntity
-    erasable: false
-    new: (@parent) =>
-    checkSolution: (@areaData) =>
-        return true
-
-    render: =>
-    renderEntity: =>
-        if @entity
-            @entity\render!
-
-    getClassName: =>
-        return @__class.__name
-
-    populatePathMap: (pathMap) => 
-
 circ = Material "moonpanel/circ128.png"
 hexagon = Material "moonpanel/hexagon.png"
 
-class Invisible extends IntersectionEntity
+class Invisible extends Moonpanel.BaseEntity
     background: true
     overridesRender: true
     populatePathMap: () =>
         return true
 
-class Entrance extends IntersectionEntity
+class Entrance extends Moonpanel.BaseEntity
     background: true
     overridesRender: true
-    new: (@parent) =>
+    new: (...) =>
+        super ...
         if CLIENT
-            parentBounds = @parent.bounds
+            parentBounds = @getBounds!
             w = parentBounds.width * 2.5
             h = parentBounds.height * 2.5
             x = parentBounds.x + (parentBounds.width / 2) - w / 2
             y = parentBounds.y + (parentBounds.width / 2) - h / 2
 
-            @bounds = Rect x, y, w, h
+            if not bounds
+                @ripple = Moonpanel.render.createRipple x + w/2, y + h/2, w * 3
 
-            @ripple = Moonpanel.render.createRipple x + w/2, y + h/2, w * 3
+            @bounds = Rect x, y, w, h
 
     render: =>
         surface.SetDrawColor @parent.tile.colors.untraced
@@ -46,18 +32,18 @@ class Entrance extends IntersectionEntity
         Moonpanel.render.drawTexturedRect @bounds.x, @bounds.y, @bounds.width, @bounds.height, @parent.tile.colors.untraced
         render.SetColorMaterial!
 
-class Hexagon extends IntersectionEntity
+class Hexagon extends Moonpanel.BaseEntity
     erasable: true
-    new: (@parent, defs) =>
-        @attributes = {
-            color: defs.Color or Moonpanel.Color.Black
-        }
+    new: (parent, defs, ...) =>
+        super parent, defs, ...
+
+        @attributes.color = defs.Color or Moonpanel.Color.Black
 
     checkSolution: (areaData) =>
         return @parent.solutionData.traced
 
     render: =>
-        bounds = @parent.bounds
+        bounds = @getBounds!
 
         w = math.min bounds.width, bounds.height
 
@@ -73,8 +59,7 @@ unitVector = (angle) ->
 
     return { :x, :y }
 
-class Exit extends IntersectionEntity
-    circ: Material "moonpanel/circ128.png"
+class Exit extends Moonpanel.BaseEntity
     background: true
     getAngle: (x, y, w, h) =>
         @__angle or= do
@@ -150,17 +135,20 @@ class Exit extends IntersectionEntity
         if @__angle ~= -1
             return @__angle
 
-    new: (@parent) =>
+    new: (parent, defs, ...) =>
+        super parent, defs, ...
+
         if CLIENT
             dir = @getAngle!
 
             if dir
-                bounds = @parent.bounds
+                bounds = @getBounds!
                 x = bounds.x + bounds.width * dir.x + bounds.width / 2
                 y = bounds.y + bounds.height * dir.y + bounds.height / 2
-                w = @parent.bounds.width
+                w = bounds.width
 
-                @ripple = Moonpanel.render.createRipple x, y, w
+                if not @bounds
+                    @ripple = Moonpanel.render.createRipple x, y, w
 
     populatePathMap: (pathMap) =>
         dir = @getAngle!

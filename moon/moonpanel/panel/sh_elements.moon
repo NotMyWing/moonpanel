@@ -173,4 +173,24 @@ Moonpanel.Elements = {
     :Intersection
     :VPath
     :HPath
-} 
+}
+
+class Moonpanel.BaseEntity
+    erasable: false
+    render: =>
+    populatePathMap: (pathMap) =>
+    new: (@parent, defaults, @bounds) =>
+        @attributes = {}
+
+    renderEntity: =>
+        if @entity
+            @entity\render!
+
+    getClassName: =>
+        return @__class.__name
+
+    getBounds: () =>
+        return @bounds or (@parent and @parent.bounds)
+
+    checkSolution: (@areaData) =>
+        return true

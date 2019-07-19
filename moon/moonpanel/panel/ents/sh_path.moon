@@ -3,40 +3,23 @@ import Rect from Moonpanel
 circ = Material "moonpanel/circ128.png"
 hexagon = Material "moonpanel/hexagon.png"
 
-class PathEntity
-    erasable: false
-    new: (@parent) =>
-    checkSolution: (@areaData) =>
-        return true
-
-    render: =>
-    renderEntity: =>
-        if @entity
-            @entity\render!
-
-    getClassName: =>
-        return @__class.__name
-
-    populatePathMap: (pathMap) => 
-
-class Invisible extends PathEntity
+class Invisible extends Moonpanel.BaseEntity
     background: true
     overridesRender: true
     populatePathMap: () =>
         return true
 
-class Hexagon extends PathEntity
+class Hexagon extends Moonpanel.BaseEntity
     erasable: true
-    new: (@parent, defs) =>
-        @attributes = {
-            color: defs.Color or Moonpanel.Color.Black
-        }
+    new: (parent, defs, ...) =>
+        super parent, defs, ...
+        @attributes.color =  defs.Color or Moonpanel.Color.Black
 
     checkSolution: (areaData) =>
         return @parent.solutionData.traced
  
     render: =>
-        bounds = @parent.bounds
+        bounds = @getBounds!
 
         w = math.min bounds.width, bounds.height
 
@@ -45,12 +28,14 @@ class Hexagon extends PathEntity
             bounds.y + (bounds.height / 2) - (w / 2), w, w
         draw.NoTexture!
 
-class VBroken extends PathEntity
+class VBroken extends Moonpanel.BaseEntity
     overridesRender: true
     background: true
     populatePathMap: (pathMap) =>
-        gap = math.ceil @parent.bounds.height * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
-        height = math.ceil @parent.bounds.height / 2 - gap / 2
+        bounds = @getBounds!
+        
+        gap = math.ceil bounds.height * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
+        height = math.ceil bounds.height / 2 - gap / 2
 
         topIntersection = @parent\getTop!
         bottomIntersection = @parent\getBottom!
@@ -83,21 +68,23 @@ class VBroken extends PathEntity
         return true
 
     render: =>
-        gap = math.ceil @parent.bounds.height * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
-        height = math.ceil @parent.bounds.height / 2 - gap / 2
+        gap = math.ceil bounds.height * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
+        height = math.ceil bounds.height / 2 - gap / 2
         
         surface.SetDrawColor @parent.tile.colors.untraced
-        surface.DrawRect @parent.bounds.x, @parent.bounds.y, @parent.bounds.width, height
-        surface.DrawRect @parent.bounds.x, @parent.bounds.y + gap + height, @parent.bounds.width, height
+        surface.DrawRect bounds.x, bounds.y, bounds.width, height
+        surface.DrawRect bounds.x, bounds.y + gap + height, bounds.width, height
 
         return true
 
-class HBroken extends PathEntity
+class HBroken extends Moonpanel.BaseEntity
     overridesRender: true
     background: true
     populatePathMap: (pathMap) =>
-        gap = math.ceil @parent.bounds.width * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
-        width = math.ceil @parent.bounds.width / 2 - gap / 2
+        bounds = @getBounds!
+
+        gap = math.ceil bounds.width * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
+        width = math.ceil bounds.width / 2 - gap / 2
 
         leftIntersection = @parent\getLeft!
         rightIntersection = @parent\getRight!
@@ -131,12 +118,14 @@ class HBroken extends PathEntity
         return true
 
     render: =>
-        gap = math.ceil @parent.bounds.width * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
-        width = math.ceil @parent.bounds.width / 2 - gap / 2
+        bounds = @getBounds!
+
+        gap = math.ceil bounds.width * (@parent.tile.tileData.Dimensions.DisjointLength or 0.25)
+        width = math.ceil bounds.width / 2 - gap / 2
         
         surface.SetDrawColor @parent.tile.colors.untraced
-        surface.DrawRect @parent.bounds.x, @parent.bounds.y, width, @parent.bounds.height
-        surface.DrawRect @parent.bounds.x + gap + width, @parent.bounds.y, width, @parent.bounds.height
+        surface.DrawRect bounds.x, bounds.y, width, bounds.height
+        surface.DrawRect bounds.x + gap + width, bounds.y, width, bounds.height
         
         return true
 

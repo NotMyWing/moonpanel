@@ -1,70 +1,62 @@
-class CellEntity
-    erasable: true
-    new: (@parent) =>
-    checkSolution: (@areaData) =>
-        return true
-
-    render: =>
-    renderEntity: =>
-        if @entity
-            @entity\render!
-
-    getClassName: =>
-        return @__class.__name
-
-    populatePathMap: (pathMap) =>
-
-class Invisible extends CellEntity
+class Invisible extends Moonpanel.BaseEntity
     background: true
     overridesRender: true
     populatePathMap: () =>
         return true
 
-_color = Material "moonpanel/color.png" 
-class Color extends CellEntity
-    new: (@parent, defs) =>
-        @attributes = {
-            color: defs.Color
-        }
+color = Material "moonpanel/color.png"
+triangle = Material "moonpanel/triangle.png"
+sun = Material "moonpanel/sun.png" 
+
+class Color extends Moonpanel.BaseEntity
+    new: (parent, defs, ...) =>
+        super parent, defs, ...
+
+        @attributes.color = defs.Color
+
     render: =>
-        bounds = @parent.bounds
+        bounds = @getBounds!
         if bounds
-            surface.SetMaterial _color
+            surface.SetMaterial color
             surface.DrawTexturedRect bounds.x, bounds.y, bounds.width, bounds.height
             draw.NoTexture!
 
-sun = Material "moonpanel/sun.png" 
-class Sun extends CellEntity
-    new: (@parent, defs) =>
-        @attributes = {
-            color: defs.Color
-        }
+
+class Sun extends Moonpanel.BaseEntity
+    new: (parent, defs, ...) =>
+        super parent, defs, ...
+
+        @attributes.color = defs.Color
+
     render: =>
-        bounds = @parent.bounds
+        bounds = @getBounds!
+
         if bounds
             surface.SetMaterial sun
             surface.DrawTexturedRect bounds.x, bounds.y, bounds.width, bounds.height
             draw.NoTexture!
 
 eraser = Material "moonpanel/eraser.png" 
-class Y extends CellEntity
-    new: (@parent, defs) =>
-        @attributes = {
-            color: defs.Color
-        }
+class Y extends Moonpanel.BaseEntity
+    new: (parent, defs, ...) =>
+        super parent, defs, ...
+
+        @attributes.color = defs.Color
+
     render: =>
-        bounds = @parent.bounds
+        bounds = @getBounds!
+
         if bounds
             surface.SetMaterial eraser
             surface.DrawTexturedRect bounds.x, bounds.y, bounds.width, bounds.height
             draw.NoTexture!
 
 poly = Material "moonpanel/polyomino_cell.png"
-class Polyomino extends CellEntity
-    new: (@parent, defs) =>
-        @attributes = {
-            color: defs.Color or Moonpanel.Color.Yellow
-        }
+class Polyomino extends Moonpanel.BaseEntity
+    new: (parent, defs, ...) =>
+        super parent, defs, ...
+
+        @attributes.color = defs.Color or Moonpanel.Color.Yellow
 
         maxw = 0
         for _, row in pairs defs.Shape
@@ -80,7 +72,7 @@ class Polyomino extends CellEntity
         @attributes.shape.rotational = defs.Rotational
 
     render: =>
-        bounds = @parent.bounds
+        bounds = @getBounds!
 
         @polyheight = @attributes.shape.h
         @polywidth = @attributes.shape.w
@@ -119,14 +111,13 @@ class Polyomino extends CellEntity
         
         if @attributes.rotational
             cam.PopModelMatrix!
+    
+class Triangle extends Moonpanel.BaseEntity
+    new: (@parent, defs, ...) =>
+        super parent, defs, ...
 
-triangle = Material "moonpanel/triangle.png"
-class Triangle extends CellEntity
-    new: (@parent, defs) =>
-        @attributes = {
-            color: defs.Color
-            count: defs.Count
-        }
+        @attributes.color = defs.Color
+        @attributes.count = defs.Count
 
     buildPoly: (bounds) =>
         
@@ -148,7 +139,7 @@ class Triangle extends CellEntity
         return sum == @attributes.count
 
     render: =>
-        bounds = @parent.bounds
+        bounds = @getBounds!
         if bounds
             shrink = bounds.width * 0.8
 

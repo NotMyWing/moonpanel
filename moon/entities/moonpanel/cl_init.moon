@@ -137,9 +137,6 @@ ENT.Desynchronize = () =>
     @tileData = nil
     @synchronized = false
 
-ENT.Draw = () =>
-    @DrawModel!
-
 ENT.SetBackgroundColor = (r, g, b, a) =>
     if type(r) ~= "number" and r.r
         g = r.g
@@ -155,8 +152,6 @@ fn = (self) ->
     self\RenderPanel!
 
 ENT.DrawTranslucent = () =>
-    @DrawModel()
-
     if not @ScreenMatrix or halo.RenderedEntity() == @
         return
     -- Draw screen here
@@ -581,14 +576,14 @@ ENT.DrawTrace = () =>
 
                 if k > 1
                     prev = stack[k - 1]
-                    Moonpanel.render.drawThickLine prev.screenX, prev.screenY, v.screenX, v.screenY, barWidth
+                    Moonpanel.render.drawThickLine prev.screenX, prev.screenY, v.screenX, v.screenY, barWidth + 0.5
 
         if cursors and #cursors > 0
             for stackid, cur in pairs cursors
                 stack = nodeStacks[stackid]
                 last = stack[#stack]
-                Moonpanel.render.drawCircle cur.x, cur.y, barWidth / 2 + 0.5
-                Moonpanel.render.drawThickLine cur.x, cur.y, last.screenX, last.screenY, barWidth
+                Moonpanel.render.drawCircle cur.x, cur.y, barWidth / 2
+                Moonpanel.render.drawThickLine cur.x, cur.y, last.screenX, last.screenY, barWidth + 0.5
 
 setRTTexture = (rt) ->
     RT_Material\SetTexture "$basetexture", rt

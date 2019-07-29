@@ -292,6 +292,7 @@ Moonpanel.calculateDimensionsShared = (data) =>
 -- Includes --
 --------------
 
+include "moonpanel/panel/sh_pathfinder.lua"
 include "moonpanel/panel/sh_elements.lua"
 include "moonpanel/panel/ents/sh_cell.lua"
 include "moonpanel/panel/ents/sh_intersection.lua"

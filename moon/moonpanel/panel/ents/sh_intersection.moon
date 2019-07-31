@@ -26,12 +26,6 @@ class Entrance extends Moonpanel.BaseEntity
 
             @bounds = Rect x, y, w, h
 
-    render: =>
-        surface.SetDrawColor @parent.tile.colors.untraced
-        render.SetMaterial circ
-        Moonpanel.render.drawTexturedRect @bounds.x, @bounds.y, @bounds.width, @bounds.height, @parent.tile.colors.untraced
-        render.SetColorMaterial!
-
 class Hexagon extends Moonpanel.BaseEntity
     erasable: true
     new: (parent, defs, ...) =>
@@ -179,31 +173,6 @@ class Exit extends Moonpanel.BaseEntity
             table.insert parentNode.neighbors, node
 
             table.insert pathMap, node
-        
-    render: =>
-        dir = @getAngle!
-
-        if dir
-            bounds = @getBounds!
-
-            surface.SetDrawColor @parent.tile.colors.untraced
-            render.SetMaterial circ
-            Moonpanel.render.drawTexturedRect bounds.x + bounds.width * dir.x, bounds.y + bounds.height * dir.y, 
-                bounds.width, bounds.height, @parent.tile.colors.untraced
-            render.SetColorMaterial!
-
-            surface.SetDrawColor Color 255, 0, 0
-
-            if x ~=0 and y == 0 or y ~= 0 and x == 0
-                x = (dir.x == -1 and -1 or 0) * bounds.width * 0.5
-                y = (dir.y == -1 and -1 or 0) * bounds.width * 0.5
-                w = bounds.width + math.ceil(math.abs(dir.x) * bounds.width * 0.5)
-                h = bounds.height + math.ceil(math.abs(dir.y) * bounds.height * 0.5)
-                surface.DrawRect bounds.x + x, bounds.y + y, w, h
-            else
-                cx, cy = bounds.x + bounds.width / 2, bounds.y + bounds.height / 2
-                ex, ey = bounds.x + bounds.width * dir.x + bounds.width / 2, bounds.y + bounds.height * dir.y + bounds.width / 2
-                Moonpanel.render.drawThickLine cx, cy, ex, ey, bounds.width
 
 Moonpanel.Entities or= {}
 

@@ -302,6 +302,12 @@ ENT.SetupDataClient = (data) =>
 
     defs = Moonpanel.DefaultColors
     
+    newColors = {}
+    for key, color in pairs @tileData.Colors
+        newColors[key] = Color color.r, color.g, color.b, color.a or 255
+    
+    @tileData.Colors = newColors
+
     @colors            = {}
     @colors.background = @tileData.Colors.Background or defs.Background
     @colors.untraced   = @tileData.Colors.Untraced or defs.Untraced
@@ -365,20 +371,35 @@ ENT.DrawBackground = () =>
 
     cellsW = @tileData.Tile.Width
     cellsH = @tileData.Tile.Height
+    barWidth = @calculatedDimensions.barWidth
+    barLength = @calculatedDimensions.barLength
+
+    surface.SetDrawColor @colors.untraced
+    draw.NoTexture!
+    render.SetColorMaterial!
+
+    for _, connection in pairs @pathMapConnections
+        nodeA = connection.to
+        nodeB = connection.from
+
+        if not nodeA.break
+            Moonpanel.render.drawCircle nodeA.screenX, nodeA.screenY, (nodeA.clickable and barWidth * 1.25 or barWidth / 2), @colors.untraced
+        
+        if not nodeB.break
+            Moonpanel.render.drawCircle nodeB.screenX, nodeB.screenY, (nodeB.clickable and barWidth * 1.25 or barWidth / 2), @colors.untraced
+        
+        length = nil
+        if nodeA.break
+            length = barWidth / 2 + math.sqrt (nodeA.screenY - nodeB.screenY)^2 + (nodeA.screenX - nodeB.screenX)^2
+
+        Moonpanel.render.drawThickLine nodeA.screenX, nodeA.screenY, 
+            nodeB.screenX, nodeB.screenY, barWidth + 0.5, length
 
     for j = 1, cellsH + 1
         for i = 1, cellsW + 1
             toRender = {}
             if i <= cellsW and j <= cellsH
                 toRender[#toRender + 1] = @elements.cells[j][i]
-
-            if i <= cellsW and j <= cellsH + 1
-                toRender[#toRender + 1] = @elements.hpaths[j][i]
-
-            if i <= cellsW + 1 and j <= cellsH
-                toRender[#toRender + 1] = @elements.vpaths[j][i]
-
-            toRender[#toRender + 1] = @elements.intersections[j][i]
             
             for _, obj in pairs toRender
                 if obj and not (obj.entity and obj.entity.overridesRender)
@@ -435,7 +456,7 @@ ENT.DrawTrace = () =>
     nodeStacks = @pathFinder.nodeStacks
     cursors = @pathFinder.cursors
 
-    surface.SetDrawColor Color 255, 255, 255, 255
+    surface.SetDrawColor @colors.traced
     if nodeStacks
         barWidth = @calculatedDimensions.barWidth
         barLength = @calculatedDimensions.barLength
@@ -443,7 +464,7 @@ ENT.DrawTrace = () =>
 
         for stackId, stack in pairs nodeStacks 
             for k, v in pairs stack
-                Moonpanel.render.drawCircle v.screenX, v.screenY, ((k == 1) and barWidth * 1.25 or barWidth / 2)
+                Moonpanel.render.drawCircle v.screenX, v.screenY, ((k == 1) and barWidth * 1.25 or barWidth / 2), @colors.traced
 
                 if k > 1
                     prev = stack[k - 1]
@@ -453,7 +474,7 @@ ENT.DrawTrace = () =>
             for stackid, cur in pairs cursors
                 stack = nodeStacks[stackid]
                 last = stack[#stack]
-                Moonpanel.render.drawCircle cur.x, cur.y, barWidth / 2
+                Moonpanel.render.drawCircle cur.x, cur.y, barWidth / 2, @colors.traced
                 Moonpanel.render.drawThickLine cur.x, cur.y, last.screenX, last.screenY, barWidth + 0.5
 
 ENT.DrawRipple = () =>

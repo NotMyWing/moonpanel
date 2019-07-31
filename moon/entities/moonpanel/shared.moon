@@ -65,6 +65,17 @@ ENT.BuildPathMap = () =>
             vpath = @elements.vpaths[j][i]
             vpath\populatePathMap @pathMap
 
+    @pathMapConnections = {}
+    memo = {}
+    for _, nodeA in pairs @pathMap
+        memo[nodeA] = true
+        for _, nodeB in pairs nodeA.neighbors
+            if not memo[nodeB]
+                @pathMapConnections[#@pathMapConnections + 1] = {
+                    from: nodeA
+                    to: nodeB
+                }            
+
 ENT.SetupData = (data) =>
     elementClasses = Moonpanel.Elements
     if CLIENT

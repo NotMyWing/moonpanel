@@ -120,7 +120,7 @@ class Moonpanel.PathFinder
                         maxDotVector = dotVector
                         maxNode = to
 
-                if not to.lowPriority and mDot >= vecLength
+                if not to.break and mDot >= vecLength
                     if to ~= nodeStack[1] and to == nodeStack[#nodeStack - 1]
                         if @symmetry
                             table.insert toRemove, #nodeStack
@@ -143,7 +143,7 @@ class Moonpanel.PathFinder
                 nodeCursor.x = nodeStack[#nodeStack].screenX
                 nodeCursor.y = nodeStack[#nodeStack].screenY
 
-            if maxNode and not maxNode.lowPriority and maxNode == nodeStack[#nodeStack - 1]
+            if maxNode and not maxNode.break and maxNode == nodeStack[#nodeStack - 1]
                 if @symmetry
                     table.insert toRemove, #nodeStack
                 else

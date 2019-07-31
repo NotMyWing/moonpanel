@@ -336,9 +336,9 @@ Moonpanel.render.drawTexturedRect = (x, y, w, h, color) ->
     makeQuad x, y, w, h
     render.DrawQuad quad_v1, quad_v2, quad_v3, quad_v4, color
 
-Moonpanel.render.drawThickLine = (x1, y1, x2, y2, width) ->
+Moonpanel.render.drawThickLine = (x1, y1, x2, y2, width, dist) ->
     angle = math.Round math.deg math.atan2 (y2 - y1), (x2 - x1)
-    dist = math.sqrt (y2 - y1)^2 + (x2 - x1)^2
+    dist or= math.sqrt (y2 - y1)^2 + (x2 - x1)^2
 
     matrix = Matrix!
     matrix\Translate Vector x2, y2, 0
@@ -351,9 +351,9 @@ Moonpanel.render.drawThickLine = (x1, y1, x2, y2, width) ->
 
 circ = Material "moonpanel/circ128.png"
 
-Moonpanel.render.drawCircle = (x, y, r) ->
+Moonpanel.render.drawCircle = (x, y, r, color) ->
     render.SetMaterial circ
-    Moonpanel.render.drawTexturedRect x - r, y - r, r * 2, r * 2
+    Moonpanel.render.drawTexturedRect x - r, y - r, r * 2, r * 2, color
     render.SetColorMaterial!
 
 Moonpanel.render.createRipple = (x, y, rad, framecount = 100) ->

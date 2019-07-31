@@ -49,7 +49,7 @@ class VBroken extends Moonpanel.BaseEntity
                 y: topNode.y + 0.25
                 screenX: topNode.screenX
                 screenY: topNode.screenY + height
-                lowPriority: true
+                break: true
                 neighbors: { topNode }
             }
 
@@ -62,7 +62,7 @@ class VBroken extends Moonpanel.BaseEntity
                 y: bottomNode.y - 0.25
                 screenX: bottomNode.screenX
                 screenY: bottomNode.screenY - height
-                lowPriority: true
+                break: true
                 neighbors: { bottomNode }
             }
 
@@ -110,7 +110,7 @@ class HBroken extends Moonpanel.BaseEntity
                 y: leftNode.y
                 screenX: leftNode.screenX + width
                 screenY: leftNode.screenY
-                lowPriority: true
+                break: true
                 neighbors: { leftNode }
             }
             table.insert leftNode.neighbors, nodeA
@@ -122,7 +122,7 @@ class HBroken extends Moonpanel.BaseEntity
                 y: rightNode.y
                 screenX: rightNode.screenX - width
                 screenY: rightNode.screenY
-                lowPriority: true
+                break: true
                 neighbors: { rightNode }
             }
             table.insert rightNode.neighbors, nodeB

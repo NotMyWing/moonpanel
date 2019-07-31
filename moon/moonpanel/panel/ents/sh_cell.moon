@@ -21,7 +21,6 @@ class Color extends Moonpanel.BaseEntity
             surface.DrawTexturedRect bounds.x, bounds.y, bounds.width, bounds.height
             draw.NoTexture!
 
-
 class Sun extends Moonpanel.BaseEntity
     new: (parent, defs, ...) =>
         super parent, defs, ...

@@ -61,7 +61,10 @@ unitVector = (angle) ->
 
 class Exit extends Moonpanel.BaseEntity
     background: true
-    getAngle: (x, y, w, h) =>
+    getAngle: =>
+        return @__angle
+
+    calculateAngle: =>
         @__angle or= do
             invis = Moonpanel.EntityTypes.Invisible
 
@@ -74,6 +77,11 @@ class Exit extends Moonpanel.BaseEntity
             right  = right  and not (right.entity  and right.entity.type  == invis) and right
             top    = top    and not (top.entity    and top.entity.type    == invis) and top
             bottom = bottom and not (bottom.entity and bottom.entity.type == invis) and bottom
+
+            @overridesRender = ((left and 1 or 0) +
+                (right and 1 or 0) +
+                (top and 1 or 0) +
+                (bottom and 1 or 0)) == 1
 
             -- Corner cases.
             if top and right and not bottom and not left
@@ -105,16 +113,16 @@ class Exit extends Moonpanel.BaseEntity
                 return unitVector 90
 
             -- Inside-out cases.
-            if y <= (h / 2)  and x ~= 1 and x ~= w
+            if y <= (h / 2) --and x ~= 1 and x ~= w
                 return unitVector 180
 
-            if y > (h / 2) and x ~= 1 and x ~= w
+            if y > (h / 2) --and x ~= 1 and x ~= w
                 return unitVector 0
 
-            if x <= (w / 2) and y ~= 1 and y ~= h
+            if x <= (w / 2) --and y ~= 1 and y ~= h
                 return unitVector 270
 
-            if x > (w / 2) and y ~= 1 and y ~= h
+            if x > (w / 2) --and y ~= 1 and y ~= h
                 return unitVector 90
 
             -- The rest.
@@ -130,13 +138,10 @@ class Exit extends Moonpanel.BaseEntity
             if not right
                 return unitVector 270
 
-            return -1
-
-        if @__angle ~= -1
-            return @__angle
-
     new: (parent, defs, ...) =>
         super parent, defs, ...
+
+        @calculateAngle!
 
         if CLIENT
             dir = @getAngle!
@@ -186,6 +191,8 @@ class Exit extends Moonpanel.BaseEntity
             Moonpanel.render.drawTexturedRect bounds.x + bounds.width * dir.x, bounds.y + bounds.height * dir.y, 
                 bounds.width, bounds.height, @parent.tile.colors.untraced
             render.SetColorMaterial!
+
+            surface.SetDrawColor Color 255, 0, 0
 
             if x ~=0 and y == 0 or y ~= 0 and x == 0
                 x = (dir.x == -1 and -1 or 0) * bounds.width * 0.5

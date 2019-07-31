@@ -46,9 +46,6 @@ gradient = (startColor, endColor, percentFade) ->
         (diffBlue * percentFade) + startColor.b,
         (diffAlpha * percentFade) + startColor.a
 
-_err = Color 255, 0, 0, 255
-_errAlt = Color 0, 0, 0, 255
-
 ENT.PanelInit = () =>
     index = tostring @EntIndex!
     @rendertargets = {
@@ -75,6 +72,9 @@ ENT.PanelInit = () =>
     Moonpanel\requestData @
     @__nextSyncAttempt = CurTime! + RESYNC_ATTEMPT_TIME
     @__powerStatePct = 0
+
+_err = Color 255, 0, 0, 255
+_errAlt = Color 0, 0, 0, 255
 
 ENT.ErrorifyColor = (color, alternate) =>
     pctMod = 1
@@ -350,9 +350,10 @@ ENT.SetupDataClient = (data) =>
                 stack[#stack + 1] = @pathFinder.nodeMap[i]
 
     timer.Simple 0.5, () ->
-        @NW_OnPowered @GetNW2Bool("TheMP Powered")
-        @SetNW2VarProxy "TheMP Powered", (_, _, _, state) ->
-            @NW_OnPowered state
+        if IsValid @
+            @NW_OnPowered @GetNW2Bool("TheMP Powered")
+            @SetNW2VarProxy "TheMP Powered", (_, _, _, state) ->
+                @NW_OnPowered state
 
     @rendertargets.background.dirty = true
     @rendertargets.foreground.dirty = true
@@ -414,9 +415,9 @@ ENT.DrawForeground = () =>
 
 ENT.DrawTrace = () =>
     Clear 0, 0, 0, 0
-    ClearDepth!
+    ClearDepth! 
 
-    if true
+    if false
         for _, node in pairs @pathMap
             w, h = 32, 32
             if node.clickable
@@ -471,9 +472,10 @@ renderFunc = (x, y, w, h) ->
     surface.DrawTexturedRect x, y, w, h
 
 ENT.DrawLoading = (powerStatePct) =>
-    surface.SetDrawColor ColorAlpha COLOR_BLACK, (255 * powerStatePct)
     draw.NoTexture!
-    surface.DrawRect 0, 0, @ScreenSize, @ScreenSize
+    if @colors.background.a ~= 0
+        surface.SetDrawColor ColorAlpha COLOR_BLACK, (255 * powerStatePct)
+        surface.DrawRect 0, 0, @ScreenSize, @ScreenSize
 
     if not @synchronized
         color = Color 255, 255, 255
@@ -522,7 +524,7 @@ ENT.RenderPanel = () =>
     surface.DrawTexturedRect 0, 0, @ScreenSize, @ScreenSize
 
     if shouldRender
-        SetDrawColor 255, 255, 255, 255
+        SetDrawColor 255, 255, 255, 255 * @__powerStatePct
         setRTTexture @rendertargets.background.rt
         renderFunc 0, 0, @ScreenSize, @ScreenSize
 

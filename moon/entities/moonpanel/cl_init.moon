@@ -1,4 +1,4 @@
-include("shared.lua")
+include "shared.lua"
 include "cl_panel.lua"
 
 ENT.Initialize = () =>

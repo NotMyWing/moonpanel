@@ -1790,7 +1790,10 @@ editor.Deserialize = (input) =>
 
     @comboBox_widthCombo\SetText newData.w
     @comboBox_heightCombo\SetText newData.h
-    @comboBox_symmetryCombo\SetText @comboBox_symmetryCombo\GetOptionTextByData newData.symmetry
+
+    symmetry = @comboBox_symmetryCombo\GetOptionTextByData newData.symmetry
+    if type(symmetry) == "string"
+        @comboBox_symmetryCombo\SetText symmetry
 
     @panel_colorfulSymmetry\SetVisible input_tile.Symmetry ~= 0
     @panel_colorfulSymmetry\SetTall (input_tile.Symmetry and input_tile.Symmetry ~= 0) and @panel_colorfulSymmetry.InitialTall or 0

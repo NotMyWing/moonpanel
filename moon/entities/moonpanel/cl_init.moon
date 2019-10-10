@@ -60,6 +60,17 @@ writez = Material("engine/writez")
 renderFunc = (self) ->
     self\RenderPanel!
 
+translucentMat = CreateMaterial "TheMP translucent", "UnlitGeneric", {
+    ["$basetexture"]: "moonpanel/translucent",
+    ["$nolod"]: 1,
+    ["$model"]: 1,
+    ["$nocull"]: 1
+    ["$translucent"]: 1
+}
+
+ENT.Draw = () =>
+    @DrawModel!
+
 ENT.DrawTranslucent = () =>
     if not @ScreenMatrix
         return
@@ -79,7 +90,7 @@ ENT.DrawTranslucent = () =>
     render.SetStencilReferenceValue 1
 
     --First draw a quad that defines the visible area
-    render.SetColorMaterial!
+    render.SetMaterial translucentMat
     render.DrawQuad unpack @ScreenQuad
 
     render.SetStencilCompareFunction STENCILCOMPARISONFUNCTION_EQUAL
@@ -370,18 +381,6 @@ ENT.Monitor_Offsets = {
         y1:	-57.647,
         y2:	57.647,
         z:	1,
-    },
-    ["models/props/cs_militia/reload_bullet_tray.mdl"]: {
-        Name:	"Tray",
-        RS:	0,
-        RatioX:	0.6,
-        offset:	Vector(0, 0, 0.8),
-        rot:	Angle(0, 90, 180),
-        x1:	0,
-        x2:	100,
-        y1:	0,
-        y2:	60,
-        z:	0,
     },
     ["models/props/cs_office/computer_monitor.mdl"]: {
         Name:	"LCD Monitor (4:3)",

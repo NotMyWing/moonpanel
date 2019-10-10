@@ -144,7 +144,6 @@ ENT.ClientTickrateThink = () =>
             @__scintPower *= 0.75
             @__firstscint = false
 
-
 ENT.NW_OnPowered = (state) =>
     if @synchronized
         if state
@@ -249,15 +248,16 @@ ENT.PuzzleFinish = (data) =>
                 @grayOut = _grayOut
                 @grayOutStart = CurTime!
                 @pen = _oldPen
+
                 if not data.sync
                     @EmitSound SOUND_PANEL_ERASER
                     @EmitSound SOUND_PANEL_SUCCESS
 
                     if @colors.traced ~= @colors.finished
                         @PenInterpolate 0.01, @pen, @colors.finished
-
                 else
                     @pen = ColorAlpha @colors.finished, @colors.finished.a or 255
+
         else
             if not data.sync
                 @EmitSound SOUND_PANEL_SUCCESS
@@ -280,6 +280,7 @@ ENT.PuzzleFinish = (data) =>
 
                 @PenFade 0.05, Color err.r, err.g, err.b
                 @EmitSound SOUND_PANEL_FAILURE
+
         else
             @PenFade 0.05, Color err.r, err.g, err.b
             if not data.sync
@@ -333,6 +334,7 @@ ENT.SetupDataClient = (data) =>
             if int and int.entity
                 if int.entity.type == Moonpanel.EntityTypes.Start
                     @startRipples[#@startRipples + 1] = int.entity.ripple
+
                 if int.entity.type == Moonpanel.EntityTypes.End
                     @endRipples[#@endRipples + 1] = int.entity.ripple
 
@@ -378,6 +380,23 @@ ENT.DrawBackground = () =>
     draw.NoTexture!
     render.SetColorMaterial!
 
+    for j = 1, cellsH + 1
+        for i = 1, cellsW + 1
+            toRender = {}
+            if i <= cellsW and j <= cellsH
+                toRender[#toRender + 1] = @elements.cells[j][i]
+            
+            for _, obj in pairs toRender
+                if obj and not (obj.entity and obj.entity.overridesRender)
+                    obj\render!
+
+                if obj and obj.entity and obj.entity.background
+                    obj\renderEntity!
+
+    surface.SetDrawColor @colors.untraced
+    draw.NoTexture!
+    render.SetColorMaterial!
+
     for _, connection in pairs @pathMapConnections
         nodeA = connection.to
         nodeB = connection.from
@@ -394,18 +413,6 @@ ENT.DrawBackground = () =>
 
         Moonpanel.render.drawThickLine nodeA.screenX, nodeA.screenY, 
             nodeB.screenX, nodeB.screenY, barWidth + 0.5, length
-
-    for j = 1, cellsH + 1
-        for i = 1, cellsW + 1
-            toRender = {}
-            if i <= cellsW and j <= cellsH
-                toRender[#toRender + 1] = @elements.cells[j][i]
-            
-            for _, obj in pairs toRender
-                if obj and not (obj.entity and obj.entity.overridesRender)
-                    obj\render!
-                if obj and obj.entity and obj.entity.background
-                    obj\renderEntity!
     
 ENT.DrawForeground = () =>
     Clear 0, 0, 0, 0
@@ -432,7 +439,6 @@ ENT.DrawForeground = () =>
         draw.NoTexture!
         render.SetColorMaterial!
         entity\render!
-
 
 ENT.DrawTrace = () =>
     Clear 0, 0, 0, 0
@@ -494,7 +500,7 @@ renderFunc = (x, y, w, h) ->
 
 ENT.DrawLoading = (powerStatePct) =>
     draw.NoTexture!
-    if @colors.background.a ~= 0
+    if not @colors or @colors.background.a ~= 0
         surface.SetDrawColor ColorAlpha COLOR_BLACK, (255 * powerStatePct)
         surface.DrawRect 0, 0, @ScreenSize, @ScreenSize
 

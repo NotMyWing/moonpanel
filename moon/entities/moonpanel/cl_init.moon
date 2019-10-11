@@ -9,6 +9,12 @@ ENT.Initialize = () =>
         mins = @OBBMins!
         maxs = @OBBMaxs!
         size = maxs-mins
+
+        if size.x > size.y
+            aux = size.y
+            size.y = size.x
+            size.x = aux
+
         info = {
             Name: ""
             RS: ((math.max(size.x, size.y) - 1) / @ScreenSize) * 2
@@ -35,25 +41,15 @@ ENT.Initialize = () =>
     @Scale = info.RS / 2
     @Origin = info.offset
 
-    w, h = @ScreenSize, @ScreenSize
+    w, maxh, h = @ScreenSize, @ScreenSize, @ScreenSize / @Aspect
     @ScreenQuad = {
-        Vector(0,0,0)
-        Vector(w,0,0)
-        Vector(w,h,0)
-        Vector(0,h,0)
-        Color(0, 0, 0, 0)
+        Vector 0, maxh/2 - h/2, 0
+        Vector w, maxh/2 - h/2, 0
+        Vector w, maxh/2 + h/2, 0
+        Vector 0, maxh/2 + h/2, 0
     }
 
     @PanelInit!
-
-ENT.SetBackgroundColor = (r, g, b, a) =>
-    if type(r) ~= "number" and r.r
-        g = r.g
-        b = r.b
-        a = r.a
-        r = r.r
-
-    @ScreenQuad[5] = Color r, g, b, (math.max a, 1)
 
 writez = Material("engine/writez")
 
@@ -95,11 +91,6 @@ ENT.DrawTranslucent = () =>
 
     render.SetStencilCompareFunction STENCILCOMPARISONFUNCTION_EQUAL
     render.SetStencilTestMask 1
-
-    --Clear it to the clear color and clear depth as well
-    color = @ScreenQuad[5]
-    if color.a == 255
-        render.ClearBuffersObeyStencil color.r, color.g, color.b, color.a, true
 
     --Render the starfall stuff
     render.PushFilterMag TEXFILTER.ANISOTROPIC

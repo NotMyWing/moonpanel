@@ -47,6 +47,8 @@ ENT.Initialize = () =>
         Vector w, maxh/2 - h/2, 0
         Vector w, maxh/2 + h/2, 0
         Vector 0, maxh/2 + h/2, 0
+
+        Color 0, 0, 0, 0
     }
 
     @PanelInit!
@@ -92,6 +94,11 @@ ENT.DrawTranslucent = () =>
     render.SetStencilCompareFunction STENCILCOMPARISONFUNCTION_EQUAL
     render.SetStencilTestMask 1
 
+    --Clear it to the clear color and clear depth as well	
+    color = @ScreenQuad[5]	
+    if color.a == 255	
+        render.ClearBuffersObeyStencil color.r, color.g, color.b, color.a, true
+
     --Render the starfall stuff
     render.PushFilterMag TEXFILTER.ANISOTROPIC
     render.PushFilterMin TEXFILTER.ANISOTROPIC
@@ -108,6 +115,15 @@ ENT.DrawTranslucent = () =>
     render.DrawQuad unpack @ScreenQuad
 
     cam.PopModelMatrix!
+
+ENT.SetBackgroundColor = (r, g, b, a) =>	
+    if type(r) ~= "number" and r.r	
+        g = r.g	
+        b = r.b	
+        a = r.a	
+        r = r.r	
+
+    @ScreenQuad[5] = Color r, g, b, (math.max a, 1)
 
 ENT.GetCursorPos = () =>
     ply = LocalPlayer()

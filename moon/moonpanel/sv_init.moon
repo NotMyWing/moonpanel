@@ -1,4 +1,8 @@
+include "moonpanel/sv_net.lua"
+include "moonpanel/sv_hooks.lua"
+
 AddCSLuaFile "moonpanel/cl_init.lua"
+AddCSLuaFile "moonpanel/cl_net.lua"
 AddCSLuaFile "moonpanel/shared.lua"
 
 AddCSLuaFile "moonpanel/panel/sh_pathfinder.lua"
@@ -75,43 +79,52 @@ resource.AddSingleFile "sound/moonpanel/panel_success.ogg"
 resource.AddSingleFile "sound/moonpanel/powered_on.ogg"
 resource.AddSingleFile "sound/moonpanel/powered_off.ogg"
 
-Moonpanel.setFocused = (player, state, force) =>
-    if state and (
-        player\KeyDown(IN_RUN) or 
-        player\KeyDown(IN_DUCK) or
-        player\KeyDown(IN_ATTACK) or
-        player\KeyDown(IN_ATTACK2) or
-        player\KeyDown(IN_ALT1) or
-        player\KeyDown(IN_ALT2) or
-        player\KeyDown(IN_WEAPON1) or
-        player\KeyDown(IN_WEAPON2) or
-        player\KeyDown(IN_BULLRUSH) or
-        player\KeyDown(IN_SPEED) or
-        player\KeyDown(IN_WALK)
-    ) 
+keysToIgnore = {
+    IN_RUN
+    IN_DUCK
+    IN_ATTACK
+    IN_ATTACK2
+    IN_ALT1
+    IN_ALT2
+    IN_WEAPON1
+    IN_WEAPON2
+    IN_BULLRUSH
+    IN_SPEED
+    IN_WALK
+}
+
+isIgnoredKeyPressed = (ply) ->
+    for _, key in pairs keysToIgnore
+        if ply\KeyDown key
+            return true
+
+    return false
+
+Moonpanel.setFocused = (ply, state, force) =>
+    if not IsValid(ply) or (state and isIgnoredKeyPressed ply)
         return
 
-    time = player.themp_lastfocuschange or 0
+    time = ply.themp_lastfocuschange or 0
 
-    if force or (CurTime! >= time and state ~= player\GetNW2Bool "TheMP Focused")
-        if (state ~= player\GetNW2Bool "TheMP Focused")
+    if force or (CurTime! >= time and state ~= ply\GetNW2Bool "TheMP Focused")
+        if (state ~= ply\GetNW2Bool "TheMP Focused")
             if state
-                weap = player\GetActiveWeapon!
+                weap = ply\GetActiveWeapon!
                 if IsValid weap
-                    player.themp_oldweapon = weap\GetClass!
-                if not player\HasWeapon "none"
-                    player\Give "none"
-                    player.themp_givenhands = true
+                    ply.themp_oldweapon = weap\GetClass!
+                if not ply\HasWeapon "none"
+                    ply\Give "none"
+                    ply.themp_givenhands = true
             else
-                player\SetNW2Entity "TheMP Controlled Panel", nil
-                player\SelectWeapon player.themp_oldweapon or "none"
-                if player.themp_givenhands
-                    player.themp_givenhands = nil
-                    player\StripWeapon "none"
+                ply\SetNW2Entity "TheMP Controlled Panel", nil
+                ply\SelectWeapon ply.themp_oldweapon or "none"
+                if ply.themp_givenhands
+                    ply.themp_givenhands = nil
+                    ply\StripWeapon "none"
 
-        player\SetNW2Bool "TheMP Focused", state
+        ply\SetNW2Bool "TheMP Focused", state
 
-        player.themp_lastfocuschange = CurTime! + 0.75
+        ply.themp_lastfocuschange = CurTime! + 0.75
 
 Moonpanel.isFocused = (ply) =>
     return ply\GetNW2Bool "TheMP Focused"
@@ -137,204 +150,6 @@ Moonpanel.requestControl = (ply, ent, x, y, force) =>
             if ent\StartPuzzle ply, x, y
                 ply\SetNW2Entity "TheMP Controlled Panel", ent
 
-Moonpanel.sendNotify = (ply, message, sound, type) =>
-    net.Start "TheMP Notify"
-    net.WriteString message
-    net.WriteString sound
-    net.WriteUInt type, 8
-    net.Send ply
-
-Moonpanel.broadcastFinish = (panel, data) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.PuzzleFinish, 8
-    net.WriteEntity panel
-
-    raw = util.Compress util.TableToJSON data
-    net.WriteUInt #raw, 32
-    net.WriteData raw, #raw
-
-    net.Broadcast!
-
-Moonpanel.broadcastStart = (panel, node, symmNode) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.PuzzleStart, 8
-    net.WriteEntity panel
-
-    net.WriteFloat node.x
-    net.WriteFloat node.y
-    net.WriteBool symmNode and true or false
-
-    if symmNode
-        net.WriteFloat symmNode.x
-        net.WriteFloat symmNode.y
-    net.Broadcast!
-
-Moonpanel.broadcastNodeStacks = (ply, panel, nodeStacks, cursors) =>
-    net.Start "TheMP NodeStacks"
-    net.WriteEntity panel
-    net.WriteUInt #nodeStacks, 4
-    for _, stack in pairs nodeStacks
-        net.WriteUInt #stack, 10
-        for _, point in pairs stack
-            net.WriteUInt point.sx, 10
-            net.WriteUInt point.sy, 10
-
-    net.WriteUInt #cursors, 4
-    for _, cursor in pairs cursors
-        net.WriteUInt cursor.x, 10
-        net.WriteUInt cursor.y, 10
-
-    net.SendOmit ply
-
-Moonpanel.broadcastDeltas = (ply, panel, x, y) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.ApplyDeltas, 8
-    net.WriteEntity panel
-
-    x, y = math.Clamp(math.floor(x), -100, 100), math.Clamp(math.floor(y), -100, 100)
-    net.WriteInt x, 8
-    net.WriteInt y, 8
-    net.SendOmit ply
-
-Moonpanel.broadcastDesync = (panel) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.Desync, 8
-    net.WriteEntity panel
-    net.Broadcast!
-
-hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
-    tr = ply\GetEyeTrace!
-
-    if key == IN_USE
-        if not ply\GetNW2Bool "TheMP Focused"
-            timer.Simple 0, () ->
-                if tr and IsValid(tr.Entity) and tr.Entity.ApplyDeltas and not tr.Entity\IsPlayerHolding!
-                    Moonpanel\setFocused ply, true
-        else
-            Moonpanel\setFocused ply, false
-    if key == IN_ATTACK and (Moonpanel\isFocused ply) 
-        Moonpanel\requestControl ply, ply\GetNW2Entity("TheMP Controlled Panel"), x, y
-
-hook.Add "Think", "TheMP Think", () ->
-    for k, v in pairs player.GetAll!
-        panel = v\GetNW2Entity("TheMP Controlled Panel")
-
-        if not IsValid panel
-            v\SetNW2Entity("TheMP Controlled Panel", nil)
-
-        if IsValid(panel) and panel\GetNW2Entity("ActiveUser") ~= v
-            v\SetNW2Entity("TheMP Controlled Panel", nil)
-
-        if v\GetNW2Bool "TheMP Focused"
-            v\SelectWeapon "none"
-
-hook.Add "PostPlayerDeath", "TheMP PlayerDeath", (ply) ->
-    Moonpanel\setFocused ply, false, true
-
-hook.Add "PlayerSilentDeath", "TheMP PlayerDeath", (ply) ->
-    Moonpanel\setFocused ply, false, true
-
-net.Receive "TheMP Flow", (len, ply) ->
-    flowType = net.ReadUInt 8
-    
-    switch flowType
-        when Moonpanel.Flow.RequestControl
-            panel = net.ReadEntity!
-
-            x = net.ReadUInt 10
-            y = net.ReadUInt 10
-
-            Moonpanel\requestControl ply, panel, x, y
-
-        when Moonpanel.Flow.ApplyDeltas
-            panel = ply\GetNW2Entity "TheMP Controlled Panel"
-            if IsValid panel
-                x = net.ReadInt 8
-                y = net.ReadInt 8
-
-                panel\ApplyDeltas x, y
-
-        when Moonpanel.Flow.RequestData
-            panel = net.ReadEntity!
-            if not panel.pathFinder
-                return
-
-            data = {
-                tileData: panel.tileData
-                cursors: panel.pathFinder.cursors
-                lastSolution: panel.lastSolution
-            }
-
-            data.stacks = {}
-            for _, nodeStack in pairs panel.pathFinder.nodeStacks
-                stack = {}
-                data.stacks[#data.stacks + 1] = stack
-
-                for _, node in pairs nodeStack
-                    stack[#stack + 1] = panel.pathFinder.nodeIds[node]
-
-            raw = util.Compress util.TableToJSON data
-
-            net.Start "TheMP Flow"
-            net.WriteUInt Moonpanel.Flow.PanelData, 8
-
-            net.WriteEntity panel
-            net.WriteUInt #raw, 32
-            net.WriteData raw, #raw
-
-            net.Send ply
-
-net.Receive "TheMP EditorData", (len, ply) ->
-    pending = nil
-    pendingEditorData = Moonpanel.pendingEditorData
-
-    for k, v in pairs pendingEditorData
-        if v.player == ply
-            pending = v
-            break
-
-    if not pending
-        return
-
-    for i = 1, #pendingEditorData
-        if pendingEditorData[i] == pending
-            table.remove pendingEditorData, i
-            break
-
-    timer.Remove pending.timer
-
-    length = net.ReadUInt 32
-    raw = net.ReadData length
-    
-    data = util.JSONToTable((util.Decompress raw) or "{}") or {}
-    data = Moonpanel\sanitizeTileData data
-
-    pending.callback data
-
-Moonpanel.pendingEditorData = {}
-pendingEditorData = Moonpanel.pendingEditorData
-
-counter = 1
-Moonpanel.requestEditorConfig = (ply, callback, errorcallback) =>
-    pending = {
-        player: ply
-        callback: callback
-        timer: "TheMP RemovePending #{tostring counter}"
-    }
-    pendingEditorData[#pendingEditorData + 1] = pending
-
-    counter = (counter % 10000) + 1
-
-    net.Start "TheMP EditorData Req"
-    net.Send ply
-    
-    timer.Create pending.timer, 4, 1, () ->
-        errorcallback!
-        for i = 1, #pendingEditorData
-            if pendingEditorData[i] == pending
-                table.remove pendingEditorData, i
-                break
-
 sanitizeColor = (clr, template) ->
     clr or= {}
     out = {}
@@ -354,7 +169,8 @@ sanitizeColor = (clr, template) ->
     return Color out.r, out.g, out.b, out.a
 
 sanitizeNumber = (num, default) ->
-    return tonumber(num) and tonumber(num) or default
+    num = tonumber(num)
+    return num and num or default
 
 Moonpanel.sanitizeTileData = (input) =>
     input or= {}

@@ -221,6 +221,7 @@ Moonpanel.render.drawRipple = (ripple, frame, color) ->
 
     clr = ColorAlpha color, f.alpha
     surface.SetDrawColor clr
+
     Moonpanel.render.drawArc f.arc
 
 Moonpanel.render.precacheArc = (cx,cy,radius,thickness,startang,endang,roughness) ->
@@ -266,7 +267,7 @@ Moonpanel.render.precacheArc = (cx,cy,radius,thickness,startang,endang,roughness
 
     -- Triangulize the points.
     for tri=1,#inner*2 -- twice as many triangles as there are degrees.
-        p1,p2,p3
+        local p1,p2,p3
         p1 = outer[math.floor(tri/2)+1]
         p3 = inner[math.floor((tri+1)/2)+1]
         if tri%2 == 0 --if the number is even use outer.

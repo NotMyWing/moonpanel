@@ -63,7 +63,7 @@ ENT.PanelInit = () =>
             render: @DrawTrace
         }
         ripple: {
-            always: false
+            always: true
             rt: GetRenderTarget "TheMPRipple#{index}", @ScreenSize, @ScreenSize
             render: @DrawRipple
         }

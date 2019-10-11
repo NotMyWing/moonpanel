@@ -76,7 +76,7 @@ ENT.DrawTranslucent = () =>
     -- Draw screen here
     transform = @GetBoneMatrix(0) * @ScreenMatrix
     @Transform = transform
-    cam.PushModelMatrix(transform)
+    cam.PushModelMatrix transform
 
     render.ClearStencil!
     render.SetStencilEnable true
@@ -89,7 +89,7 @@ ENT.DrawTranslucent = () =>
 
     --First draw a quad that defines the visible area
     render.SetMaterial translucentMat
-    render.DrawQuad unpack @ScreenQuad
+    render.DrawQuad @ScreenQuad[1], @ScreenQuad[2], @ScreenQuad[3], @ScreenQuad[4]
 
     render.SetStencilCompareFunction STENCILCOMPARISONFUNCTION_EQUAL
     render.SetStencilTestMask 1
@@ -112,7 +112,7 @@ ENT.DrawTranslucent = () =>
 
     --Give the screen back its depth
     render.SetMaterial writez
-    render.DrawQuad unpack @ScreenQuad
+    render.DrawQuad @ScreenQuad[1], @ScreenQuad[2], @ScreenQuad[3], @ScreenQuad[4]
 
     cam.PopModelMatrix!
 

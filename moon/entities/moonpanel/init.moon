@@ -53,10 +53,6 @@ findPolySolutions = (polyos, maxArea, result, currentPoly = 1, solution = {}, cu
         findPolySolutions polyos, maxArea, result, currentPoly + 1, solution, currentArea
 
 ENT.PopulateWithPositions = (positions, id, poly, area) =>
-    -- Bit matrices are right-to-left.
-    -- Exact cover is normal Cartesian.
-    -- Nested matrices are Cartesian, but Y is reversed.
-    -- ...good god.
     for rotation = 0, poly.rotational and 3 or 0
         rotatedPoly = poly\rotate rotation
 
@@ -174,7 +170,8 @@ ENT.CheckSolution = (errors) =>
             for _, path in pairs paths
                 if not a.intersection or not b.intersection
                     return
-                elseif path\getClassName! == "HPath" and 
+
+                elseif path.type == Moonpanel.ObjectTypes.HPath and
                     (a.intersection == path\getLeft! and b.intersection == path\getRight!) or
                     (b.intersection == path\getLeft! and a.intersection == path\getRight!)
 
@@ -185,7 +182,7 @@ ENT.CheckSolution = (errors) =>
                     found = true
                     break
 
-                elseif path\getClassName! == "VPath" and
+                elseif path.type == Moonpanel.ObjectTypes.VPath and
                     (a.intersection == path\getTop! and b.intersection == path\getBottom!) or
                     (b.intersection == path\getTop! and a.intersection == path\getBottom!)
 
@@ -279,7 +276,7 @@ ENT.CheckSolution = (errors) =>
                 nextYSymbol.solutionData.inactive = true
                 table.remove ySymbols, nextYSymbolID
                 
-                if element.entity\getClassName! == "Y"
+                if element.entity.type == Moonpanel.EntityTypes.Eraser
                     for id, ySymbol in pairs ySymbols
                         if ySymbol == element
                             table.remove ySymbols, id
@@ -292,24 +289,20 @@ ENT.CheckSolution = (errors) =>
             redOut[element.type][element.y][element.x] = true
 
         for _, element in pairs area
-            if element.entity
-                if element.entity\getClassName! == "Y"
-                    table.insert ySymbols, element
+            if element.entity and element.entity.type == Moonpanel.EntityTypes.Eraser
+                table.insert ySymbols, element
 
         for _, element in pairs area
-            if element.entity
-                if not element.entity\checkSolution areaData
-                    markAsError element
+            if element.entity and not element.entity\checkSolution areaData
+                markAsError element
                         
-        -- Check colors! The plain old functional way.
         groups = {}
         for i = 1, #Moonpanel.Colors
             groups[i] = {}
 
         for _, element in pairs area
-            if element.entity
-                if element.entity\getClassName! == "Color"
-                    table.insert groups[element.entity.attributes.color], element
+            if element.entity and element.entity.type == Moonpanel.EntityTypes.Color
+                table.insert groups[element.entity.attributes.color], element
 
         table.sort groups, (a, b) ->
             #a > #b
@@ -319,11 +312,10 @@ ENT.CheckSolution = (errors) =>
                 for _, element in pairs groups[i]
                     markAsError element
 
-        -- pepehands
         positivePolyos = {}
         negativePolyos = {}
         for _, element in pairs area
-            if element.entity and element.entity\getClassName! == "Polyomino"
+            if element.entity and element.entity.type == Moonpanel.EntityTypes.Polyomino
                 table.insert positivePolyos, element.entity.attributes.shape
                 element.entity.attributes.shape.element = element
 
@@ -345,7 +337,7 @@ ENT.CheckSolution = (errors) =>
                     if not miny or v.y < miny
                         miny = v.y
                     
-                    if v.entity and v.entity\getClassName! == "Polyomino"
+                    if v.entity and v.entity.type == Moonpanel.EntityTypes.Polyomino
                         countPositives += v.entity.attributes.shape\countOnes!
 
             areaMatrix = Moonpanel.BitMatrix maxx-minx + 1, maxy-miny + 1
@@ -359,20 +351,20 @@ ENT.CheckSolution = (errors) =>
             
             if countPositives < countNegatives
                 for _, v in pairs area
-                    if v.entity and v.entity\getClassName! == "Polyomino"
+                    if v.entity and v.entity.type == Moonpanel.EntityTypes.Polyomino
                         markAsError v
 
             elseif countPositives >= countNegatives
                 if #positivePolyos == 1
                     if not @CheckPolySolution positivePolyos, areaMatrix  
                         markAsError positivePolyos[1].element
-                shouldDepthTest = true
+                shouldTestCombinations = true
 
                 if countPositives == countNegatives
                     if @CheckPolySolution positivePolyos, areaMatrix
-                        shouldDepthTest = false
+                        shouldTestCombinations = false
 
-                if shouldDepthTest
+                if shouldTestCombinations
                     polyCombinations = {} 
                     findPolySolutions positivePolyos, countNegatives, polyCombinations
 
@@ -405,7 +397,7 @@ ENT.CheckSolution = (errors) =>
         -- but... well, this is just easier overall.
         checkSuns = () ->
             for _, element in pairs area
-                if not element.solutionData.inactive and element.entity and element.entity\getClassName! == "Sun"
+                if not element.solutionData.inactive and element.entity and element.entity.type == Moonpanel.EntityTypes.Sun
                     count = 1
                     for _, otherElement in pairs area
                         if otherElement.type == Moonpanel.ObjectTypes.Cell and

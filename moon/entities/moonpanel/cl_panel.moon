@@ -168,6 +168,9 @@ ENT.PuzzleStart = (nodeA, nodeB) =>
     @__nextscint = CurTime! + 0.5
     @__firstscint = true
     @__scintPower = 1
+
+    barWidth = @calculatedDimensions.barWidth
+    @__penSizeModifier = (barWidth / 2) / (barWidth * 1.25)
     
     @CleanUp!
 
@@ -187,7 +190,8 @@ ENT.PenFade = (interval, clr, delta = 5) =>
         @pen.a -= delta
         @shouldRepaintTrace = true
 
-ENT.PenInterpolate = (interval, _from, to, delta = 0.015) =>
+ENT.PenInterpolate = (interval, _from, to, callback) =>
+    delta = 0.15
     @__penInterp = 0
 
     timer.Create @GetTimerName("penFade"), interval, 0, () ->
@@ -201,10 +205,19 @@ ENT.PenInterpolate = (interval, _from, to, delta = 0.015) =>
 
         if @__penInterp == 1
             timer.Remove @GetTimerName "penFade"
+
+            if callback
+                callback!
+
             return
 
         @__penInterp += delta
         @shouldRepaintTrace = true
+
+white = Color 255, 255, 255, 255
+ENT.PenInterpolateFinished = () =>
+    @PenInterpolate 0.01, @pen, white, () ->
+        @PenInterpolate 0.01, @pen, @colors.finished
 
 ENT.PuzzleFinish = (data) =>
     success = data.success or false
@@ -247,22 +260,21 @@ ENT.PuzzleFinish = (data) =>
                 @redOut = nil
                 @grayOut = _grayOut
                 @grayOutStart = CurTime!
-                @pen = _oldPen
 
                 if not data.sync
                     @EmitSound SOUND_PANEL_ERASER
                     @EmitSound SOUND_PANEL_SUCCESS
 
-                    if @colors.traced ~= @colors.finished
-                        @PenInterpolate 0.01, @pen, @colors.finished
+                    if @pen ~= @colors.finished
+                        @PenInterpolateFinished!
                 else
                     @pen = ColorAlpha @colors.finished, @colors.finished.a or 255
 
         else
             if not data.sync
                 @EmitSound SOUND_PANEL_SUCCESS
-                if @colors.traced ~= @colors.finished
-                    @PenInterpolate 0.01, @pen, @colors.finished
+                if @pen ~= @colors.finished
+                    @PenInterpolateFinished!
             else
                 @pen = ColorAlpha @colors.finished, @colors.finished.a or 255
 
@@ -460,17 +472,26 @@ ENT.DrawTrace = () =>
                 surface.DrawLine node.screenX, node.screenY, neighbor.screenX, neighbor.screenY
 
     nodeStacks = @pathFinder.nodeStacks
-    cursors = @pathFinder.cursors
+    cursors = @pathFinder.cursors    
 
     surface.SetDrawColor @colors.traced
     if nodeStacks
+        activeUser = @GetNW2Entity "ActiveUser"
+        if IsValid activeUser
+            @__penSizeModifier += math.max 0.001, RealFrameTime! * 5
+            if @__penSizeModifier > 1
+                @__penSizeModifier = 1
+            elseif @__penSizeModifier < 1
+                @rendertargets.trace.dirty = true    
+
         barWidth = @calculatedDimensions.barWidth
         barLength = @calculatedDimensions.barLength
         symmVector = nil
 
         for stackId, stack in pairs nodeStacks 
             for k, v in pairs stack
-                Moonpanel.render.drawCircle v.screenX, v.screenY, ((k == 1) and barWidth * 1.25 or barWidth / 2), @colors.traced
+                Moonpanel.render.drawCircle v.screenX, v.screenY,
+                    ((k == 1) and barWidth * 1.25 * @__penSizeModifier or barWidth / 2), @colors.traced
 
                 if k > 1
                     prev = stack[k - 1]

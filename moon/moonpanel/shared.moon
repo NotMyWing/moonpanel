@@ -125,8 +125,8 @@ Moonpanel.Colors = {
 Moonpanel.DefaultColors = {
     Background: Color 80, 77, 255, 255
     Untraced: Color 40, 22, 186
-    Traced: Color 255, 255, 255, 255
-    Finished: Color 255, 255, 255, 255
+    Traced: Color 200, 235, 255, 255
+    Finished: Color 110, 170, 255, 255
     Vignette: Color 255, 255, 255, 200
     Errored: Color 0, 0, 0, 255
     Cell: Color 0, 0, 0, 0

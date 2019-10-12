@@ -59,7 +59,7 @@ renderFunc = (self) ->
     self\RenderPanel!
 
 translucentMat = CreateMaterial "TheMP translucent", "UnlitGeneric", {
-    ["$basetexture"]: "moonpanel/translucent",
+    ["$basetexture"]: "moonpanel/panel/translucent",
     ["$nolod"]: 1,
     ["$model"]: 1,
     ["$nocull"]: 1

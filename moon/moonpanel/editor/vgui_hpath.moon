@@ -6,7 +6,7 @@ hpath.Init = () =>
     @type = Moonpanel.ObjectTypes.HPath
 
 types = Moonpanel.EntityTypes
-hexagon = Material "moonpanel/hexagon.png"
+hexagon = Material "moonpanel/common/hexagon.png"
 
 hpath.Paint = (w, h) =>
     surface.SetDrawColor @panel.data.colors.untraced or Moonpanel.DefaultColors.Untraced

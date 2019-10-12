@@ -13,11 +13,11 @@ SOUND_FOCUS_OFF = Sound "moonpanel/focus_off.ogg"
 FOCUSING_TIME = 0.6
 
 export MOONPANEL_ENTITY_GRAPHICS = {
-    [Moonpanel.EntityTypes.Hexagon]: (Material "moonpanel/hexagon.png", "noclamp smooth")
-    [Moonpanel.EntityTypes.Sun]: (Material "moonpanel/sun.png", "noclamp smooth")
-    [Moonpanel.EntityTypes.Triangle]: (Material "moonpanel/triangle.png", "noclamp smooth")
-    [Moonpanel.EntityTypes.Color]: (Material "moonpanel/color.png", "noclamp smooth") 
-    [Moonpanel.EntityTypes.Eraser]: (Material "moonpanel/eraser.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Hexagon]: (Material "moonpanel/common/hexagon.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Sun]: (Material "moonpanel/common/sun.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Triangle]: (Material "moonpanel/common/triangle.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Color]: (Material "moonpanel/common/color.png", "noclamp smooth") 
+    [Moonpanel.EntityTypes.Eraser]: (Material "moonpanel/common/eraser.png", "noclamp smooth")
 }
 
 export Moonpanel = Moonpanel or {}
@@ -193,7 +193,7 @@ Moonpanel.render.drawThickLine = (x1, y1, x2, y2, width, dist) ->
 
     cam.PopModelMatrix!
 
-circ = Material "moonpanel/circ128.png"
+circ = Material "moonpanel/common/circ256.png"
 
 Moonpanel.render.drawCircle = (x, y, r, color) ->
     render.SetMaterial circ

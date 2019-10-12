@@ -25,9 +25,9 @@ SOUND_PANEL_ABORT = Sound "moonpanel/panel_abort_tracing.ogg"
 SOUND_POWER_ON = Sound "moonpanel/powered_on.ogg"
 SOUND_POWER_OFF = Sound "moonpanel/powered_off.ogg"
 
-circ = Material "moonpanel/circ128.png"
-polyo = Material "moonpanel/polyomino_cell.png", "smooth"
-vignette = Material "moonpanel/vignette.png"
+circ = Material "moonpanel/common/circ256.png"
+polyo = Material "moonpanel/common/polyomino_cell.png", "smooth"
+vignette = Material "moonpanel/common/vignette.png"
 
 COLOR_BLACK = Color 0, 0, 0, 255
 

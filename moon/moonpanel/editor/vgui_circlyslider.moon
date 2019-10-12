@@ -1,10 +1,10 @@
 circlyslider = {}
 
-head = Material "moonpanel/slider/head.png"
-left = Material "moonpanel/slider/left.png"
-right = Material "moonpanel/slider/right.png"
-middle = Material "moonpanel/slider/middle.png"
-notch = Material "moonpanel/slider/notch.png"
+head = Material "moonpanel/editor/slider/head.png"
+left = Material "moonpanel/editor/slider/left.png"
+right = Material "moonpanel/editor/slider/right.png"
+middle = Material "moonpanel/editor/slider/middle.png"
+notch = Material "moonpanel/editor/slider/notch.png"
 
 circlyslider.Init = () =>
     button = @\GetChildren![2]\GetChildren![1]

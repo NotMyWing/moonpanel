@@ -82,13 +82,6 @@ class HPath extends Path
         @cachedBottom or= (@tile.elements.cells[@y] or EMPTY_TABLE)[@x]
         return @cachedBottom
 
-corners = {
-    [0]: Material "moonpanel/corner128/0.png"
-    [90]: Material "moonpanel/corner128/90.png"
-    [180]: Material "moonpanel/corner128/180.png"
-    [270]: Material "moonpanel/corner128/270.png"
-}
-
 class Intersection extends Element
     type: Moonpanel.ObjectTypes.Intersection
     getLeft: =>

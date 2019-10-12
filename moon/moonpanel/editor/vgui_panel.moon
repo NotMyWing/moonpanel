@@ -4,11 +4,11 @@ backgroundImages = {
     ["default"]: {
         outDimension: { w: 1474, h: 1474 }
         inDimension: { w: 1024, h: 1024 }
-        path: Material "moonpanel/panel_transparent.png"
+        path: Material "moonpanel/editor/panel.png"
     }
 }
 
-vignette = Material "moonpanel/vignette.png"
+vignette = Material "moonpanel/common/vignette.png"
 panel.Init = () =>
     @centerPanel = vgui.Create "DPanel", @
     @centerPanel.Paint = (_, w, h) -> 

@@ -4,9 +4,9 @@ class Invisible extends Moonpanel.BaseEntity
     populatePathMap: () =>
         return true
 
-color = Material "moonpanel/color.png"
-triangle = Material "moonpanel/triangle.png"
-sun = Material "moonpanel/sun.png" 
+color = Material "moonpanel/common/color.png"
+triangle = Material "moonpanel/common/triangle.png"
+sun = Material "moonpanel/common/sun.png" 
 
 class Color extends Moonpanel.BaseEntity
     new: (parent, defs, ...) =>
@@ -35,7 +35,7 @@ class Sun extends Moonpanel.BaseEntity
             surface.DrawTexturedRect bounds.x, bounds.y, bounds.width, bounds.height
             draw.NoTexture!
 
-eraser = Material "moonpanel/eraser.png" 
+eraser = Material "moonpanel/common/eraser.png" 
 class Y extends Moonpanel.BaseEntity
     new: (parent, defs, ...) =>
         super parent, defs, ...
@@ -50,7 +50,7 @@ class Y extends Moonpanel.BaseEntity
             surface.DrawTexturedRect bounds.x, bounds.y, bounds.width, bounds.height
             draw.NoTexture!
 
-poly = Material "moonpanel/polyomino_cell.png"
+poly = Material "moonpanel/common/polyomino_cell.png"
 class Polyomino extends Moonpanel.BaseEntity
     new: (parent, defs, ...) =>
         super parent, defs, ...

@@ -7,9 +7,9 @@ white = Color 255, 255, 255
 cell.Init = () =>
     @type = Moonpanel.ObjectTypes.Cell
 
-polyocell = Material "moonpanel/polyomino_cell.png", "smooth"
-triangle = Material "moonpanel/triangle.png"
-cross = Material "moonpanel/cross.png"
+polyocell = Material "moonpanel/common/polyomino_cell.png", "smooth"
+triangle = Material "moonpanel/common/triangle.png"
+cross = Material "moonpanel/editor/cross.png"
 
 cell.RenderTriangles = (w, h, count) =>
     surface.SetDrawColor Moonpanel.Colors[@attributes.color or Moonpanel.Color.Yellow]

@@ -94,30 +94,30 @@ COLOR_WHITE = Color 255, 255, 255
 -----------------------------------
 
 TOOL_GRAPHICS = {
-    ["place"]: (Material "moonpanel/editor_brush.png", "noclamp smooth")
-    ["erase"]: (Material "moonpanel/editor_eraser.png", "noclamp smooth")
-    ["flood"]: (Material "moonpanel/editor_bucket.png", "noclamp smooth")
+    ["place"]: (Material "moonpanel/editor/tool_brush.png", "noclamp smooth")
+    ["erase"]: (Material "moonpanel/editor/tool_eraser.png", "noclamp smooth")
+    ["flood"]: (Material "moonpanel/editor/tool_bucket.png", "noclamp smooth")
 }
 
 ENTITY_GRAPHICS = {
-    [Moonpanel.EntityTypes.Polyomino]: (Material "moonpanel/polyo.png", "noclamp smooth")
-    [Moonpanel.EntityTypes.Sun]: (Material "moonpanel/sun.png", "noclamp smooth")
-    [Moonpanel.EntityTypes.Triangle]: (Material "moonpanel/triangle.png", "noclamp smooth")
-    [Moonpanel.EntityTypes.Color]: (Material "moonpanel/color.png", "noclamp smooth") 
-    [Moonpanel.EntityTypes.Eraser]: (Material "moonpanel/eraser.png", "noclamp smooth")
-    [Moonpanel.EntityTypes.Start]: (Material "moonpanel/start.png", "noclamp smooth")
-    [Moonpanel.EntityTypes.End]: (Material "moonpanel/end.png", "noclamp smooth")
-    [Moonpanel.EntityTypes.Disjoint]: (Material "moonpanel/disjoint.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Polyomino]: (Material "moonpanel/editor/polyo.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Sun]: (Material "moonpanel/common/sun.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Triangle]: (Material "moonpanel/common/triangle.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Color]: (Material "moonpanel/common/color.png", "noclamp smooth") 
+    [Moonpanel.EntityTypes.Eraser]: (Material "moonpanel/common/eraser.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Start]: (Material "moonpanel/editor/start.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.End]: (Material "moonpanel/editor/end.png", "noclamp smooth")
+    [Moonpanel.EntityTypes.Disjoint]: (Material "moonpanel/editor/disjoint.png", "noclamp smooth")
     [Moonpanel.EntityTypes.Hexagon]: {
-        (Material "moonpanel/hex_layer1.png", "noclamp smooth")
-        (Material "moonpanel/hex_layer2.png", "noclamp smooth")
+        (Material "moonpanel/editor/hex_layer1.png", "noclamp smooth")
+        (Material "moonpanel/editor/hex_layer2.png", "noclamp smooth")
     }
     [Moonpanel.EntityTypes.Invisible]: {
         [1]: {
-            (Material "moonpanel/invisible_layer1.png", "noclamp smooth")
-            (Material "moonpanel/invisible_layer2.png", "noclamp smooth")
+            (Material "moonpanel/editor/invisible_layer1.png", "noclamp smooth")
+            (Material "moonpanel/editor/invisible_layer2.png", "noclamp smooth")
         }
-        [2]: (Material "moonpanel/cell_nocalc.png", "noclamp smooth")
+        [2]: (Material "moonpanel/editor/cell_nocalc.png", "noclamp smooth")
     }
 }
 
@@ -862,7 +862,7 @@ editor.Init = () =>
 
     with vgui.Create "DImageButton", @panel_toolBar
         \DockMargin 16, 4, 0, 4
-        \SetImage "moonpanel/icon16_windmill.png"
+        \SetImage "moonpanel/editor/icon16_windmill.png"
         \Dock LEFT
         \SetTooltip "Import from The Windmill..."
         \SizeToContents!

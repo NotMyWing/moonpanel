@@ -1,11 +1,11 @@
 intersection = {}
 
-corner = Material "moonpanel/corner128/0.png", "noclamp smooth mips"
-circle = Material "moonpanel/circ256.png", "noclamp smooth mips"
+corner = Material "moonpanel/editor/corner128/0.png", "noclamp smooth mips"
+circle = Material "moonpanel/common/circ256.png", "noclamp smooth mips"
 
 white = Color 255, 255, 255
 types = Moonpanel.EntityTypes
-hexagon = Material "moonpanel/hexagon.png"
+hexagon = Material "moonpanel/common/hexagon.png"
 
 intersection.Init = () =>
     @type = Moonpanel.ObjectTypes.Intersection

@@ -51,8 +51,8 @@ class Moonpanel.PathFinder
         toInsert = {}
         toRemove = {}
 
-        for _, nodeStack in pairs @nodeStacks
-            nodeCursor = @cursors[_]
+        for nodeStackId, nodeStack in pairs @nodeStacks
+            nodeCursor = @cursors[nodeStackId]
             mouseX = nodeCursor.x
             mouseY = nodeCursor.y
 
@@ -71,7 +71,7 @@ class Moonpanel.PathFinder
 
                 vecLength = vec\Length!
 
-                otherStack = @nodeStacks[1 - (_ - 1) + 1]
+                otherStack = @nodeStacks[1 - (nodeStackId - 1) + 1]
                 if @symmetry and otherStack
                     otherLast = otherStack[#otherStack]
                     
@@ -149,6 +149,9 @@ class Moonpanel.PathFinder
                 else
                     table.remove nodeStack, #nodeStack
 
+            if maxNode
+                @potentialNodes[nodeStackId] = maxNode
+
         if @symmetry and #toInsert > 1 and toInsert[1] ~= toInsert[2]
             a = toInsert[1]
             b = toInsert[2]               
@@ -195,6 +198,7 @@ class Moonpanel.PathFinder
 
     restart: (firstNode, secondNode) => 
         @nodeStacks = { {firstNode} }
+        @potentialNodes = {}
         @cursors = {
             {
                 x: firstNode.screenX

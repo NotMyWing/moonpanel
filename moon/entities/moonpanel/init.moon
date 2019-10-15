@@ -111,10 +111,6 @@ timeout = 0.5
 ENT.CheckSolution = (errors) =>
     @__solutionCheckMaxTime = os.clock! + timeout
 
-    paths = {}
-    cells = {}
-    intersections = {}
-    everything = {}
     width = @tileData.Tile.Width
     height = @tileData.Tile.Height
 
@@ -133,29 +129,28 @@ ENT.CheckSolution = (errors) =>
         [Moonpanel.ObjectTypes.HPath]: {}
     }
 
-    for i = 1, width
-        for j = 1, height + 1
-            hpath = @elements.hpaths[j][i]
-            hpath.solutionData = {}
-            table.insert everything, hpath
-            table.insert paths, hpath
-
-    for i = 1, width + 1
-        for j = 1, height
-            vpath = @elements.vpaths[j][i]
-            vpath.solutionData = {}
-            table.insert everything, vpath
-            table.insert paths, vpath
-
-    for i = 1, width
-        for j = 1, height
-            cell = @elements.cells[j][i]
-            cell.solutionData = {}
-            table.insert cells, cell
-            table.insert everything, cell
-
+    paths = {}
+    intersections = {}
+    everything = {}
     for i = 1, width + 1
         for j = 1, height + 1
+            if j <= height + 1 and i <= width
+                hpath = @elements.hpaths[j][i]
+                hpath.solutionData = {}
+                table.insert everything, hpath
+                table.insert paths, hpath
+
+            if j <= height and i <= width + 1
+                vpath = @elements.vpaths[j][i]
+                vpath.solutionData = {}
+                table.insert everything, vpath
+                table.insert paths, vpath
+
+            if j <= height and i <= width
+                cell = @elements.cells[j][i]
+                cell.solutionData = {}
+                table.insert everything, cell
+
             intersection = @elements.intersections[j][i]
             intersection.solutionData = {}
             table.insert intersections, intersection
@@ -485,15 +480,6 @@ ENT.StartPuzzle = (ply, x, y) =>
 
 ENT.FinishPuzzle = (forceFail) =>
     @SetNW2Entity "ActiveUser", nil
-    
-    -- Serialize them stacks.
-    stacks = {}
-    for _, nodeStack in pairs @pathFinder.nodeStacks
-        stack = {}
-        stacks[#stacks + 1] = stack
-
-        for _, node in pairs nodeStack
-            stack[#stack + 1] = @pathFinder.nodeIds[node]
 
     cursors = @pathFinder.cursors
 
@@ -503,9 +489,21 @@ ENT.FinishPuzzle = (forceFail) =>
 
     lastInts = {}
     for i, nodeStack in pairs @pathFinder.nodeStacks
-        last = nodeStack[#nodeStack]
-        if not last.exit
+        potentialNode = @pathFinder.potentialNodes[i]
+        if not nodeStack[#nodeStack].exit and potentialNode and potentialNode.exit
+            table.insert nodeStack, potentialNode
+
+        elseif not nodeStack[#nodeStack].exit
             success = false
+
+    -- Serialize them stacks.
+    stacks = {}
+    for _, nodeStack in pairs @pathFinder.nodeStacks
+        stack = {}
+        stacks[#stacks + 1] = stack
+
+        for _, node in pairs nodeStack
+            stack[#stack + 1] = @pathFinder.nodeIds[node]
 
     if success
         func = () ->
@@ -521,7 +519,7 @@ ENT.FinishPuzzle = (forceFail) =>
             @SetNW2Bool "TheMP Powered", false
             return
 
-        if redOut.errored
+        if not redOut or redOut.errored
             success = false
     else
         aborted = true

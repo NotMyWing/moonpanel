@@ -98,6 +98,8 @@ ENT.CleanUp = () =>
     @redOut = nil
     @grayOut = nil
     @grayOutStart = nil
+    @__finishTime = nil
+    @__wasSolutionAborted = false
 
     timer.Remove @GetTimerName "redOut"
     timer.Remove @GetTimerName "grayOut"
@@ -308,6 +310,7 @@ ENT.PuzzleFinish = (data) =>
             else
                 @PenFade 0.05, Color @pen.r, @pen.g, @pen.b, @pen.a or 255
     
+    @__wasSolutionAborted = aborted
     @shouldRepaintTrace = true
 
 ENT.SetupDataClient = (data) =>
@@ -476,8 +479,7 @@ ENT.DrawTrace = () =>
 
     surface.SetDrawColor @colors.traced
     if nodeStacks
-        activeUser = @GetNW2Entity "ActiveUser"
-        if IsValid activeUser
+        if @__penSizeModifier
             @__penSizeModifier += math.max 0.001, RealFrameTime! * 5
             if @__penSizeModifier > 1
                 @__penSizeModifier = 1
@@ -490,6 +492,12 @@ ENT.DrawTrace = () =>
 
         for stackId, stack in pairs nodeStacks 
             for k, v in pairs stack
+                cur = cursors[stackId]
+                if k == #stack and not (v.screenX == cur.x and v.screenY == cur.y) and
+                    @__finishTime and not @__wasSolutionAborted
+
+                    continue
+
                 Moonpanel.render.drawCircle v.screenX, v.screenY,
                     ((k == 1) and barWidth * 1.25 * @__penSizeModifier or barWidth / 2), @colors.traced
 
@@ -502,6 +510,23 @@ ENT.DrawTrace = () =>
                 stack = nodeStacks[stackid]
                 last = stack[#stack]
                 Moonpanel.render.drawCircle cur.x, cur.y, barWidth / 2, @colors.traced
+
+                if @__finishTime and not @__wasSolutionAborted and (last.screenX ~= cur.x or last.screenY ~= cur.y)
+                    distance = math.sqrt (last.screenX - cur.x)^2 + (last.screenY - cur.y)^2
+                    frameTime = math.max 0.01, RealFrameTime! * 5
+
+                    dx = (last.screenX - cur.x)
+                    cur.x = math.Approach cur.x, last.screenX, 
+                        dx * frameTime
+
+                    dy = (last.screenY - cur.y)
+                    cur.y = math.Approach cur.y, last.screenY,
+                        dy * frameTime
+
+                    @rendertargets.trace.dirty = true 
+
+                    last = stack[#stack - 1]                   
+                
                 Moonpanel.render.drawThickLine cur.x, cur.y, last.screenX, last.screenY, barWidth + 0.5
 
 ENT.DrawRipple = () =>

@@ -59,12 +59,10 @@ if SERVER
                 Ang.pitch = Ang.pitch + 90
                 model = @GetClientInfo "Model"
                 if not ((util.IsValidModel model) and (util.IsValidProp model))
-                    print "? 2", (util.IsValidModel model), (util.IsValidProp model)
                     return nil
 
                 sf = createMoonpanel ply, Vector(), Ang, model
                 if not sf
-                    print "? 3"
                     return nil
 
                 min = sf\OBBMins!

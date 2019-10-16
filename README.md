@@ -31,3 +31,4 @@ TBA.
 * [Soojin Nam](https://github.com/sjnam/lua-dancing-links) - *Lua Dancing Links*
 * [thegrb93 and contributors](https://github.com/thegrb93/StarfallEx/) - *StarfallEX and the panel rendering codebase*
 * [BytewaveMLP](https://github.com/BytewaveMLP) - *Buildscript*
+* [SneakySquid](https://github.com/Sneaky-Squid/Circles) - *Circles!*

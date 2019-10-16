@@ -74,7 +74,7 @@ ENT.BuildPathMap = () =>
                 @pathMapConnections[#@pathMapConnections + 1] = {
                     from: nodeA
                     to: nodeB
-                }            
+                }      
 
 ENT.SetupData = (data) =>
     elementClasses = Moonpanel.Elements

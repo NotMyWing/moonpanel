@@ -25,7 +25,6 @@ SOUND_PANEL_ABORT = Sound "moonpanel/panel_abort_tracing.ogg"
 SOUND_POWER_ON = Sound "moonpanel/powered_on.ogg"
 SOUND_POWER_OFF = Sound "moonpanel/powered_off.ogg"
 
-circ = Material "moonpanel/common/circ256.png"
 polyo = Material "moonpanel/common/polyomino_cell.png", "smooth"
 vignette = Material "moonpanel/common/vignette.png"
 
@@ -412,16 +411,19 @@ ENT.DrawBackground = () =>
     draw.NoTexture!
     render.SetColorMaterial!
 
+    barCircle = @calculatedDimensions.barCircle
+    startCircle = @calculatedDimensions.startCircle
+
     for _, connection in pairs @pathMapConnections
         nodeA = connection.to
         nodeB = connection.from
 
         if not nodeA.break
-            Moonpanel.render.drawCircle nodeA.screenX, nodeA.screenY, (nodeA.clickable and barWidth * 1.25 or barWidth / 2), @colors.untraced
-        
+            Moonpanel.render.drawCircleAt nodeA.clickable and startCircle or barCircle, nodeA.screenX, nodeA.screenY
+
         if not nodeB.break
-            Moonpanel.render.drawCircle nodeB.screenX, nodeB.screenY, (nodeB.clickable and barWidth * 1.25 or barWidth / 2), @colors.untraced
-        
+            Moonpanel.render.drawCircleAt nodeB.clickable and startCircle or barCircle, nodeB.screenX, nodeB.screenY
+
         length = nil
         if nodeA.break
             length = barWidth / 2 + math.sqrt (nodeA.screenY - nodeB.screenY)^2 + (nodeA.screenX - nodeB.screenX)^2
@@ -478,6 +480,7 @@ ENT.DrawTrace = () =>
     cursors = @pathFinder.cursors    
 
     surface.SetDrawColor @colors.traced
+    draw.NoTexture!
     if nodeStacks
         if @__penSizeModifier
             @__penSizeModifier += math.max 0.001, RealFrameTime! * 5
@@ -498,8 +501,9 @@ ENT.DrawTrace = () =>
 
                     continue
 
-                Moonpanel.render.drawCircle v.screenX, v.screenY,
-                    ((k == 1) and barWidth * 1.25 * @__penSizeModifier or barWidth / 2), @colors.traced
+                circ = (k == 1) and @calculatedDimensions.startCircle or @calculatedDimensions.barCircle
+                scale = (k == 1) and @__penSizeModifier
+                Moonpanel.render.drawCircleAt circ, v.screenX, v.screenY, scale
 
                 if k > 1
                     prev = stack[k - 1]
@@ -509,7 +513,8 @@ ENT.DrawTrace = () =>
             for stackid, cur in pairs cursors
                 stack = nodeStacks[stackid]
                 last = stack[#stack]
-                Moonpanel.render.drawCircle cur.x, cur.y, barWidth / 2, @colors.traced
+
+                Moonpanel.render.drawCircleAt @calculatedDimensions.barCircle, cur.x, cur.y
 
                 if @__finishTime and not @__wasSolutionAborted and (last.screenX ~= cur.x or last.screenY ~= cur.y)
                     distance = math.sqrt (last.screenX - cur.x)^2 + (last.screenY - cur.y)^2
@@ -525,7 +530,7 @@ ENT.DrawTrace = () =>
 
                     @rendertargets.trace.dirty = true 
 
-                    last = stack[#stack - 1]                   
+                    last = stack[#stack - 1]
                 
                 Moonpanel.render.drawThickLine cur.x, cur.y, last.screenX, last.screenY, barWidth + 0.5
 

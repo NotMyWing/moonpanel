@@ -1,6 +1,5 @@
 import Rect from Moonpanel
 
-circ = Material "moonpanel/common/circ256.png"
 hexagon = Material "moonpanel/common/hexagon.png"
 
 class Invisible extends Moonpanel.BaseEntity

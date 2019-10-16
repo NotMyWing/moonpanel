@@ -193,13 +193,6 @@ Moonpanel.render.drawThickLine = (x1, y1, x2, y2, width, dist) ->
 
     cam.PopModelMatrix!
 
-circ = Material "moonpanel/common/circ256.png"
-
-Moonpanel.render.drawCircle = (x, y, r, color) ->
-    render.SetMaterial circ
-    Moonpanel.render.drawTexturedRect x - r, y - r, r * 2, r * 2, color
-    render.SetColorMaterial!
-
 Moonpanel.render.createRipple = (x, y, rad, framecount = 100) ->
     ripple = {
         :framecount
@@ -223,6 +216,23 @@ Moonpanel.render.drawRipple = (ripple, frame, color) ->
     surface.SetDrawColor clr
 
     Moonpanel.render.drawArc f.arc
+
+circleMatrix = Matrix!
+circleTranslation = Vector!
+circleScale = Vector 1, 1, 1
+
+Moonpanel.render.drawCircleAt = (circle, x, y, scale) ->
+    circleTranslation.x = x
+    circleTranslation.y = y
+    circleMatrix\SetTranslation circleTranslation
+
+    circleScale.x = scale or 1
+    circleScale.y = scale or 1
+    circleMatrix\SetScale circleScale
+    
+    cam.PushModelMatrix circleMatrix
+    circle!
+    cam.PopModelMatrix!
 
 Moonpanel.render.precacheArc = (cx,cy,radius,thickness,startang,endang,roughness) ->
     triarc = {}

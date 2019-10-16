@@ -1,7 +1,6 @@
 intersection = {}
 
 corner = Material "moonpanel/editor/corner128/0.png", "noclamp smooth mips"
-circle = Material "moonpanel/common/circ256.png", "noclamp smooth mips"
 
 white = Color 255, 255, 255
 types = Moonpanel.EntityTypes
@@ -23,18 +22,20 @@ intersection.getAngle = (x, y, w, h) =>
     return -1
 
 intersection.Paint = (w, h) =>
-    surface.SetDrawColor @panel.data.colors.untraced or Moonpanel.DefaultColors.Untraced
-
     if @entity == Moonpanel.EntityTypes.Invisible
         return
         
+    draw.NoTexture!
+    surface.SetDrawColor @panel.data.colors.untraced or Moonpanel.DefaultColors.Untraced
+
     render.PushFilterMag TEXFILTER.ANISOTROPIC
     render.PushFilterMin TEXFILTER.ANISOTROPIC
-
-    if @entity == Moonpanel.EntityTypes.Start
+    
+    barCircle = @panel.calculatedDimensions.barCircle
+    startCircle = @panel.calculatedDimensions.startCircle
+    if startCircle and @entity == Moonpanel.EntityTypes.Start
         surface.DisableClipping true
-        surface.SetMaterial circle
-        surface.DrawTexturedRectRotated math.floor(w/2), math.floor(h/2), w * 2.5, h * 2.5, 0 
+        Moonpanel.render.drawCircleAt startCircle, w/2, w/2
         surface.DisableClipping false
     
     elseif @entity == Moonpanel.EntityTypes.End
@@ -58,8 +59,7 @@ intersection.Paint = (w, h) =>
             cam.PushModelMatrix matrix
 
             surface.DrawRect -w05, -w15, w, w15
-            surface.SetMaterial circle
-            surface.DrawTexturedRect -w05, -w05, w, w
+            barCircle!
         
             cam.PopModelMatrix!
             surface.DisableClipping false

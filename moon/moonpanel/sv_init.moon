@@ -3,6 +3,7 @@ include "moonpanel/sv_hooks.lua"
 
 AddCSLuaFile "moonpanel/cl_init.lua"
 AddCSLuaFile "moonpanel/cl_net.lua"
+AddCSLuaFile "moonpanel/cl_circles.lua"
 AddCSLuaFile "moonpanel/shared.lua"
 
 AddCSLuaFile "moonpanel/panel/sh_pathfinder.lua"
@@ -79,7 +80,6 @@ materials = {
     "common/triangle.png"
     "common/sun.png"
     "common/vignette.png"
-    "common/circ256.png"
 
     "panel/translucent.vtf"
 }

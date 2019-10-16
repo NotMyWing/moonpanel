@@ -286,11 +286,24 @@ Moonpanel.calculateDimensionsShared = (data) =>
         barLength: math.floor barLength
         innerWidth: math.floor innerWidth
         innerHeight: math.floor innerHeight
+
+        barCircle: if CLIENT
+            with circle = draw.NewCircle CIRCLE_FILLED
+                \SetPos 0, 0
+                \SetRadius math.floor barWidth / 2
+
+        startCircle: if CLIENT
+            with circle = draw.NewCircle CIRCLE_FILLED
+                \SetPos 0, 0
+                \SetRadius math.floor barWidth * 1.25 
     }
 
 --------------
 -- Includes --
 --------------
+
+if CLIENT
+    include "moonpanel/cl_circles.lua"
 
 include "moonpanel/panel/sh_pathfinder.lua"
 include "moonpanel/panel/sh_elements.lua"

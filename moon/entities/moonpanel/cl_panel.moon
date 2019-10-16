@@ -99,6 +99,8 @@ ENT.CleanUp = () =>
     @grayOutStart = nil
     @__finishTime = nil
     @__wasSolutionAborted = false
+    @__traceLerps or= {}
+    table.Empty @__traceLerps
 
     timer.Remove @GetTimerName "redOut"
     timer.Remove @GetTimerName "grayOut"
@@ -192,7 +194,7 @@ ENT.PenFade = (interval, clr, delta = 5) =>
         @shouldRepaintTrace = true
 
 ENT.PenInterpolate = (interval, _from, to, callback) =>
-    delta = 0.15
+    delta = 0.10
     @__penInterp = 0
 
     timer.Create @GetTimerName("penFade"), interval, 0, () ->
@@ -436,7 +438,7 @@ ENT.DrawForeground = () =>
     ClearDepth!
 
     grayOutAlpha = if @grayOut
-        255 * math.EaseInOut (1 - (math.Clamp (CurTime!- @grayOutStart) / 2, 0, 0.6)), 0.1, 0.1
+        255 * math.EaseInOut (1 - (math.Clamp (CurTime!- @grayOutStart) / 5, 0, 0.8)), 0.1, 0.1
 
     for _, entity in pairs @elements.entities
         if entity.background
@@ -457,82 +459,114 @@ ENT.DrawForeground = () =>
         render.SetColorMaterial!
         entity\render!
 
+ENT.CalculateLineLength = (stackId) =>
+    if @__calculatedLineLength and @__calculatedLineLength[stack]
+        return @__calculatedLineLength[stack]
+
+    cursor = @pathFinder.cursors[stackId]
+    stack = @pathFinder.nodeStacks[stackId]
+
+    local cursorNode
+    if not @__finishTime or @__wasSolutionAborted
+        cursorNode = {
+            screenX: cursor.x
+            screenY: cursor.y
+        }
+
+        table.insert stack, cursorNode
+
+    stackLength = #stack
+    cursor = cursor
+    last = stack[#stack]
+
+    length = 0
+    for nodeId, node in pairs stack
+        if nodeId == 1
+            continue
+
+        prev = stack[nodeId - 1]
+        delta = math.sqrt (prev.screenX - node.screenX)^2 + (prev.screenY - node.screenY)^2
+        
+        prev.__delta = delta
+        length += delta
+
+    if cursorNode
+        table.remove stack, #stack
+
+    return length
+
 ENT.DrawTrace = () =>
     Clear 0, 0, 0, 0
-    ClearDepth! 
-
-    if false
-        for _, node in pairs @pathMap
-            w, h = 32, 32
-            if node.clickable
-                w, h = w * 2, h * 2
-            x, y = node.screenX - w/2, node.screenY - w/2
-            render.SetMaterial circ
-            Moonpanel.render.drawTexturedRect x, y, w, h, (Color 255, 0, 0)
-            render.SetColorMaterial!
-
-            for _, neighbor in pairs node.neighbors
-                draw.NoTexture!
-                surface.SetDrawColor (Color 255, 0, 0, 255)
-                surface.DrawLine node.screenX, node.screenY, neighbor.screenX, neighbor.screenY
-
-    nodeStacks = @pathFinder.nodeStacks
-    cursors = @pathFinder.cursors    
+    ClearDepth!
 
     surface.SetDrawColor @colors.traced
     draw.NoTexture!
-    if nodeStacks
+
+    nodeStacks = @pathFinder.nodeStacks
+    cursors = @pathFinder.cursors
+
+    barWidth = @calculatedDimensions.barWidth
+    if nodeStacks and #nodeStacks > 0
         if @__penSizeModifier
             @__penSizeModifier += math.max 0.001, RealFrameTime! * 5
             if @__penSizeModifier > 1
                 @__penSizeModifier = 1
             elseif @__penSizeModifier < 1
-                @rendertargets.trace.dirty = true    
+                @rendertargets.trace.dirty = true
 
-        barWidth = @calculatedDimensions.barWidth
-        barLength = @calculatedDimensions.barLength
-        symmVector = nil
+        for stackId, stack in pairs nodeStacks
+            cursor = cursors[stackId]
+            length = @CalculateLineLength stackId
 
-        for stackId, stack in pairs nodeStacks 
-            for k, v in pairs stack
-                cur = cursors[stackId]
-                if k == #stack and not (v.screenX == cur.x and v.screenY == cur.y) and
-                    @__finishTime and not @__wasSolutionAborted
+            @__traceLerps[stackId] or= 0
+            lerped = @__traceLerps[stackId]
+            if lerped ~= length
+                @rendertargets.trace.dirty = true
 
+                lerped = math.Approach lerped, length, math.max 1, math.abs(lerped - length) * math.max 0.01, RealFrameTime! * 25
+                @__traceLerps[stackId] = lerped
+
+            local cursorNode
+            if not @__finishTime or @__wasSolutionAborted
+                cursorNode = {
+                    screenX: cursor.x
+                    screenY: cursor.y
+                }
+
+                table.insert stack, cursorNode
+
+            accumulator = 0
+            for nodeId, node in pairs stack
+                delta = node.__delta
+
+                circ = nodeId == 1 and @calculatedDimensions.startCircle or @calculatedDimensions.barCircle
+                scale = nodeId == 1 and @__penSizeModifier or 1
+                Moonpanel.render.drawCircleAt circ, node.screenX, node.screenY, scale
+
+                next = stack[nodeId + 1]
+                if not next
+                    break
+
+                if accumulator + delta <= lerped
+                    accumulator += delta
+                    
+                    Moonpanel.render.drawThickLine node.screenX, node.screenY, next.screenX, next.screenY, barWidth + 0.5
                     continue
+                else
+                    delta = lerped - accumulator
+                    
+                    dx = next.screenX - node.screenX
+                    dy = next.screenY - node.screenY
+                    mag = math.sqrt dx^2 + dy^2
+                    dx = dx / mag * delta
+                    dy = dy / mag * delta
 
-                circ = (k == 1) and @calculatedDimensions.startCircle or @calculatedDimensions.barCircle
-                scale = (k == 1) and @__penSizeModifier
-                Moonpanel.render.drawCircleAt circ, v.screenX, v.screenY, scale
+                    Moonpanel.render.drawThickLine node.screenX, node.screenY, dx + node.screenX, dy + node.screenY, barWidth + 0.5
+                    Moonpanel.render.drawCircleAt @calculatedDimensions.barCircle, dx + node.screenX, dy + node.screenY
+                    break
 
-                if k > 1
-                    prev = stack[k - 1]
-                    Moonpanel.render.drawThickLine prev.screenX, prev.screenY, v.screenX, v.screenY, barWidth + 0.5
-
-        if cursors and #cursors > 0
-            for stackid, cur in pairs cursors
-                stack = nodeStacks[stackid]
-                last = stack[#stack]
-
-                Moonpanel.render.drawCircleAt @calculatedDimensions.barCircle, cur.x, cur.y
-
-                if @__finishTime and not @__wasSolutionAborted and (last.screenX ~= cur.x or last.screenY ~= cur.y)
-                    distance = math.sqrt (last.screenX - cur.x)^2 + (last.screenY - cur.y)^2
-                    frameTime = math.max 0.01, RealFrameTime! * 5
-
-                    dx = (last.screenX - cur.x)
-                    cur.x = math.Approach cur.x, last.screenX, 
-                        dx * frameTime
-
-                    dy = (last.screenY - cur.y)
-                    cur.y = math.Approach cur.y, last.screenY,
-                        dy * frameTime
-
-                    @rendertargets.trace.dirty = true 
-
-                    last = stack[#stack - 1]
-                
-                Moonpanel.render.drawThickLine cur.x, cur.y, last.screenX, last.screenY, barWidth + 0.5
+            if cursorNode
+                table.remove stack, #stack
 
 ENT.DrawRipple = () =>
     Clear 0, 0, 0, 0

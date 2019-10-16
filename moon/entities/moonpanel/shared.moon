@@ -219,6 +219,8 @@ ENT.ApplyDeltas = (x, y) =>
     if IsValid(@) and @.pathFinder and (x ~= 0 or y ~= 0)
         if CLIENT
             @shouldRepaintTrace = true
+            @__calculatedLineLength = nil
+
         else
             activeUser = @GetNW2Entity "ActiveUser"
             Moonpanel\broadcastDeltas activeUser, @, x, y

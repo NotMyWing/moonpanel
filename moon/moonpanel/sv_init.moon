@@ -117,7 +117,7 @@ Moonpanel.setFocused = (ply, state, force) =>
 
     time = ply.themp_lastfocuschange or 0
 
-    if force or (CurTime! >= time and state ~= ply\GetNW2Bool "TheMP Focused")
+    if state ~= (ply\GetNW2Bool "TheMP Focused") and (force or (CurTime! >= time))
         if (state ~= ply\GetNW2Bool "TheMP Focused")
             if state
                 weap = ply\GetActiveWeapon!

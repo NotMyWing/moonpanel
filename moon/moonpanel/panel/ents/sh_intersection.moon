@@ -31,11 +31,15 @@ class Hexagon extends Moonpanel.BaseEntity
         super parent, defs, ...
 
         @attributes.color = defs.Color or Moonpanel.Color.Black
+        @attributes.hollow = defs.Hollow or false
 
     checkSolution: (areaData) =>
         return @parent.solutionData.traced
 
     render: =>
+        if @attributes.hollow
+            return
+
         bounds = @getBounds!
 
         w = math.min bounds.width, bounds.height

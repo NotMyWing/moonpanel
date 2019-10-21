@@ -291,6 +291,7 @@ Moonpanel.sanitizeTileData = (input) =>
                     Type: math.floor math.Clamp((sanitizeNumber hbar.Type, 1), 0, MAXENT)
                     Attributes: {
                         Color: math.floor math.Clamp((sanitizeNumber atts.Color, 1), 1, #Moonpanel.Colors)
+                        Hollow: not not atts.Hollow
                     }
                 }
 
@@ -303,6 +304,7 @@ Moonpanel.sanitizeTileData = (input) =>
                     Type: math.floor math.Clamp((sanitizeNumber vbar.Type, 1), 0, MAXENT)
                     Attributes: {
                         Color: math.floor math.Clamp((sanitizeNumber atts.Color, 1), 1, #Moonpanel.Colors)
+                        Hollow: not not atts.Hollow
                     }
                 }
 
@@ -315,6 +317,7 @@ Moonpanel.sanitizeTileData = (input) =>
                     Type: math.floor math.Clamp((sanitizeNumber int.Type, 1), 0, MAXENT)
                     Attributes: {
                         Color: math.floor math.Clamp((sanitizeNumber atts.Color, 1), 1, #Moonpanel.Colors)
+                        Hollow: not not atts.Hollow
                     }
                 }
 

@@ -5,6 +5,7 @@ corner = Material "moonpanel/editor/corner128/0.png", "noclamp smooth mips"
 white = Color 255, 255, 255
 types = Moonpanel.EntityTypes
 hexagon = Material "moonpanel/common/hexagon.png"
+hexagon_hollow = Material "moonpanel/common/hexagon_hollow.png"
 
 intersection.Init = () =>
     @type = Moonpanel.ObjectTypes.Intersection
@@ -77,7 +78,7 @@ intersection.Paint = (w, h) =>
             innerh = innerw
 
             surface.SetDrawColor Moonpanel.Colors[@attributes.color or Moonpanel.Color.Black]
-            surface.SetMaterial hexagon
+            surface.SetMaterial @attributes.hollow and hexagon_hollow or hexagon
             surface.DrawTexturedRect (w/2) - (innerw/2), (h/2) - (innerh/2), innerw, innerh
 
     render.PopFilterMag!

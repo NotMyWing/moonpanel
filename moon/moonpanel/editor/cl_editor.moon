@@ -111,6 +111,7 @@ ENTITY_GRAPHICS = {
     [Moonpanel.EntityTypes.Hexagon]: {
         (Material "moonpanel/editor/hex_layer1.png", "noclamp smooth")
         (Material "moonpanel/editor/hex_layer2.png", "noclamp smooth")
+        (Material "moonpanel/editor/hex_layer2_hollow.png", "noclamp smooth")
     }
     [Moonpanel.EntityTypes.Invisible]: {
         [1]: {
@@ -432,24 +433,36 @@ TOOLSET_PATHENTITIES = {
     -- Tool: hexagon entity --
     --------------------------
     {
-        tooltip: "Dot / Hexagon"
+        tooltip: "Dot / Hexagon (click again to make hollow)"
         entity: Moonpanel.EntityTypes.Hexagon
         target: { Moonpanel.ObjectTypes.HPath, Moonpanel.ObjectTypes.VPath, Moonpanel.ObjectTypes.Intersection }
 
-        render: (w, h, bgColor, entColor) ->
+        copy: (button, editor, gridElement) ->
+            button.hollow = gridElement.attributes.hollow
+
+        render: (w, h, bgColor, entColor, button) ->
             surface.SetDrawColor bgColor
             surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Hexagon][1]
             surface.DrawTexturedRect 0, 0, w, h
+
             surface.SetDrawColor entColor
-            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Hexagon][2]
+            surface.SetMaterial ENTITY_GRAPHICS[Moonpanel.EntityTypes.Hexagon][button.hollow and 3 or 2]
             surface.DrawTexturedRect 0, 0, w, h
 
+        click: (button, wasSelected) ->
+            if wasSelected
+                button.hollow = not button.hollow
+
         set: (button, gridElement, color) ->
-            if gridElement.attributes.color == color and gridElement.entity == Moonpanel.EntityTypes.Hexagon
+            if gridElement.attributes.color == color and 
+                gridElement.attributes.hollow == button.hollow and
+                gridElement.entity == Moonpanel.EntityTypes.Hexagon
+
                 gridElement.entity = nil
             else
+                gridElement.entity = Moonpanel.EntityTypes.Hexagon
+                gridElement.attributes.hollow = button.hollow
                 gridElement.attributes.color = color
-                gridElement.entity = Moonpanel.EntityTypes.Hexagon 
     }
     ---------------------------------
     -- Tool: invisible line entity --
@@ -1428,7 +1441,7 @@ editor.Init = () =>
 
                     render.PushFilterMag TEXFILTER.ANISOTROPIC
                     render.PushFilterMin TEXFILTER.ANISOTROPIC
-                    v.render w, h, bgColor, entColor
+                    v.render w, h, bgColor, entColor, _self
                     render.PopFilterMag!
                     render.PopFilterMin!
                 if i == 1
@@ -1742,6 +1755,9 @@ editor.Serialize = () =>
                     switch t.Type
                         when Moonpanel.EntityTypes.Triangle
                             t.Attributes.Count = element.attributes.count or 1
+                        
+                        when Moonpanel.EntityTypes.Hexagon
+                            t.Attributes.Hollow = element.attributes.hollow
 
                         when Moonpanel.EntityTypes.Polyomino
                             t.Attributes.Shape = {}
@@ -1865,6 +1881,7 @@ editor.Deserialize = (input) =>
                     entity: hbar.Type
                     attributes: {
                         color: hbar.Attributes and hbar.Attributes.Color
+                        hollow: hbar.Attributes and hbar.Attributes.Hollow
                     }
                 }
 
@@ -1876,6 +1893,7 @@ editor.Deserialize = (input) =>
                     entity: vbar.Type
                     attributes: {
                         color: vbar.Attributes and vbar.Attributes.Color
+                        hollow: vbar.Attributes and vbar.Attributes.Hollow
                     }
                 }
 
@@ -1887,6 +1905,7 @@ editor.Deserialize = (input) =>
                     entity: int.Type
                     attributes: {
                         color: int.Attributes and int.Attributes.Color
+                        hollow: int.Attributes and int.Attributes.Hollow
                     }
                 }
     

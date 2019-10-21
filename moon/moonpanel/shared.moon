@@ -153,6 +153,12 @@ Moonpanel.Presets = {
         Untraced: Color 90, 140, 130
         Cell: Color 0, 0, 0, 255
     }
+    ["The Windmill"]: {
+        Background: Color 112, 128, 144, 255
+        Traced: Color 220, 220, 220, 255
+        Untraced: Color 0, 0, 0, 255
+        Finished: Color 230, 230, 230, 255
+    }
 }
 
 ---------------------------

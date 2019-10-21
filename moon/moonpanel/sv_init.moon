@@ -45,6 +45,11 @@ sounds = {
     "panel_success.ogg"
     "powered_on.ogg"
     "powered_off.ogg"
+    "panel_path_complete_loop.wav"
+    "panel_solving_loop.wav"
+    "panel_presence_loop.wav"
+    "panel_finish_tracing.ogg"
+    "panel_abort_finish_tracing.ogg"
 }
 
 materials = {

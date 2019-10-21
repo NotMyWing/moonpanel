@@ -143,9 +143,6 @@ class Moonpanel.PathFinder
                 vec_2 = @dotVectors[2].maxDotVector
 
                 allPointsValid = if @symmetry == Moonpanel.Symmetry.Rotational
-                    print "vec_1: [ #{vec_1.x}, #{vec_1.y} ]"
-                    print "vec_2: [ #{vec_2.x}, #{vec_2.y} ]"
-                    print "---"
                     (vec_1.x == -vec_2.x) and (vec_1.y == -vec_2.y)
                 elseif @symmetry == Moonpanel.Symmetry.Vertical
                     (vec_1.x ==  vec_2.x) and (vec_1.y == -vec_2.y)
@@ -204,7 +201,9 @@ class Moonpanel.PathFinder
             elseif toRemoveCount == #@nodeStacks
                 allPointsValid = false
                 for nodeStackId, nodeStack in pairs @nodeStacks
-                    table.remove @nodeStacks[nodeStackId], toInsert[nodeStackId]
+                    @potentialNodes[nodeStackId] = nodeStack[toRemove[nodeStackId]]
+
+                    table.remove @nodeStacks[nodeStackId], toRemove[nodeStackId]
 
         for nodeStackId, nodeStack in pairs @nodeStacks
             nodeCursor = @cursors[nodeStackId]
@@ -215,12 +214,12 @@ class Moonpanel.PathFinder
             if allPointsValid
                 nodeCursor.x = offsetNode.screenX + vector.maxDotVector.x
                 nodeCursor.y = offsetNode.screenY + vector.maxDotVector.y
+
+                @potentialNodes[nodeStackId] = vector.maxNode
             -- Snap cursors to last known points
             else
                 nodeCursor.x = offsetNode.screenX
                 nodeCursor.y = offsetNode.screenY
-            
-            @potentialNodes[nodeStackId] = allPointsValid and vector.maxNode or nil
 
     applyDeltas: (x, y) =>
         if not @nodeStacks or not @cursors

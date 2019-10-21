@@ -15,16 +15,6 @@ REDOUT_TIME = 10
 POWERSTATE_TIME = 1
 RESYNC_ATTEMPT_TIME = 0.5
 
-SOUND_PANEL_SCINT = Sound "moonpanel/panel_scint.ogg"
-SOUND_PANEL_FAILURE = Sound "moonpanel/panel_failure.ogg"
-SOUND_PANEL_POTENTIAL_FAILURE = Sound "moonpanel/panel_potential_failure.ogg"
-SOUND_PANEL_SUCCESS = Sound "moonpanel/panel_success.ogg"
-SOUND_PANEL_START = Sound "moonpanel/panel_start_tracing.ogg"
-SOUND_PANEL_ERASER = Sound "moonpanel/eraser_apply.ogg"
-SOUND_PANEL_ABORT = Sound "moonpanel/panel_abort_tracing.ogg"
-SOUND_POWER_ON = Sound "moonpanel/powered_on.ogg"
-SOUND_POWER_OFF = Sound "moonpanel/powered_off.ogg"
-
 polyo = Material "moonpanel/common/polyomino_cell.png", "smooth"
 vignette = Material "moonpanel/common/vignette.png"
 
@@ -34,16 +24,20 @@ setRTTexture = (rt) ->
     RT_Material\SetTexture "$basetexture", rt
     surface.SetMaterial RT_Material
 
+__gradientColor = Color!
 gradient = (startColor, endColor, percentFade) ->
     diffRed = endColor.r - startColor.r
     diffGreen = endColor.g - startColor.g
     diffBlue = endColor.b - startColor.b
     diffAlpha = endColor.a - startColor.a
 
-    return Color (diffRed * percentFade) + startColor.r,
-        (diffGreen * percentFade) + startColor.g,
-        (diffBlue * percentFade) + startColor.b,
-        (diffAlpha * percentFade) + startColor.a
+    with __gradientColor
+        .r = (diffRed   * percentFade) + startColor.r
+        .g = (diffGreen * percentFade) + startColor.g
+        .b = (diffBlue  * percentFade) + startColor.b
+        .a = (diffAlpha * percentFade) + startColor.a
+
+    return __gradientColor
 
 ENT.PanelInit = () =>
     index = tostring @EntIndex!
@@ -72,6 +66,57 @@ ENT.PanelInit = () =>
     @__nextSyncAttempt = CurTime! + RESYNC_ATTEMPT_TIME
     @__powerStatePct = 0
 
+    panelSoundLevel = 65
+    @sounds = {
+        scint:    with CreateSound @, "moonpanel/panel_scint.ogg"
+            \SetSoundLevel panelSoundLevel
+
+        failure:  with CreateSound @, "moonpanel/panel_failure.ogg"
+            \SetSoundLevel panelSoundLevel
+
+        potentialFailure: with CreateSound @, "moonpanel/panel_potential_failure.ogg"
+            \SetSoundLevel panelSoundLevel
+
+        success:  with CreateSound @, "moonpanel/panel_success.ogg"
+            \SetSoundLevel panelSoundLevel
+
+        start:    with CreateSound @, "moonpanel/panel_start_tracing.ogg"
+            \SetSoundLevel panelSoundLevel
+
+        eraser:   with CreateSound @, "moonpanel/eraser_apply.ogg"
+            \SetSoundLevel panelSoundLevel
+            
+        abort:    with CreateSound @, "moonpanel/panel_abort_tracing.ogg"
+            \SetSoundLevel panelSoundLevel
+
+        powerOn:  with CreateSound @, "moonpanel/powered_on.ogg"
+            \SetSoundLevel panelSoundLevel
+
+        powerOff: with CreateSound @, "moonpanel/powered_off.ogg"
+            \SetSoundLevel panelSoundLevel
+
+        pathComplete: with CreateSound @, "moonpanel/panel_path_complete_loop.wav"
+            \SetSoundLevel 45
+
+        solvingLoop: with CreateSound @, "moonpanel/panel_solving_loop.wav"
+            \SetSoundLevel 40
+
+        presenceLoop: with CreateSound @, "moonpanel/panel_presence_loop.wav"
+            \SetSoundLevel 40
+
+        finishTracing: with CreateSound @, "moonpanel/panel_finish_tracing.ogg"
+            \SetSoundLevel panelSoundLevel
+
+        abortFinishTracing: with CreateSound @, "moonpanel/panel_abort_finish_tracing.ogg"
+            \SetSoundLevel panelSoundLevel
+    }
+
+ENT.OnRemove = () =>
+    for i, sound in pairs @sounds
+        if sound\IsPlaying!
+            sound\Stop!
+            @sounds[i] = nil
+
 _err = Color 255, 0, 0, 255
 _errAlt = Color 0, 0, 0, 255
 
@@ -94,6 +139,13 @@ ENT.ErrorifyColor = (color, alternate) =>
     return gradient color, clr, pctMod * pct
 
 ENT.CleanUp = () =>
+    if @sounds
+        if @sounds.pathComplete\IsPlaying!
+            @sounds.pathComplete\Stop!
+        
+        if @sounds.solvingLoop\IsPlaying!
+            @sounds.solvingLoop\Stop!    
+
     @redOut = nil
     @grayOut = nil
     @grayOutStart = nil
@@ -107,9 +159,12 @@ ENT.CleanUp = () =>
     timer.Remove @GetTimerName "penFade"
     timer.Remove @GetTimerName "foreground"
 
-    @rendertargets.foreground.always = false
-    @rendertargets.foreground.dirty = true
-    @rendertargets.trace.dirty = true
+    if @rendertargets
+        @rendertargets.foreground.always = false
+        @rendertargets.foreground.dirty = true
+        @rendertargets.trace.dirty = true
+
+    @__lastShouldBlink = false
 
 ENT.Desynchronize = () =>
     @CleanUp!
@@ -141,8 +196,11 @@ ENT.ClientTickrateThink = () =>
         
     activeUser = @GetNW2Entity "ActiveUser"
     if IsValid activeUser
-        if @__scintPower and @__scintPower >= 0.15 and CurTime! >= @__nextscint
-            @EmitSound SOUND_PANEL_SCINT, 75, 100, @__scintPower
+        if @__shouldScint and @__scintPower and @__scintPower >= 0.15 and CurTime! >= @__nextscint
+            if @sounds.scint
+                @sounds.scint\Stop!
+                @sounds.scint\PlayEx @__scintPower, 100
+
             @__nextscint = CurTime! + 2
             @__scintPower *= 0.75
             @__firstscint = false
@@ -150,32 +208,44 @@ ENT.ClientTickrateThink = () =>
 ENT.NW_OnPowered = (state) =>
     if @synchronized
         if state
-            @EmitSound SOUND_POWER_ON
+            if @sounds.presenceLoop
+                @sounds.presenceLoop\Play!
+
+            if @sounds.powerOn
+                @PlaySound @sounds.powerOn
         else
             @pen.a = 0
             @CleanUp!
-            @EmitSound SOUND_POWER_OFF
+            if @sounds.presenceLoop
+                @sounds.presenceLoop\Stop!
+            if @sounds.powerOff
+                @PlaySound @sounds.powerOff
 
 ENT.PuzzleStart = (nodeA, nodeB) =>
     if not @synchronized
         return
 
+    @CleanUp!
+
     tr = @colors.traced
     @pen = Color tr.r, tr.g, tr.b, tr.a or 255
 
-    @EmitSound SOUND_PANEL_START
+    if @sounds.start
+        @PlaySound @sounds.start
 
     @pathFinder\restart nodeA, nodeB
     @shouldRepaintTrace = true
 
     @__nextscint = CurTime! + 0.5
     @__firstscint = true
+    @__shouldScint = true
     @__scintPower = 1
 
     barWidth = @calculatedDimensions.barWidth
     @__penSizeModifier = (barWidth / 2) / (barWidth * 1.25)
-    
-    @CleanUp!
+
+    if @sounds.solvingLoop
+        @sounds.solvingLoop\Play!
 
 ENT.PenFade = (interval, clr, delta = 5) =>
     if clr
@@ -223,6 +293,12 @@ ENT.PenInterpolateFinished = () =>
         @PenInterpolate 0.01, @pen, @colors.finished
 
 ENT.PuzzleFinish = (data) =>
+    if @sounds.pathComplete\IsPlaying!
+        @sounds.pathComplete\Stop!
+
+    if @sounds.solvingLoop\IsPlaying!
+            @sounds.solvingLoop\FadeOut 0.1
+
     success = data.success or false
     aborted = data.aborted or false
     @redOut = data.redOut or {}
@@ -251,8 +327,8 @@ ENT.PuzzleFinish = (data) =>
 
     if success
         if _grayOut.grayedOut
-            if not data.sync
-                @EmitSound SOUND_PANEL_POTENTIAL_FAILURE
+            if @sounds.potentialFailure
+                @PlaySound @sounds.potentialFailure
 
             _oldPen = ColorAlpha @pen, @pen.a or 255
             err = @colors.errored
@@ -265,8 +341,10 @@ ENT.PuzzleFinish = (data) =>
                 @grayOutStart = CurTime!
 
                 if not data.sync
-                    @EmitSound SOUND_PANEL_ERASER
-                    @EmitSound SOUND_PANEL_SUCCESS
+                    if @sounds.eraser
+                        @PlaySound @sounds.eraser
+                    if @sounds.success
+                        @PlaySound @sounds.success
 
                     if @pen ~= @colors.finished
                         @PenInterpolateFinished!
@@ -275,7 +353,8 @@ ENT.PuzzleFinish = (data) =>
 
         else
             if not data.sync
-                @EmitSound SOUND_PANEL_SUCCESS
+                if @sounds.success
+                    @PlaySound  @sounds.success
                 if @pen ~= @colors.finished
                     @PenInterpolateFinished!
             else
@@ -286,24 +365,25 @@ ENT.PuzzleFinish = (data) =>
         @pen = Color err.r, err.g, err.b, err.a or 255
 
         if _grayOut.grayedOut
-            if not data.sync
-                @EmitSound SOUND_PANEL_POTENTIAL_FAILURE
+            if not data.sync and @sounds.potentialFailure
+                @PlaySound @sounds.potentialFailure
 
             timer.Create @GetTimerName("grayOut"), 0.75, 1, () ->
                 @grayOut = _grayOut
                 @grayOutStart = CurTime!
 
                 @PenFade 0.05, Color err.r, err.g, err.b
-                @EmitSound SOUND_PANEL_FAILURE
+                if @sounds.failure
+                    @PlaySound @sounds.failure
 
         else
             @PenFade 0.05, Color err.r, err.g, err.b
-            if not data.sync
-                @EmitSound SOUND_PANEL_FAILURE
+            if not data.sync and @sounds.failure
+                @PlaySound @sounds.failure
 
     else
-        if not data.sync and not data.forceFail
-            @EmitSound SOUND_PANEL_ABORT
+        if not data.sync and not data.forceFail and @sounds.abort
+            @PlaySound @sounds.abort
 
         if @pen
             if data.forceFail
@@ -313,6 +393,10 @@ ENT.PuzzleFinish = (data) =>
     
     @__wasSolutionAborted = aborted
     @shouldRepaintTrace = true
+
+ENT.PlaySound = (sound) =>
+    sound\Stop!
+    sound\Play!
 
 ENT.SetupDataClient = (data) =>
     @CleanUp!
@@ -499,8 +583,19 @@ ENT.DrawTrace = () =>
     Clear 0, 0, 0, 0
     ClearDepth!
 
-    surface.SetDrawColor @colors.traced
     draw.NoTexture!
+
+    if false
+        surface.SetDrawColor (Color 255, 0, 0, 255)
+        for _, node in pairs @pathMap
+            w, h = 32, 32
+            if node.clickable
+                w, h = w * 2, h * 2
+            x, y = node.screenX - w/2, node.screenY - w/2
+            Moonpanel.render.drawCircleAt @calculatedDimensions.barCircle, node.screenX, node.screenY, 0.5
+
+            for _, neighbor in pairs node.neighbors
+                surface.DrawLine node.screenX, node.screenY, neighbor.screenX, neighbor.screenY
 
     nodeStacks = @pathFinder.nodeStacks
     cursors = @pathFinder.cursors
@@ -515,6 +610,43 @@ ENT.DrawTrace = () =>
                 @rendertargets.trace.dirty = true
 
         for stackId, stack in pairs nodeStacks
+            shouldBlink = not @__finishTime and (stack[#stack].exit or 
+                @pathFinder.potentialNodes[stackId] and @pathFinder.potentialNodes[stackId].exit) or false
+            
+            if not @__finishTime
+                if @__lastShouldBlink ~= shouldBlink
+                    if @sounds.finishTracing and shouldBlink
+                        @PlaySound @sounds.finishTracing
+                    elseif @sounds.abortFinishTracing and not shouldBlink
+                        @PlaySound @sounds.abortFinishTracing
+                @__lastShouldBlink = shouldBlink
+
+                if shouldBlink
+                    if @__shouldScint
+                        @__shouldScint = false
+                    if not @sounds.pathComplete\IsPlaying!
+                        @sounds.pathComplete\Play!
+
+                    @__blinkDistance = (1 + math.cos(CurTime! * 16)) / 2
+
+                    @pen = gradient @colors.traced, (Color 255, 255, 255), @__blinkDistance
+                    @rendertargets.trace.dirty = true
+
+                elseif @__blinkDistance and @__blinkDistance ~= 0 and IsValid(@GetNW2Entity "ActiveUser")
+                    if @sounds.pathComplete\IsPlaying!
+                        @sounds.pathComplete\Stop!
+
+                    @__blinkDistance = math.Approach @__blinkDistance, 0, @__blinkDistance * math.max 0.01, RealFrameTime! * 5
+                    if @__blinkDistance <= 0.01
+                        @__blinkDistance = 0
+
+                    @pen = Color gradient @colors.traced, (Color 255, 255, 255), @__blinkDistance 
+                    @rendertargets.trace.dirty = true
+            
+                surface.SetDrawColor @pen
+            else
+                surface.SetDrawColor @colors.traced
+
             cursor = cursors[stackId]
             length = @CalculateLineLength stackId
 
@@ -575,10 +707,10 @@ ENT.DrawRipple = () =>
     draw.NoTexture!
     render.SetColorMaterial!
     activeUser = @GetNW2Entity "ActiveUser"
-    if @endRipples and @__nextscint and not @__firstscint and IsValid activeUser
+    if @__shouldScint and @endRipples and @__nextscint and not @__firstscint and IsValid activeUser
         buf = 1 - ((@__nextscint - CurTime!) / 2)
         for _, ripple in pairs @endRipples
-            Moonpanel.render.drawRipple ripple, buf, (Color 255, 255, 255)
+            Moonpanel.render.drawRipple ripple, buf * 2, (Color 255, 255, 255)
 
 renderFunc = (x, y, w, h) ->
     surface.DrawTexturedRect x, y, w, h

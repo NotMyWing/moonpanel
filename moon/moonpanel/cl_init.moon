@@ -193,15 +193,15 @@ Moonpanel.render.drawThickLine = (x1, y1, x2, y2, width, dist) ->
 
     cam.PopModelMatrix!
 
-Moonpanel.render.createRipple = (x, y, rad, framecount = 100) ->
+Moonpanel.render.createRipple = (x, y, rad, framecount = 50) ->
     ripple = {
         :framecount
     }
     ripple.frames = {}
     for i = 1, framecount
-        r = (i / framecount) * rad
+        r = (i / framecount) * rad * 1.25
         ripple.frames[#ripple.frames + 1] = {
-            arc: Moonpanel.render.precacheArc x, y, r, rad * 0.07, -180, 180, 30
+            arc: Moonpanel.render.precacheArc x, y, r, rad * 0.09, -180, 180, 30
             alpha: (1 - (i / framecount)) * 255
         }
     

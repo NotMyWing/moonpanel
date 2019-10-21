@@ -522,7 +522,7 @@ ENT.DrawForeground = () =>
     ClearDepth!
 
     grayOutAlpha = if @grayOut
-        255 * math.EaseInOut (1 - (math.Clamp (CurTime!- @grayOutStart) / 5, 0, 0.8)), 0.1, 0.1
+        255 * math.EaseInOut (1 - (math.Clamp (CurTime!- @grayOutStart) / 3, 0, 0.625)), 0.1, 0.1
 
     for _, entity in pairs @elements.entities
         if entity.background

@@ -45,12 +45,7 @@ class Moonpanel.PathFinder
                 return node
 
     think: () =>
-        if not @nodeStacks or not @cursors
-            return
-
-        toInsert = {}
-        toRemove = {}
-
+        -- Calculate valid points
         for nodeStackId, nodeStack in pairs @nodeStacks
             nodeCursor = @cursors[nodeStackId]
             mouseX = nodeCursor.x
@@ -67,6 +62,9 @@ class Moonpanel.PathFinder
             maxNode = nil
             maxVecLength = nil
             for k, to in pairs last.neighbors
+                if not to
+                    continue
+
                 vec = Vector to.screenX - last.screenX, to.screenY - last.screenY, 0
 
                 vecLength = vec\Length!
@@ -82,98 +80,150 @@ class Moonpanel.PathFinder
                 if to ~= nodeStack[#nodeStack - 1]
                     vecLength -= (@isFirst(to) and @barWidth * 1.75) or (@hasNode(to) and @barWidth) or 0
 
-                unitVector = vec\GetNormalized!
+                vec\Normalize!
 
-                mDot = unitVector\Dot mouseVector
+                mDot = vec\Dot mouseVector
 
                 if mDot > 0
                     mDot = math.min mDot, vecLength
             
-                    dotVector = (unitVector * mDot)
+                    dotVector = (vec * mDot)
                     toMouseVec = mouseVector - dotVector
 
-                    tx, ty = last.screenX + dotVector.x, last.screenY + dotVector.y
-                    angle = math.atan2 (last.screenY - ty), (last.screenX - tx)
+                    mDot = math.min mDot, vecLength
 
-                    -- 1 back, 3 front, 2 left, 4 right
-                    corrDotProducts = {}
-                    for i = 1, 4
-                        sx = math.cos angle
-                        sy = math.sin angle
-
-                        corrDotProducts[#corrDotProducts + 1] = toMouseVec\Dot Vector sx, sy, 0
-                        angle += math.pi / 2
-
-                    mainAxis = 8 * math.max corrDotProducts[3], corrDotProducts[1]
-
-                    if corrDotProducts[2] >= mainAxis or corrDotProducts[4] >= mainAxis
-                        if mDot > (@barLength or vecLength) / 2
-                            mDot = mDot + toMouseVec\Length! * 0.25
-                        else
-                            mDot = mDot - toMouseVec\Length! * 0.25
-
-                    mDot = math.min trunc(mDot, 3), vecLength
-
-                    dotVector = (unitVector * mDot)
+                    dotVector = (vec * mDot)
                     if mDot >= maxMDot
                         maxMDot = mDot
                         maxDotVector = dotVector
                         maxNode = to
+                        maxVecLength = vecLength
 
-                if not to.break and mDot >= vecLength
+            if not @dotVectors[nodeStackId]
+                @dotVectors[nodeStackId] = {}
+
+            -- This might introduce several inaccuracies, but 
+            -- floating points is why we can't have nice things.
+            if maxDotVector
+                maxDotVector.x = trunc maxDotVector.x, 3
+                maxDotVector.y = trunc maxDotVector.y, 3
+
+            @dotVectors[nodeStackId].maxNode = maxNode
+            @dotVectors[nodeStackId].maxDotVector = maxDotVector
+            @dotVectors[nodeStackId].maxMDot = trunc maxMDot, 3
+            @dotVectors[nodeStackId].maxVecLength = maxVecLength
+
+        -- Determine the minVector and setup cursor offset nodes
+        allPointsValid = true
+        local minVector
+        for nodeStackId, nodeStack in pairs @nodeStacks
+            @cursorOffsetNodes[nodeStackId] = nodeStack[#nodeStack]
+            
+            if allPointsValid
+                vector = @dotVectors[nodeStackId]
+                if not vector.maxNode or not vector.maxVecLength or vector.maxMDot == 0
+                    allPointsValid = false
+
+                if not minVector or vector.maxMDot < minVector.maxMDot
+                    minVector = vector
+
+        if allPointsValid
+            -- Clamp all other points to minVector magnitude
+            for nodeStackId, nodeStack in pairs @nodeStacks
+                vector = @dotVectors[nodeStackId]
+                if vector ~= minVector
+                    vector = @dotVectors[nodeStackId]
+                    vector.maxDotVector.x = trunc (minVector.maxMDot * (vector.maxDotVector.x / vector.maxMDot)), 3
+                    vector.maxDotVector.y = trunc (minVector.maxMDot * (vector.maxDotVector.y / vector.maxMDot)), 3
+                    vector.maxMDot = minVector.maxMDot
+
+            -- If symmetry, ensure that vectors are symmetrical
+            if @symmetry
+                vec_1 = @dotVectors[1].maxDotVector
+                vec_2 = @dotVectors[2].maxDotVector
+
+                allPointsValid = if @symmetry == Moonpanel.Symmetry.Rotational
+                    print "vec_1: [ #{vec_1.x}, #{vec_1.y} ]"
+                    print "vec_2: [ #{vec_2.x}, #{vec_2.y} ]"
+                    print "---"
+                    (vec_1.x == -vec_2.x) and (vec_1.y == -vec_2.y)
+                elseif @symmetry == Moonpanel.Symmetry.Vertical
+                    (vec_1.x ==  vec_2.x) and (vec_1.y == -vec_2.y)
+                elseif @symmetry == Moonpanel.Symmetry.Horizontal
+                    (vec_1.x == -vec_2.x) and (vec_1.y ==  vec_2.y)
+
+        if allPointsValid
+            -- Gather points
+            toInsert = {}
+            toInsertCount = 0
+            toRemove = {}
+            toRemoveCount = 0
+
+            for nodeStackId, nodeStack in pairs @nodeStacks
+                nodeCursor = @cursors[nodeStackId]
+                vector = @dotVectors[nodeStackId]
+                to = vector.maxNode
+            
+                if not to.break and vector.maxMDot >= vector.maxVecLength
                     if to ~= nodeStack[1] and to == nodeStack[#nodeStack - 1]
-                        if @symmetry
-                            table.insert toRemove, #nodeStack
-                        else
-                            table.remove nodeStack, #nodeStack
-                        break
+                        table.insert toRemove, #nodeStack
+                        toRemoveCount += 1
+                        continue
 
                     elseif not @hasNode to
-                        if @symmetry 
-                            table.insert toInsert, to
-                        else
-                            table.insert nodeStack, to
-                        break
-      
-            if maxNode and nodeStack[#nodeStack] == last
-                nodeCursor.x = nodeStack[#nodeStack].screenX + maxDotVector.x
-                nodeCursor.y = nodeStack[#nodeStack].screenY + maxDotVector.y
+                        table.insert toInsert, to
+                        toInsertCount += 1
+                        continue
 
-            else
-                nodeCursor.x = nodeStack[#nodeStack].screenX
-                nodeCursor.y = nodeStack[#nodeStack].screenY
-
-            if maxNode and not maxNode.break and maxNode == nodeStack[#nodeStack - 1]
-                if @symmetry
+                elseif to and not to.break and to == nodeStack[#nodeStack - 1]
                     table.insert toRemove, #nodeStack
-                else
-                    table.remove nodeStack, #nodeStack
+                    toRemoveCount += 1
 
-            if maxNode
-                @potentialNodes[nodeStackId] = maxNode
+            -- ???
+            if toInsertCount > 0 and toRemoveCount > 0
+                allPointsValid = true
+            
+            -- Insert case
+            elseif toInsertCount == #@nodeStacks
+                seen = {}
+                isInvalid = false
+                for nodeStackId, nodeStack in pairs @nodeStacks
+                    if seen[toInsert[nodeStackId]]
+                        isInvalid = true
+                        break
 
-        if @symmetry and #toInsert > 1 and toInsert[1] ~= toInsert[2]
-            a = toInsert[1]
-            b = toInsert[2]               
+                    seen[toInsert[nodeStackId]] = true
 
-            --if not (a == @nodeStacks[1][1] or b == @nodeStacks[1][1] or
-            --    b == @nodeStacks[2][1] or a == @nodeStacks[2][1]) and @checkSymmetry a, b
+                if not isInvalid
+                    allPointsValid = false
+                    for nodeStackId, nodeStack in pairs @nodeStacks
+                        table.insert @nodeStacks[nodeStackId], toInsert[nodeStackId]
+                        @cursorOffsetNodes[nodeStackId] = toInsert[nodeStackId]
 
-            table.insert @nodeStacks[1], toInsert[1]
-            table.insert @nodeStacks[2], toInsert[2]
+            -- Remove case
+            elseif toRemoveCount == #@nodeStacks
+                allPointsValid = false
+                for nodeStackId, nodeStack in pairs @nodeStacks
+                    table.remove @nodeStacks[nodeStackId], toInsert[nodeStackId]
 
-        if @symmetry and #toRemove > 1 and toRemove[1] == toRemove[2]
-            a = @nodeStacks[1][toRemove[1]]
-            b = @nodeStacks[2][toRemove[2]]                 
-
-            --if not (a == @nodeStacks[1][1] or b == @nodeStacks[1][1] or
-            --    b == @nodeStacks[2][1] or a == @nodeStacks[2][1]) and @checkSymmetry a, b
-
-            table.remove @nodeStacks[1], toRemove[1]
-            table.remove @nodeStacks[2], toRemove[2]
+        for nodeStackId, nodeStack in pairs @nodeStacks
+            nodeCursor = @cursors[nodeStackId]
+            offsetNode = @cursorOffsetNodes[nodeStackId]
+            vector = @dotVectors[nodeStackId]
+            
+            -- Snap cursors to lines
+            if allPointsValid
+                nodeCursor.x = offsetNode.screenX + vector.maxDotVector.x
+                nodeCursor.y = offsetNode.screenY + vector.maxDotVector.y
+            -- Snap cursors to last known points
+            else
+                nodeCursor.x = offsetNode.screenX
+                nodeCursor.y = offsetNode.screenY
+            
+            @potentialNodes[nodeStackId] = allPointsValid and vector.maxNode or nil
 
     applyDeltas: (x, y) =>
-        if not @cursors
+        if not @nodeStacks or not @cursors
             return
 
         @cursors[1].x = math.floor @cursors[1].x + x
@@ -196,7 +246,11 @@ class Moonpanel.PathFinder
 
         @think!
 
-    restart: (firstNode, secondNode) => 
+    restart: (firstNode, secondNode) =>
+        @dotVectors = {}
+        @cursorOffsetNodes = {}
+        @potentialOffsetNodes = {}
+
         @nodeStacks = { {firstNode} }
         @potentialNodes = {}
         @cursors = {

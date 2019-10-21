@@ -98,11 +98,11 @@ hook.Add "CreateMove", "TheMP Control", (cmd) ->
             y = -cmd\GetForwardMove!
             x = cmd\GetSideMove!
 
-            x = ((x > 0 and 1) or (x < 0 and -1) or 0) * 10
-            y = ((y > 0 and 1) or (y < 0 and -1) or 0) * 10
+            x = ((x > 0 and 1) or (x < 0 and -1) or 0) * 5
+            y = ((y > 0 and 1) or (y < 0 and -1) or 0) * 5
 
             if x ~= 0 or y ~= 0
-                Moonpanel.__nextMovementSend = CurTime! + 0.01
+                Moonpanel.__nextMovementSend = CurTime! + 0.001
                 Moonpanel\applyDeltas panel, x, y
         
         if IsValid panel
@@ -119,7 +119,7 @@ hook.Add "InputMouseApply", "TheMP FocusMode", (cmd, x, y) ->
         panel = Moonpanel\getControlledPanel!
         if IsValid panel
             if x ~= 0 or y ~= 0
-                x, y = x * 0.75, y * 0.75
+                x, y = x * 0.25, y * 0.25
                 Moonpanel\applyDeltas panel, x, y
             cmd\SetMouseX 0
             cmd\SetMouseY 0
@@ -181,7 +181,7 @@ Moonpanel.render.drawTexturedRect = (x, y, w, h, color) ->
     render.DrawQuad quad_v1, quad_v2, quad_v3, quad_v4, color
 
 Moonpanel.render.drawThickLine = (x1, y1, x2, y2, width, dist) ->
-    angle = math.Round math.deg math.atan2 (y2 - y1), (x2 - x1)
+    angle = math.deg math.atan2 (y2 - y1), (x2 - x1)
     dist or= math.sqrt (y2 - y1)^2 + (x2 - x1)^2
 
     matrix = Matrix!

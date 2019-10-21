@@ -215,17 +215,20 @@ ENT.SetupData = (data) =>
 
     @isPowered = true
 
-ENT.ApplyDeltas = (x, y) =>
-    if IsValid(@) and @.pathFinder and (x ~= 0 or y ~= 0)
+ENT.ApplyDeltas = (dx, dy) =>
+    if IsValid(@) and @.pathFinder and (dx ~= 0 or dy ~= 0)
+        dx *= @calculatedDimensions.barWidth * 0.035
+        dy *= @calculatedDimensions.barWidth * 0.035
+
         if CLIENT
             @shouldRepaintTrace = true
             @__calculatedLineLength = nil
 
         else
             activeUser = @GetNW2Entity "ActiveUser"
-            Moonpanel\broadcastDeltas activeUser, @, x, y
+            Moonpanel\broadcastDeltas activeUser, @, dx, dy
 
-        @pathFinder\applyDeltas x, y
+        @pathFinder\applyDeltas dx, dy
 
 ENT.Think = () =>
     if SERVER

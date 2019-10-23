@@ -247,7 +247,9 @@ ENT.PuzzleStart = (nodeA, nodeB) =>
     if @sounds.solvingLoop
         @sounds.solvingLoop\Play!
 
-ENT.PenFade = (interval, clr, delta = 5) =>
+ENT.PenFade = (interval, clr) =>
+    delta = math.max 0.001, FrameTime! * 1000
+
     if clr
         @pen = Color clr.r, clr.g, clr.b, clr.a or 255
 
@@ -255,16 +257,16 @@ ENT.PenFade = (interval, clr, delta = 5) =>
         if not IsValid @
             return
 
+        @pen.a -= delta
+        @shouldRepaintTrace = true
+
         if @pen.a <= 0
             @pen.a = 0
             timer.Remove @GetTimerName "penFade"
             return
 
-        @pen.a -= delta
-        @shouldRepaintTrace = true
-
 ENT.PenInterpolate = (interval, _from, to, callback) =>
-    delta = 0.10
+    delta = math.max 0.001, FrameTime! * 20
     @__penInterp = 0
 
     timer.Create @GetTimerName("penFade"), interval, 0, () ->
@@ -333,7 +335,7 @@ ENT.PuzzleFinish = (data) =>
             _oldPen = ColorAlpha @pen, @pen.a or 255
             err = @colors.errored
 
-            @PenFade 0.05, Color err.r, err.g, err.b, err.a or 255
+            @PenFade 0.025, Color err.r, err.g, err.b, err.a or 255
             timer.Create @GetTimerName("grayOut"), 0.75, 1, () ->
                 timer.Remove @GetTimerName "penFade"
                 @redOut = nil
@@ -372,12 +374,12 @@ ENT.PuzzleFinish = (data) =>
                 @grayOut = _grayOut
                 @grayOutStart = CurTime!
 
-                @PenFade 0.05, Color err.r, err.g, err.b
+                @PenFade 0.025, Color err.r, err.g, err.b
                 if @sounds.failure
                     @PlaySound @sounds.failure
 
         else
-            @PenFade 0.05, Color err.r, err.g, err.b
+            @PenFade 0.01, Color err.r, err.g, err.b
             if not data.sync and @sounds.failure
                 @PlaySound @sounds.failure
 
@@ -389,7 +391,7 @@ ENT.PuzzleFinish = (data) =>
             if data.forceFail
                 @pen.a = 0
             else
-                @PenFade 0.05, Color @pen.r, @pen.g, @pen.b, @pen.a or 255
+                @PenFade 0.01, Color @pen.r, @pen.g, @pen.b, @pen.a or 255
     
     @__wasSolutionAborted = aborted
     @shouldRepaintTrace = true
@@ -603,7 +605,7 @@ ENT.DrawTrace = () =>
     barWidth = @calculatedDimensions.barWidth
     if nodeStacks and #nodeStacks > 0
         if @__penSizeModifier
-            @__penSizeModifier += math.max 0.001, RealFrameTime! * 5
+            @__penSizeModifier += math.max 0.001, FrameTime! * 5
             if @__penSizeModifier > 1
                 @__penSizeModifier = 1
             elseif @__penSizeModifier < 1
@@ -636,7 +638,7 @@ ENT.DrawTrace = () =>
                     if @sounds.pathComplete\IsPlaying!
                         @sounds.pathComplete\Stop!
 
-                    @__blinkDistance = math.Approach @__blinkDistance, 0, @__blinkDistance * math.max 0.01, RealFrameTime! * 5
+                    @__blinkDistance = math.Approach @__blinkDistance, 0, @__blinkDistance * math.max 0.01, FrameTime! * 5
                     if @__blinkDistance <= 0.01
                         @__blinkDistance = 0
 
@@ -655,7 +657,7 @@ ENT.DrawTrace = () =>
             if lerped ~= length
                 @rendertargets.trace.dirty = true
 
-                lerped = math.Approach lerped, length, math.max 1, math.abs(lerped - length) * math.max 0.01, RealFrameTime! * 25
+                lerped = math.Approach lerped, length, math.max 1, math.abs(lerped - length) * math.max 0.01, FrameTime! * 25
                 @__traceLerps[stackId] = lerped
 
             local cursorNode

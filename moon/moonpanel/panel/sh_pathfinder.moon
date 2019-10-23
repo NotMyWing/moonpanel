@@ -33,80 +33,56 @@ class Moonpanel.PathFinder
         return rotational or vertical or horizontal
 
     getClosestNode: (x, y, radius) =>
-        for k, node in pairs @nodeMap
-            if node.clickable
-                dist = math.sqrt (x - node.screenX)^2 + (y - node.screenY)^2
-                if dist <= radius
-                    return node
+        for k, node in pairs @clickableNodes
+            dist = math.sqrt (x - node.screenX)^2 + (y - node.screenY)^2
+            if dist <= radius
+                return node
 
     getSymmetricalNode: (firstNode) =>
-        for k, node in pairs @nodeMap
-            if node.clickable and @checkSymmetry node, firstNode
-                return node
+        return @symmetricalNodes[firstNode]
 
     think: () =>
         -- Calculate valid points
         for nodeStackId, nodeStack in pairs @nodeStacks
             nodeCursor = @cursors[nodeStackId]
-            mouseX = nodeCursor.x
-            mouseY = nodeCursor.y
-
             last = nodeStack[#nodeStack]
 
-            localMouseX = mouseX - last.screenX
-            localMouseY = mouseY - last.screenY
+            localMouseX = nodeCursor.x - last.screenX
+            localMouseY = nodeCursor.y - last.screenY
             mouseVector = Vector localMouseX, localMouseY, 0
 
             maxMDot = 0
             maxDotVector = nil
             maxNode = nil
             maxVecLength = nil
-            for k, to in pairs last.neighbors
-                if not to
-                    continue
-
-                vec = Vector to.screenX - last.screenX, to.screenY - last.screenY, 0
+            -- Iterate through all neighboring points to find the best match
+            for _, neighbor in pairs last.neighbors
+                vec = Vector neighbor.screenX - last.screenX, neighbor.screenY - last.screenY, 0
 
                 vecLength = vec\Length!
 
-                otherStack = @nodeStacks[1 - (nodeStackId - 1) + 1]
-                if @symmetry and otherStack
-                    otherLast = otherStack[#otherStack]
-                    
-                    if to == otherLast
-                        vecLength /= 2
-                        vecLength += @barWidth / 2
-
-                if to ~= nodeStack[#nodeStack - 1]
-                    vecLength -= (@isFirst(to) and @barWidth * 1.75) or (@hasNode(to) and @barWidth) or 0
+                if neighbor ~= nodeStack[#nodeStack - 1]
+                    vecLength -= (@isFirst(neighbor) and @barWidth * 1.75) or (@hasNode(neighbor) and @barWidth) or 0
 
                 vec\Normalize!
-
                 mDot = vec\Dot mouseVector
 
                 if mDot > 0
                     mDot = math.min mDot, vecLength
-            
-                    dotVector = (vec * mDot)
-                    toMouseVec = mouseVector - dotVector
-
-                    mDot = math.min mDot, vecLength
-
-                    dotVector = (vec * mDot)
                     if mDot >= maxMDot
                         maxMDot = mDot
-                        maxDotVector = dotVector
-                        maxNode = to
+                        maxDotVector = (vec * mDot)
+                        maxNode = neighbor
                         maxVecLength = vecLength
-
-            if not @dotVectors[nodeStackId]
-                @dotVectors[nodeStackId] = {}
 
             -- This might introduce several inaccuracies, but 
             -- floating points is why we can't have nice things.
             if maxDotVector
                 maxDotVector.x = trunc maxDotVector.x, 3
                 maxDotVector.y = trunc maxDotVector.y, 3
+
+            if not @dotVectors[nodeStackId]
+                @dotVectors[nodeStackId] = {}
 
             @dotVectors[nodeStackId].maxNode = maxNode
             @dotVectors[nodeStackId].maxDotVector = maxDotVector
@@ -150,12 +126,34 @@ class Moonpanel.PathFinder
                     (vec_1.x == -vec_2.x) and (vec_1.y ==  vec_2.y)
 
         if allPointsValid
-            -- Gather points
+            -- Check for overlaps
+            seen = {}
+            isOverlapping = false
+            for nodeStackId, nodeStack in pairs @nodeStacks
+                vector = @dotVectors[nodeStackId]
+                if not @isFirst(vector.maxNode) and seen[vector.maxNode]
+                    isOverlapping = true
+                    break
+
+                seen[vector.maxNode] = true
+
+            -- If there are overlaps, clamp cursors
+            if isOverlapping
+                for nodeStackId, nodeStack in pairs @nodeStacks
+                    vector = @dotVectors[nodeStackId]
+
+                    newLength = (vector.maxVecLength - @barWidth / 2)
+                    if vector.maxMDot > newLength
+                        vector.maxDotVector.x = trunc newLength * (vector.maxDotVector.x / vector.maxMDot), 3
+                        vector.maxDotVector.y = trunc newLength * (vector.maxDotVector.y / vector.maxMDot), 3
+                        vector.maxMDot = newLength
+
             toInsert = {}
             toInsertCount = 0
             toRemove = {}
             toRemoveCount = 0
 
+            -- Determine inserts/removes for this round
             for nodeStackId, nodeStack in pairs @nodeStacks
                 nodeCursor = @cursors[nodeStackId]
                 vector = @dotVectors[nodeStackId]
@@ -176,35 +174,25 @@ class Moonpanel.PathFinder
                     table.insert toRemove, #nodeStack
                     toRemoveCount += 1
 
-            -- ???
-            if toInsertCount > 0 and toRemoveCount > 0
-                allPointsValid = true
-            
-            -- Insert case
-            elseif toInsertCount == #@nodeStacks
-                seen = {}
-                isInvalid = false
-                for nodeStackId, nodeStack in pairs @nodeStacks
-                    if seen[toInsert[nodeStackId]]
-                        isInvalid = true
-                        break
-
-                    seen[toInsert[nodeStackId]] = true
-
-                if not isInvalid
+            -- Prevent weird uncaught cases
+            if not (toInsertCount > 0 and toRemoveCount > 0)
+                -- If there are points to insert, insert them
+                if toInsertCount == #@nodeStacks
                     allPointsValid = false
+
                     for nodeStackId, nodeStack in pairs @nodeStacks
                         table.insert @nodeStacks[nodeStackId], toInsert[nodeStackId]
                         @cursorOffsetNodes[nodeStackId] = toInsert[nodeStackId]
 
-            -- Remove case
-            elseif toRemoveCount == #@nodeStacks
-                allPointsValid = false
-                for nodeStackId, nodeStack in pairs @nodeStacks
-                    @potentialNodes[nodeStackId] = nodeStack[toRemove[nodeStackId]]
+                -- If there are points to remove, remove them
+                elseif toRemoveCount == #@nodeStacks
+                    allPointsValid = false
+                    for nodeStackId, nodeStack in pairs @nodeStacks
+                        @potentialNodes[nodeStackId] = nodeStack[toRemove[nodeStackId]]
 
-                    table.remove @nodeStacks[nodeStackId], toRemove[nodeStackId]
+                        table.remove @nodeStacks[nodeStackId], toRemove[nodeStackId]
 
+        -- Finally, determine new cursor positions
         for nodeStackId, nodeStack in pairs @nodeStacks
             nodeCursor = @cursors[nodeStackId]
             offsetNode = @cursorOffsetNodes[nodeStackId]
@@ -277,6 +265,23 @@ class Moonpanel.PathFinder
             @screenWidth = .screenWidth
             @screenHeight = .screenHeight
             @symmetry = (.symmetry and .symmetry ~= Moonpanel.Symmetry.None) and .symmetry or false
+
+        -- Prepare clickable nodes
+        @clickableNodes = {}
+        for k, node in pairs @nodeMap
+            if node.clickable
+                @clickableNodes[#@clickableNodes + 1] = node
+
+        -- Prepare symmetrical clickable nodes
+        seen = {}
+        @symmetricalNodes = {}
+        for _, firstNode in pairs @clickableNodes
+            for _, secondNode in pairs @clickableNodes
+                if not seen[firstNode] and not seen[secondNode] and @checkSymmetry firstNode, secondNode
+                    @symmetricalNodes[secondNode] = firstNode
+                    @symmetricalNodes[firstNode]  = secondNode
+                    seen[firstNode]  = true
+                    seen[secondNode] = true
 
         -- Cache the nodemap IDs so we can communicate them easily.
         -- This is highly unsafe since nodemaps might end up

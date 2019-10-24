@@ -49,10 +49,11 @@ class Hexagon extends Moonpanel.BaseEntity
             bounds.y + (bounds.height / 2) - (w / 2), w, w
         draw.NoTexture!
 
+trunc = Moonpanel.trunc
 unitVector = (angle) ->
     angle = math.rad angle + 90
-    x = math.cos angle
-    y = math.sin angle
+    x = trunc (math.cos angle), 3
+    y = trunc (math.sin angle), 3
 
     return { :x, :y }
 

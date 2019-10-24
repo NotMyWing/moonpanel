@@ -459,7 +459,7 @@ ENT.StartPuzzle = (ply, x, y) =>
                 return
 
             if @tileData.Tile.Symmetry ~= Moonpanel.Symmetry.None
-                nodeB = @pathFinder\getSymmetricalNode nodeA
+                nodeB = @pathFinder\getSymmetricalClickableNode nodeA
                 if not nodeB
                     return
                     

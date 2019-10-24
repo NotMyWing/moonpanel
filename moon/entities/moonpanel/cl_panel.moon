@@ -588,14 +588,19 @@ ENT.DrawTrace = () =>
     draw.NoTexture!
 
     if false
-        surface.SetDrawColor (Color 255, 0, 0, 255)
         for _, node in pairs @pathMap
+            if node.hili
+                surface.SetDrawColor (Color 0, 255, 255, 255)
+            else
+                surface.SetDrawColor (Color 255, 0, 0, 255)
+
             w, h = 32, 32
             if node.clickable
                 w, h = w * 2, h * 2
             x, y = node.screenX - w/2, node.screenY - w/2
             Moonpanel.render.drawCircleAt @calculatedDimensions.barCircle, node.screenX, node.screenY, 0.5
 
+            surface.SetDrawColor (Color 255, 0, 0, 255)
             for _, neighbor in pairs node.neighbors
                 surface.DrawLine node.screenX, node.screenY, neighbor.screenX, neighbor.screenY
 

@@ -304,6 +304,10 @@ Moonpanel.calculateDimensionsShared = (data) =>
                 \SetRadius math.floor barWidth * 1.25 
     }
 
+Moonpanel.trunc = (num, n) ->
+    mult = 10^(n or 0)
+    return math.floor(num * mult + 0.5) / mult
+
 --------------
 -- Includes --
 --------------

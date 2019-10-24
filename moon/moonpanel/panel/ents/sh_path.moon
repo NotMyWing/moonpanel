@@ -46,6 +46,7 @@ class VBroken extends Moonpanel.BaseEntity
         topNode = topIntersection and topIntersection.pathMapNode
         bottomNode = bottomIntersection and bottomIntersection.pathMapNode
 
+        local nodeA
         if topNode
             nodeA = {
                 x: topNode.x
@@ -71,6 +72,9 @@ class VBroken extends Moonpanel.BaseEntity
 
             table.insert bottomNode.neighbors, nodeB
             table.insert pathMap, nodeB
+
+            nodeA.pairedBreak = nodeB
+            nodeB.pairedBreak = nodeA
 
         return true
 
@@ -107,6 +111,7 @@ class HBroken extends Moonpanel.BaseEntity
         leftNode = leftIntersection and leftIntersection.pathMapNode
         rightNode = rightIntersection and rightIntersection.pathMapNode
 
+        local nodeA
         if leftNode
             nodeA = {
                 x: leftNode.x + 0.25
@@ -130,6 +135,9 @@ class HBroken extends Moonpanel.BaseEntity
             }
             table.insert rightNode.neighbors, nodeB
             table.insert pathMap, nodeB
+
+            nodeA.pairedBreak = nodeB
+            nodeB.pairedBreak = nodeA
 
         return true
 

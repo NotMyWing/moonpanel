@@ -341,7 +341,7 @@ class Moonpanel.PathFinder
 
         -- Snapping
         areSnapsDistinct = true
-        if @symmetry and (@dotVectors[1].maxNode ~= @dotVectors[2].maxNode)
+        if @symmetry and (@dotVectors[1].maxNode == @dotVectors[2].maxNode)
             areSnapsDistinct = false
 
         for nodeStackId, nodeStack in pairs @nodeStacks
@@ -352,51 +352,53 @@ class Moonpanel.PathFinder
                 maxVecLength = @dotVectors[nodeStackId].maxVecLength
 
                 nodeCursor = @cursors[nodeStackId]
-                last = nodeStack[#nodeStack]
 
-                localMouseX = nodeCursor.x - last.screenX
-                localMouseY = nodeCursor.y - last.screenY
-                localMouseMag = math.sqrt localMouseX^2 + localMouseY^2
+                if (PathFinderSnapModifierConvar\GetFloat! or 0) > 0
+                    last = nodeStack[#nodeStack]
+                    localMouseX = nodeCursor.x - last.screenX
+                    localMouseY = nodeCursor.y - last.screenY
+                    localMouseMag = math.sqrt localMouseX^2 + localMouseY^2
 
-                -- Find the best suitable snap origin
-                snapOrigin = (localMouseMag > (maxVecLength / 2) and
-                    areSnapsDistinct and
-                    not maxNode.exit and
-                    not maxNode.break and
-                    not @isTraced maxNode) and maxNode or last
+                    -- Find the best suitable snap origin
+                    snapOrigin = (localMouseMag > (maxVecLength / 2) and
+                        areSnapsDistinct and
+                        not maxNode.exit and
+                        not maxNode.break and
+                        not @isTraced maxNode) and maxNode or last
 
-                -- Find perpendicular vector to vec
-                px = localMouseX - (maxMDot * maxDotVector.x)
-                py = localMouseY - (maxMDot * maxDotVector.y)
+                    -- Find perpendicular vector to vec
+                    px = localMouseX - (maxMDot * maxDotVector.x)
+                    py = localMouseY - (maxMDot * maxDotVector.y)
 
-                -- Equality comparison tolerance
-                tolerance = 0.001
-            
-                -- Find the max dotProduct of p to neighbouring lines
-                maxSnapDot = 0
-                for _, snapNode in pairs snapOrigin.neighbors
-                    if snapNode == last or snapNode == maxNode
-                        continue
+                    -- Equality comparison tolerance
+                    tolerance = 0.001
+                
+                    -- Find the max dotProduct of p to neighbouring lines
+                    maxSnapDot = 0
+                    for _, snapNode in pairs snapOrigin.neighbors
+                        if snapNode == last or snapNode == maxNode
+                            continue
 
-                    dx = snapNode.screenX - snapOrigin.screenX
-                    dy = snapNode.screenY - snapOrigin.screenY
-                    mag = math.sqrt dx^2 + dy^2
+                        dx = snapNode.screenX - snapOrigin.screenX
+                        dy = snapNode.screenY - snapOrigin.screenY
+                        mag = math.sqrt dx^2 + dy^2
 
-                    -- Don't prefer dead-end pathes
-                    modifier = math.Clamp PathFinderSnapModifierConvar\GetFloat!, 0, 1
+                        -- Intrusiveness modifier. The lower the value,
+                        -- the less intrusive the snapping is.
+                        modifier = math.Clamp (PathFinderSnapModifierConvar\GetFloat! or 0), 0, 1
+                        
+                        -- Don't prefer dead-end pathes
+                        if @isTraced(snapNode)
+                            modifier *= 0.8
 
-                    -- Don't prefer dead-end pathes
-                    if @isTraced(snapNode)
-                        modifier *= 0.8
+                        dotProduct = modifier * (px * (dx/mag) + py * (dy/mag))
+                        if dotProduct > 0 and math.abs(dotProduct) > tolerance and dotProduct > maxSnapDot
+                            maxSnapDot = dotProduct
 
-                    dotProduct = modifier * (px * (dx/mag) + py * (dy/mag))
-                    if dotProduct > 0 and math.abs(dotProduct) > tolerance and dotProduct > maxSnapDot
-                        maxSnapDot = dotProduct
-
-                if snapOrigin == last
-                    maxMDot -= maxSnapDot
-                else
-                    maxMDot += maxSnapDot
+                    if snapOrigin == last
+                        maxMDot -= maxSnapDot
+                    else
+                        maxMDot += maxSnapDot
 
                 -- This might introduce several inaccuracies, but 
                 -- floating points is why we can't have nice things.

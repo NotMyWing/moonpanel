@@ -262,7 +262,7 @@ class Moonpanel.PathFinder
     -- Applies delta movement. Invokes think.
     -------------------------------------------
     applyDeltas: (x, y) =>
-        if not @nodeStacks or not @cursors
+        if not @dotVectors or not @nodeStacks or not @cursors
             return
 
         @cursors[1].x = math.floor @cursors[1].x + x

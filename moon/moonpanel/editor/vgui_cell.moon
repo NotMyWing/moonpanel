@@ -42,7 +42,7 @@ cell.RenderTriangles = (w, h, count) =>
 
 cell.RenderPolyo = (w, h) =>
     data = @attributes
-    if not data
+    if not data or not data.shape
         return
 
     polyheight = data.shape.h
@@ -107,7 +107,7 @@ cell.Paint = (w, h) =>
         @RenderPolyo w, h
         
     elseif @entity == types.Triangle
-        @RenderTriangles w, h, @attributes.count
+        @RenderTriangles w, h, @attributes.count or 1
 
     elseif @entity == types.Invisible
         surface.SetDrawColor white

@@ -54,110 +54,141 @@ export MOONPANEL_DEFAULTEST_RESOLUTION = {
 -------------
 
 Moonpanel.EntityTypes = {
-    None: 0
-    Start: 1
-    End: 2
-    Hexagon: 3
-    Triangle: 4
-    Polyomino: 5
-    Sun: 6
-    Eraser: 7
-    Color: 8
-    Disjoint: 9
-    Invisible: 10
+    None:               0
+    Start:              1
+    End:                2
+    Hexagon:            3
+    Triangle:           4
+    Polyomino:          5
+    Sun:                6
+    Eraser:             7
+    Color:              8
+    Disjoint:           9
+    Invisible:         10
+    NegativePolyomino: 11
 }
 
 Moonpanel.ObjectTypes = {
-    None: 0
-    Cell: 1
-    VPath: 2
-    HPath: 3
+    None:         0
+    Cell:         1
+    VPath:        2
+    HPath:        3
     Intersection: 4
 }
 
 Moonpanel.Symmetry = {
-    None: 0
+    None:       0
     Rotational: 1
-    Vertical: 2
+    Vertical:   2
     Horizontal: 3
 }
 
 Moonpanel.PanelState = {
-    None: 1
+    None:      1
     BeingUsed: 2
-    Finished: 3
+    Finished:  3
 }
 
 Moonpanel.Flow = {
-    ApplyDeltas: 1
-    PanelData: 2
-    PuzzleFinish: 3
-    PuzzleStart: 4
+    ApplyDeltas:    1
+    PanelData:      2
+    PuzzleFinish:   3
+    PuzzleStart:    4
     RequestControl: 5
-    RequestData: 6
-    Desync: 7
+    RequestData:    6
+    Desync:         7
 }
 
 Moonpanel.Color = {
-    Black: 1
-    White: 2
-    Cyan: 3
+    Black:   1
+    White:   2
+    Cyan:    3
     Magenta: 4
-    Yellow: 5
-    Red: 6
-    Green: 7
-    Blue: 8
-    Orange: 9
+    Yellow:  5
+    Red:     6
+    Green:   7
+    Blue:    8
+    Orange:  9
+}
+
+Moonpanel.TheWindmill_EntityTypes = {
+    [3]:  Moonpanel.EntityTypes.Start
+    [4]:  Moonpanel.EntityTypes.End
+    [5]:  Moonpanel.EntityTypes.Disjoint
+    [6]:  Moonpanel.EntityTypes.Hexagon
+    [7]:  Moonpanel.EntityTypes.Color
+    [8]:  Moonpanel.EntityTypes.Sun
+    [9]:  Moonpanel.EntityTypes.Polyomino
+    [10]: Moonpanel.EntityTypes.Eraser
+    [11]: Moonpanel.EntityTypes.Triangle
+}
+
+Moonpanel.TheWindmill_SymmetryTypes = {
+    [0]: Moonpanel.Symmetry.None
+    [1]: Moonpanel.Symmetry.None
+    [2]: Moonpanel.Symmetry.Horizontal
+    [3]: Moonpanel.Symmetry.Vertical
+    [4]: Moonpanel.Symmetry.Rotational
+}
+
+Moonpanel.DefaultEntityColors = {
+    [Moonpanel.EntityTypes.Color]:     Moonpanel.Color.Black
+    [Moonpanel.EntityTypes.Hexagon]:   Moonpanel.Color.Black
+    [Moonpanel.EntityTypes.Triangle]:  Moonpanel.Color.Orange
+    [Moonpanel.EntityTypes.Polyomino]: Moonpanel.Color.Yellow
+    [Moonpanel.EntityTypes.Eraser]:    Moonpanel.Color.White
+    [Moonpanel.EntityTypes.Sun]:       Moonpanel.Color.White
 }
 
 Moonpanel.Colors = {
-    [Moonpanel.Color.Black]: Color 0, 0, 0 
-    [Moonpanel.Color.White]: Color 255, 255, 255
-    [Moonpanel.Color.Cyan]: Color 0, 255, 255
-    [Moonpanel.Color.Magenta]: Color 255, 0, 255
-    [Moonpanel.Color.Yellow]: Color 255, 255, 0
-    [Moonpanel.Color.Red]: Color 255, 0, 0
-    [Moonpanel.Color.Green]: Color 0, 128, 0
-    [Moonpanel.Color.Blue]: Color 0, 0, 255
-    [Moonpanel.Color.Orange]: Color 255, 160, 0
+    [Moonpanel.Color.Black]:   Color 0   , 0   , 0 
+    [Moonpanel.Color.White]:   Color 255 , 255 , 255
+    [Moonpanel.Color.Cyan]:    Color 0   , 255 , 255
+    [Moonpanel.Color.Magenta]: Color 255 , 0   , 255
+    [Moonpanel.Color.Yellow]:  Color 255 , 255 , 0
+    [Moonpanel.Color.Red]:     Color 255 , 0   , 0
+    [Moonpanel.Color.Green]:   Color 0   , 128 , 0
+    [Moonpanel.Color.Blue]:    Color 0   , 0   , 255
+    [Moonpanel.Color.Orange]:  Color 255 , 160 , 0
 }
 
 Moonpanel.DefaultColors = {
-    Background: Color 80, 77, 255, 255
-    Untraced: Color 40, 22, 186
-    Traced: Color 200, 235, 255, 255
-    Finished: Color 110, 170, 255, 255
-    Vignette: Color 255, 255, 255, 200
-    Errored: Color 0, 0, 0, 255
-    Cell: Color 0, 0, 0, 0
+    Background: Color 80  , 77  , 255 , 255
+    Untraced:   Color 40  , 22  , 186 , 255
+    Traced:     Color 200 , 235 , 255 , 255
+    Finished:   Color 110 , 170 , 255 , 255
+    Vignette:   Color 255 , 255 , 255 , 200
+    Errored:    Color 0   , 0   , 0   , 255
+    Cell:       Color 0   , 0   , 0   , 0
 }
 
 Moonpanel.Presets = {
     ["Default"]: {
         Background: Moonpanel.DefaultColors.Background
-        Untraced: Moonpanel.DefaultColors.Untraced
-        Traced: Moonpanel.DefaultColors.Traced
-        Finished: Moonpanel.DefaultColors.Finished
-        Vignette: Moonpanel.DefaultColors.Vignette
-        Errored: Moonpanel.DefaultColors.Errored
-        Cell: Moonpanel.DefaultColors.Cell
+        Untraced:   Moonpanel.DefaultColors.Untraced
+        Traced:     Moonpanel.DefaultColors.Traced
+        Finished:   Moonpanel.DefaultColors.Finished
+        Vignette:   Moonpanel.DefaultColors.Vignette
+        Errored:    Moonpanel.DefaultColors.Errored
+        Cell:       Moonpanel.DefaultColors.Cell
     }
     ["The Challenge Triangles"]: {
-        Background: Color 30, 30, 30, 255
-        Traced: Color 250, 160, 10, 255
-        Untraced: Color 125, 110, 50, 255
+        Background: Color 30  , 30  , 30 , 255
+        Traced:     Color 250 , 160 , 10 , 255
+        Untraced:   Color 125 , 110 , 50 , 255
     }
     ["The Quarry Gray"]: {
-        Background: Color 70, 70, 70, 255
-        Traced: Color 255, 255, 255, 255
-        Untraced: Color 90, 140, 130
-        Cell: Color 0, 0, 0, 255
+        Background: Color 70  , 70  , 70  , 255
+        Traced:     Color 255 , 255 , 255 , 255
+        Untraced:   Color 90  , 140 , 130 , 255
+        Cell:       Color 0   , 0   , 0   , 255
     }
     ["The Windmill"]: {
-        Background: Color 112, 128, 144, 255
-        Traced: Color 220, 220, 220, 255
-        Untraced: Color 0, 0, 0, 255
-        Finished: Color 230, 230, 230, 255
+        Background: Color 112 , 128 , 144 , 255
+        Traced:     Color 220 , 220 , 220 , 255
+        Untraced:   Color 0   , 0   , 0   , 255
+        Finished:   Color 230 , 230 , 230 , 255
+        Errored:    Color 220 , 64  , 64  , 255
     }
 }
 

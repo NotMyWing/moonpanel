@@ -20,6 +20,8 @@ AddCSLuaFile "moonpanel/editor/vgui_hpath.lua"
 AddCSLuaFile "moonpanel/editor/vgui_intersection.lua"
 AddCSLuaFile "moonpanel/editor/vgui_polyoeditor.lua"
 AddCSLuaFile "moonpanel/editor/vgui_circlyslider.lua"
+AddCSLuaFile "moonpanel/editor/vgui_windmill.lua"
+AddCSLuaFile "moonpanel/editor/vgui_dhtmlcontrols.lua"
 
 AddCSLuaFile "entities/moonpanel/shared.lua"
 AddCSLuaFile "entities/moonpanel/cl_init.lua"

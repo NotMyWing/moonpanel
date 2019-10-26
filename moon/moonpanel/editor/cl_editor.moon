@@ -7,6 +7,9 @@ TIPLABEL_TIPS = {
     "You should play The Witness!"
 }
 
+ProxyEndPoint = CreateConVar "themp_browser_proxyendpoint", "https://windmill-proxy.pony.workers.dev/",
+    FCVAR_ARCHIVE, "The Windmill proxy endpoint."
+
 -----------------------------------
 --                               --
 -- HERE BE LOCALS.               --
@@ -600,6 +603,9 @@ editor.Autosave = () =>
     file.Write "moonpanel_meta/metadata.txt", util.TableToJSON metadata
 
 editor.OnChange = () =>
+    if @__serializing
+        return
+    
     if not @__hasChanged
         @SetTitle @GetTitle! .. " (*)"
 
@@ -880,7 +886,13 @@ editor.Init = () =>
         \SetTooltip "Import from The Windmill..."
         \SizeToContents!
         .DoClick = () ->
-            --@ShowSaveAsDialog!     
+            if not @__windmillBrowser
+                @__windmillBrowser = vgui.CreateFromTable (include "moonpanel/editor/vgui_windmill.lua")
+                @__windmillBrowser.ImportCallback = (data) ->
+                    @WindmillImportCallback data
+
+            @__windmillBrowser\Show!
+            @__windmillBrowser\MakePopup!
     
     @panel_toolBar\SetWide 160
     @panel_toolBar\InvalidateLayout!
@@ -1760,19 +1772,20 @@ editor.Serialize = () =>
                             t.Attributes.Hollow = element.attributes.hollow
 
                         when Moonpanel.EntityTypes.Polyomino
-                            t.Attributes.Shape = {}
-                            for j = 1, element.attributes.shape.h
-                                t.Attributes.Shape[j] = {}
-                                for i = 1, element.attributes.shape.w
-                                    t.Attributes.Shape[j][i] = element.attributes.shape[j][i] and 1 or 0
-                            
-                            t.Attributes.Rotational = element.attributes.shape.rotational
+                            if element.attributes.shape
+                                t.Attributes.Shape = {}
+                                for j = 1, element.attributes.shape.h
+                                    t.Attributes.Shape[j] = {}
+                                    for i = 1, element.attributes.shape.w
+                                        t.Attributes.Shape[j][i] = element.attributes.shape[j][i] and 1 or 0
+                                
+                                t.Attributes.Rotational = element.attributes.shape.rotational
 
     @__serializing = false
 
     return outputData
 
-editor.Deserialize = (input) =>
+editor.Deserialize = (input, noChange) =>
     if @__serializing
         return
     @__serializing = true
@@ -1978,6 +1991,216 @@ editor.ShowSaveAsDialog = () =>
 
             @SaveTo "moonpanel/" .. fileName .. ".txt"
             @UpdateTree!  
+
+editor.WindmillImportCallback = (data) =>
+    if @__hasChanged
+        Derma_Query "You have unsaved changes! Clear anyway?", "New",
+            "Yes", () ->
+                @SetOpenedFile!
+                @ConfirmWindmillParsing data,
+            "No"
+    else
+        @SetOpenedFile!
+        @ConfirmWindmillParsing data
+
+errorCallback = (error) ->
+    text = error or "Failed to parse the puzzle."
+    Derma_Message error, "Error", ":("
+
+editor.ConfirmWindmillParsing = (data) =>
+    http.Fetch ProxyEndPoint\GetString! .. data,
+        (body, len, headers, code) ->
+            result = util.JSONToTable body
+            if result
+                @ParseWindmillData result
+            else
+                errorCallback!,
+        errorCallback
+
+editor.ParseWindmillData = (storage) =>
+    local width, height
+    contents = storage.contents
+
+    local storeHeight
+    if (not contents.entity or not contents.width)
+        Derma_Message "Failed to decode the panel data.", "Error", ":("
+        return
+    else
+        expandedEntities = {}
+
+        for _, entity in pairs contents.entity
+            if entity and entity.shape and entity.shape.negative
+                Derma_Message "Negative polyominoes are not supported.", "Error", ":("
+                return
+
+            for i = 1, entity.count or 1
+                table.insert expandedEntities, entity
+
+        contents.entity = expandedEntities
+        if (#contents.entity % contents.width ~= 0)
+            Derma_Message "Failed to decode the panel data.", "Error", ":("
+            return
+
+        storeHeight = math.floor #contents.entity / contents.width
+        width = math.floor contents.width / 2
+        height = math.floor storeHeight / 2
+
+    storeWidth = width * 2 + 1
+    storeHeight = height * 2 + 1
+
+    toIndex = (a, b) ->
+        1 + a + storeWidth * b
+
+    newData = {
+        --title: ""
+        w: width or 3
+        h: height or 3
+        symmetry: Moonpanel.TheWindmill_SymmetryTypes[contents.symmetry] or Moonpanel.Symmetry.None
+
+        cells: {}
+        intersections: {}
+        vpaths: {}
+        hpaths: {}
+        colors: {}
+    }
+
+    @slider_barWidth\SetValue 0
+    @slider_innerScreenRatio\SetValue 0
+    @slider_maxBarLength\SetValue 0
+    @slider_disjointLength\SetValue 0
+
+    @comboBox_widthCombo\SetText width
+    @comboBox_heightCombo\SetText height
+
+    symmetry = @comboBox_symmetryCombo\GetOptionTextByData newData.symmetry
+    if type(symmetry) == "string"
+        @comboBox_symmetryCombo\SetText symmetry
+
+    preset = Moonpanel.Presets["The Windmill"]
+    default = Moonpanel.DefaultColors
+
+    newData.colors.background = preset.Background or default.Background
+    @color_background\SetColor newData.colors.background
+
+    newData.colors.vignette = preset.Vignette or default.Vignette
+    @color_vignette\SetColor newData.colors.vignette
+
+    newData.colors.cell = preset.Cell or default.Cell
+    @color_cell\SetColor newData.colors.cell
+
+    newData.colors.traced = preset.Traced or default.Traced
+    @color_traced\SetColor newData.colors.traced
+
+    newData.colors.untraced = preset.Untraced or default.Untraced
+    @color_untraced\SetColor newData.colors.untraced
+
+    newData.colors.finished = preset.Finished or default.Finished
+    @color_finished\SetColor newData.colors.finished
+
+    newData.colors.errored = preset.Errored or default.Errored
+    @color_errored\SetColor Moonpanel.DefaultColors.Errored
+
+    for i = 1, width
+        for j = 1, height
+            cell = contents.entity[toIndex((i-1) * 2 + 1, (j-1) * 2 + 1)]
+
+            if cell and cell.type and cell.type >= 3
+                type = Moonpanel.TheWindmill_EntityTypes[cell.type]
+
+                newData.cells[j] or= {}
+                newData.cells[j][i] = {
+                    entity: type,
+                    attributes: {
+                        color: cell.color or Moonpanel.DefaultEntityColors[type] or Moonpanel.Color.Black
+                        count: cell.triangleCount
+                    }
+                }
+                attributes = newData.cells[j][i].attributes
+
+                if (cell.shape)
+                    shapeW = cell.shape.width
+                    shapeH = #cell.shape.grid / shapeW
+
+                    attributes.shape = {
+                        w: shapeW
+                        h: shapeH
+                    }
+                    if (cell.shape.free)
+                        attributes.shape.rotational = true
+
+                    for _j = 0, shapeH - 1
+                        attributes.shape[_j + 1] = {}
+                        for _i = 0, shapeW - 1
+                            attributes.shape[_j + 1][_i + 1] = cell.shape.grid[(_i + shapeW * _j) + 1] and true or false
+
+    for i = 1, width + 1
+        for j = 1, height + 1
+            int = contents.entity[toIndex((i-1) * 2, (j-1) * 2)]
+
+            if int and int.type and int.type >= 3
+                type = Moonpanel.TheWindmill_EntityTypes[int.type]
+
+                color = if type == Moonpanel.EntityTypes.Hexagon
+                    Moonpanel.Color.White
+                else
+                    int.color or Moonpanel.DefaultEntityColors[type] or Moonpanel.Color.Black
+
+                newData.intersections[j] or= {}
+                newData.intersections[j][i] = {
+                    entity: type
+                    attributes: {
+                        :color
+                    }
+                }
+
+    for i = 1, width + 1
+        for j = 1, height
+            vpath = contents.entity[toIndex((i-1) * 2, (j-1) * 2 + 1)]
+            
+            if vpath and vpath.type and vpath.type >= 3
+                type = Moonpanel.TheWindmill_EntityTypes[vpath.type]
+
+                color = if type == Moonpanel.EntityTypes.Hexagon
+                    Moonpanel.Color.White
+                else
+                    vpath.color or Moonpanel.DefaultEntityColors[type] or Moonpanel.Color.Black
+
+                newData.vpaths[j] or= {}
+                newData.vpaths[j][i] = {
+                    entity: type
+                    attributes: {
+                        :color
+                    }
+                }
+
+    for i = 1, width
+        for j = 1, height + 1
+            hpath = contents.entity[toIndex((i-1) * 2 + 1, (j-1) * 2)]
+            
+            if hpath and hpath.type and hpath.type >= 3
+                type = Moonpanel.TheWindmill_EntityTypes[hpath.type]
+
+                color = if type == Moonpanel.EntityTypes.Hexagon
+                    Moonpanel.Color.White
+                else
+                    hpath.color or Moonpanel.DefaultEntityColors[type] or Moonpanel.Color.Black
+
+                newData.hpaths[j] or= {}
+                newData.hpaths[j][i] = {
+                    entity: type
+                    attributes: {
+                        :color
+                    }
+                }
+
+    table.Empty @data
+    table.CopyFromTo newData, @data
+
+    @SetupGrid @data
+    @panel_controls\InvalidateChildren!
+    @panel_controls\InvalidateLayout!
+
+    @__windmillBrowser\Hide!
 
 editor.OnClose = () =>
     @Autosave!

@@ -319,10 +319,12 @@ Moonpanel.calculateDimensionsShared = (data) =>
     innerWidth = barWidth * (cellsW + 1) + barLength * (cellsW)
 
     return {
-        barWidth: math.floor barWidth
-        barLength: math.floor barLength
-        innerWidth: math.floor innerWidth
-        innerHeight: math.floor innerHeight
+        screenWidth:  w
+        screenHeight: h
+        barWidth:     math.floor barWidth
+        barLength:    math.floor barLength
+        innerWidth:   math.floor innerWidth
+        innerHeight:  math.floor innerHeight
 
         barCircle: if CLIENT
             with circle = draw.NewCircle CIRCLE_FILLED

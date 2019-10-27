@@ -518,6 +518,9 @@ ENT.DrawBackground = () =>
 
         Moonpanel.render.drawThickLine nodeA.screenX, nodeA.screenY, 
             nodeB.screenX, nodeB.screenY, barWidth + 0.5, length
+
+    for _, node in pairs @pathMapDisconnectedNodes
+        Moonpanel.render.drawCircleAt node.clickable and startCircle or barCircle, node.screenX, node.screenY
     
 ENT.DrawForeground = () =>
     Clear 0, 0, 0, 0

@@ -63,78 +63,82 @@ class Exit extends Moonpanel.BaseEntity
         return @__angle
 
     calculateAngle: =>
-        @__angle or= do
-            invis = Moonpanel.EntityTypes.Invisible
+        if @__angle == nil
+            @__angle = (->
+                invis = Moonpanel.EntityTypes.Invisible
 
-            left = @parent\getLeft!
-            right = @parent\getRight!
-            top = @parent\getTop!
-            bottom = @parent\getBottom!
+                left = @parent\getLeft!
+                right = @parent\getRight!
+                top = @parent\getTop!
+                bottom = @parent\getBottom!
 
-            left   = left   and not (left.entity   and left.entity.type   == invis) and left
-            right  = right  and not (right.entity  and right.entity.type  == invis) and right
-            top    = top    and not (top.entity    and top.entity.type    == invis) and top
-            bottom = bottom and not (bottom.entity and bottom.entity.type == invis) and bottom
+                left   = left   and not (left.entity   and left.entity.type   == invis) and left
+                right  = right  and not (right.entity  and right.entity.type  == invis) and right
+                top    = top    and not (top.entity    and top.entity.type    == invis) and top
+                bottom = bottom and not (bottom.entity and bottom.entity.type == invis) and bottom
 
-            @overridesRender = ((left and 1 or 0) +
-                (right and 1 or 0) +
-                (top and 1 or 0) +
-                (bottom and 1 or 0)) == 1
+                screenWidth  = @parent.tile.calculatedDimensions.screenWidth
+                screenHeight = @parent.tile.calculatedDimensions.screenHeight
 
-            -- Corner cases.
-            if top and right and not bottom and not left
-                return unitVector 45
-            
-            if right and bottom and not left and not top
-                return unitVector 135
+                isLeftMost = @parent.bounds.x <= screenWidth  / 2
+                isTopMost  = @parent.bounds.y <= screenHeight / 2
 
-            if left and bottom and not right and not top
-                return unitVector 225
+                numNeighbours = (left and 1 or 0) +
+                    (right and 1 or 0) +
+                    (top and 1 or 0) +
+                    (bottom and 1 or 0)
 
-            if left and top and not right and not bottom
-                return unitVector 315
+                if numNeighbours == 3
+                    if not top
+                        return unitVector 180
 
-            td = @parent.tile.tileData.Tile
-            x, y, w, h = @parent.x, @parent.y, td.Width + 1, td.Height + 1
+                    if not bottom
+                        return unitVector 0
 
-            -- "Edge" cases.
-            if y == 1 and x ~= 1 and x ~= w
-                return unitVector 180
+                    if not left
+                        return unitVector 90
 
-            if y == h and x ~= 1 and x ~= w
-                return unitVector 0
+                    if not right
+                        return unitVector 270
 
-            if x == w and y ~= 1 and y ~= h
-                return unitVector 270
+                    return false
 
-            if x == 1 and y ~= 1 and y ~= h
-                return unitVector 90
+                if numNeighbours == 2
+                    if top and right
+                        return unitVector 45
 
-            -- Inside-out cases.
-            if y <= (h / 2) --and x ~= 1 and x ~= w
-                return unitVector 180
+                    if bottom and right
+                        return unitVector 135
 
-            if y > (h / 2) --and x ~= 1 and x ~= w
-                return unitVector 0
+                    if left and bottom
+                        return unitVector 225
 
-            if x <= (w / 2) --and y ~= 1 and y ~= h
-                return unitVector 270
+                    if left and top
+                        return unitVector 315
 
-            if x > (w / 2) --and y ~= 1 and y ~= h
-                return unitVector 90
+                    if left and right
+                        return unitVector isTopMost and 180 or 0
 
-            -- The rest.
-            if not bottom
-                return unitVector 0
+                    if top and bottom
+                        return unitVector isLeftMost and 90 or 270
 
-            if not top
-                return unitVector 180
+                if numNeighbours == 1
+                    if bottom
+                        return unitVector 180
 
-            if not left
-                return unitVector 90
-            
-            if not right
-                return unitVector 270
+                    if top
+                        return unitVector 0
+
+                    if right
+                        return unitVector 270
+
+                    if left
+                        return unitVector 90
+
+                return false
+            )!
+
+        @__angle
 
     new: (parent, defs, ...) =>
         super parent, defs, ...

@@ -66,15 +66,25 @@ ENT.BuildPathMap = () =>
             vpath\populatePathMap @pathMap
 
     @pathMapConnections = {}
-    memo = {}
+    seen = {}
+    local isSeen
     for _, nodeA in pairs @pathMap
-        memo[nodeA] = true
+        isSeen = false
         for _, nodeB in pairs nodeA.neighbors
-            if not memo[nodeB]
+            if not isSeen
+                seen[nodeA] = true
+                isSeen = true
+
+            if not seen[nodeB]
                 @pathMapConnections[#@pathMapConnections + 1] = {
                     from: nodeA
                     to: nodeB
-                }      
+                }
+
+    @pathMapDisconnectedNodes = {}
+    for _, node in pairs @pathMap
+        if not seen[node]
+            @pathMapDisconnectedNodes[#@pathMapDisconnectedNodes + 1] = node
 
 ENT.SetupData = (data) =>
     elementClasses = Moonpanel.Elements

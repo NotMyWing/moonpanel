@@ -58,6 +58,10 @@ writez = Material("engine/writez")
 renderFunc = (self) ->
     self\RenderPanel!
 
+errorFunc = (err) ->
+    print "Rendering error: #{err}"
+    print debug.traceback!
+
 translucentMat = CreateMaterial "TheMP translucent", "UnlitGeneric", {
     ["$basetexture"]: "moonpanel/panel/translucent",
     ["$nolod"]: 1,
@@ -103,7 +107,7 @@ ENT.DrawTranslucent = () =>
     render.PushFilterMag TEXFILTER.ANISOTROPIC
     render.PushFilterMin TEXFILTER.ANISOTROPIC
 
-    xpcall renderFunc, print, @
+    xpcall renderFunc, errorFunc, @
 
     render.PopFilterMag!
     render.PopFilterMin!

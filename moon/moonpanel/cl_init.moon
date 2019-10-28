@@ -33,6 +33,9 @@ Moonpanel.applyDeltas = (panel, x = 0, y = 0) =>
 
     x, y = math.Clamp(math.floor(x), -100, 100), math.Clamp(math.floor(y), -100, 100)
 
+    if x == 0 and y == 0
+        return
+
     Moonpanel\sendMouseDeltas x, y
     panel\ApplyDeltas x, y
 

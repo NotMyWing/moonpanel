@@ -11,6 +11,7 @@ ENT.Initialize = () =>
     self\SetMoveType            MOVETYPE_VPHYSICS
     self\SetSolid               SOLID_VPHYSICS
     self\SetUseType             SIMPLE_USE
+    self\AddEFlags              EFL_FORCE_CHECK_TRANSMIT 
 
     @SetNW2Bool "TheMP Powered", true
 
@@ -20,6 +21,9 @@ ENT.Initialize = () =>
 
 ENT.Use = (activator) =>
     Moonpanel\setFocused activator, true
+
+ENT.UpdateTransmitState = =>
+	TRANSMIT_ALWAYS
 
 ENT.PreEntityCopy = () =>
     duplicator.StoreEntityModifier @, "TheMoonpanelTileData", @tileData
@@ -510,7 +514,7 @@ ENT.FinishPuzzle = (forceFail) =>
             @CheckSolution!
 
         catch = (err) ->
-            print err
+            print "Error verifying the solution: #{err}"
 
         status, grayOut, redOut = xpcall func, catch 
 

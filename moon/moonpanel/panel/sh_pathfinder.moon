@@ -1,12 +1,3 @@
-PathFinderSnapModifierConvar = CreateConVar "moonpanel_pathfinder_snapmodifier",
-    0.5, bit.bor(FCVAR_ARCHIVE), "Defines the intrusiveness of Pathfinder snapping. [0..1]", 0
-
-hasValue = (t, val) ->
-    for k, v in pairs t
-        if v == val
-            return true
-    return false
-
 trunc = Moonpanel.trunc
 
 class Moonpanel.PathFinder
@@ -325,7 +316,7 @@ class Moonpanel.PathFinder
                     vecLength -= (@isFirst(neighbor) and @barWidth * 1.75) or (@isTraced(neighbor) and @barWidth) or 0
 
                 vec\Normalize!
-                mDot = vec.x * localMouseX + vec.y * localMouseY
+                mDot = math.ceil vec.x * localMouseX + vec.y * localMouseY
 
                 if mDot > 0 and mDot >= maxMDot
                     maxMDot = mDot
@@ -353,56 +344,53 @@ class Moonpanel.PathFinder
 
                 nodeCursor = @cursors[nodeStackId]
 
-                if (PathFinderSnapModifierConvar\GetFloat! or 0) > 0
-                    last = nodeStack[#nodeStack]
-                    localMouseX = nodeCursor.x - last.screenX
-                    localMouseY = nodeCursor.y - last.screenY
-                    localMouseMag = math.sqrt localMouseX^2 + localMouseY^2
+                last = nodeStack[#nodeStack]
+                localMouseX = nodeCursor.x - last.screenX
+                localMouseY = nodeCursor.y - last.screenY
+                localMouseMag = math.sqrt localMouseX^2 + localMouseY^2
 
-                    -- Find the best suitable snap origin
-                    snapOrigin = (localMouseMag > (maxVecLength / 2) and
-                        areSnapsDistinct and
-                        not maxNode.exit and
-                        not maxNode.break and
-                        not @isTraced maxNode) and maxNode or last
+                -- Find the best suitable snap rigin
+                snapOrigin = (localMouseMag > (maxVecLength / 2) and
+                    areSnapsDistinct and
+                    not maxNode.exit and
+                    not maxNode.break and
+                    not @isTraced maxNode) and maxNode or last
 
-                    -- Find perpendicular vector to vec
-                    px = localMouseX - (maxMDot * maxDotVector.x)
-                    py = localMouseY - (maxMDot * maxDotVector.y)
+                -- Find perpendicular vector to vec
+                px = localMouseX - (maxMDot * maxDotVector.x)
+                py = localMouseY - (maxMDot * maxDotVector.y)
 
-                    -- Equality comparison tolerance
-                    tolerance = 0.001
-                
-                    -- Find the max dotProduct of p to neighbouring lines
-                    maxSnapDot = 0
-                    for _, snapNode in pairs snapOrigin.neighbors
-                        if snapNode == last or snapNode == maxNode
-                            continue
+                -- Equality comparison tolerance
+                tolerance = 0.001
+            
+                -- Find the max dotProduct of p to neighbouring lines
+                maxSnapDot = 0
+                for _, snapNode in pairs snapOrigin.neighbors
+                    if snapNode == last or snapNode == maxNode
+                        continue
 
-                        dx = snapNode.screenX - snapOrigin.screenX
-                        dy = snapNode.screenY - snapOrigin.screenY
-                        mag = math.sqrt dx^2 + dy^2
+                    dx = snapNode.screenX - snapOrigin.screenX
+                    dy = snapNode.screenY - snapOrigin.screenY
+                    mag = math.sqrt dx^2 + dy^2
 
-                        -- Intrusiveness modifier. The lower the value,
-                        -- the less intrusive the snapping is.
-                        modifier = math.Clamp (PathFinderSnapModifierConvar\GetFloat! or 0), 0, 1
-                        
-                        -- Don't prefer dead-end pathes
-                        if @isTraced(snapNode)
-                            modifier *= 0.8
+                    modifier = 0.75
+                    
+                    -- Don't prefer dead-end pathes
+                    if @isTraced(snapNode)
+                        modifier *= 0.8
 
-                        dotProduct = modifier * (px * (dx/mag) + py * (dy/mag))
-                        if dotProduct > 0 and math.abs(dotProduct) > tolerance and dotProduct > maxSnapDot
-                            maxSnapDot = dotProduct
+                    dotProduct = modifier * (px * (dx/mag) + py * (dy/mag))
+                    if dotProduct > 0 and math.abs(dotProduct) > tolerance and dotProduct > maxSnapDot
+                        maxSnapDot = dotProduct
 
-                    if snapOrigin == last
-                        maxMDot -= maxSnapDot
-                    else
-                        maxMDot += maxSnapDot
+                if snapOrigin == last
+                    maxMDot -= math.floor maxSnapDot
+                else
+                    maxMDot += math.floor maxSnapDot
 
                 -- This might introduce several inaccuracies, but 
                 -- floating points is why we can't have nice things.
-                length = math.max 0, (math.min maxVecLength, maxMDot)
+                length = math.ceil math.max 0, (math.min maxVecLength, maxMDot)
 
                 maxDotVector.x = trunc length * maxDotVector.x, 3
                 maxDotVector.y = trunc length * maxDotVector.y, 3
@@ -526,8 +514,8 @@ class Moonpanel.PathFinder
 
             -- Snap cursors to lines
             if allNodesValid
-                nodeCursor.x = offsetNode.screenX + vector.maxDotVector.x
-                nodeCursor.y = offsetNode.screenY + vector.maxDotVector.y
+                nodeCursor.x = math.floor offsetNode.screenX + vector.maxDotVector.x
+                nodeCursor.y = math.floor offsetNode.screenY + vector.maxDotVector.y
 
                 @potentialNodes[nodeStackId] = vector.maxNode
             -- Snap cursors to last known nodes

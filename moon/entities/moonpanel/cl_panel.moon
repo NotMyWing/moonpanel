@@ -24,7 +24,7 @@ setRTTexture = (rt) ->
     RT_Material\SetTexture "$basetexture", rt
     surface.SetMaterial RT_Material
 
-__gradientColor = Color!
+__gradientColor = Color 0, 0, 0, 0
 gradient = (startColor, endColor, percentFade) ->
     diffRed = endColor.r - startColor.r
     diffGreen = endColor.g - startColor.g
@@ -650,12 +650,10 @@ ENT.DrawTrace = () =>
                     if @__blinkDistance <= 0.01
                         @__blinkDistance = 0
 
-                    @pen = Color gradient @colors.traced, (Color 255, 255, 255), @__blinkDistance 
+                    @pen = gradient @colors.traced, (Color 255, 255, 255), @__blinkDistance 
                     @rendertargets.trace.dirty = true
             
-                surface.SetDrawColor @pen
-            else
-                surface.SetDrawColor @colors.traced
+            surface.SetDrawColor @pen
 
             cursor = cursors[stackId]
             length = @CalculateLineLength stackId

@@ -39,6 +39,28 @@ gradient = (startColor, endColor, percentFade) ->
 
     return __gradientColor
 
+__colorAlphaReused = Color 0, 0, 0, 0
+colorAlphaReuse = (color, alpha) ->
+    with __colorAlphaReused
+        .r = color.r or 0
+        .g = color.g or 0
+        .b = color.b or 0
+        .a = alpha or color.a or 0
+
+    return __colorAlphaReused
+
+pow = math.pow
+s_curve = (x, p = 0.5, s = 0.5) ->
+    c = (2 / (1 - s)) - 1
+
+	if (x <= p)
+		return pow(x, c) / pow(p, c - 1)
+    else
+		return 1 - (pow(1 - x, c) / pow(1 - p, c - 1))
+
+s_curve_gradient = (startColor, endColor, percentFade, p = 0.5, s = 0.5) ->
+    return gradient startColor, endColor, s_curve percentFade, p, s
+
 ENT.PanelInit = () =>
     index = tostring @EntIndex!
     @rendertargets = {
@@ -154,9 +176,7 @@ ENT.CleanUp = () =>
     @__traceLerps or= {}
     table.Empty @__traceLerps
 
-    timer.Remove @GetTimerName "redOut"
     timer.Remove @GetTimerName "grayOut"
-    timer.Remove @GetTimerName "penFade"
     timer.Remove @GetTimerName "foreground"
 
     if @rendertargets
@@ -165,6 +185,8 @@ ENT.CleanUp = () =>
         @rendertargets.trace.dirty = true
 
     @__lastShouldBlink = false
+
+    @PenInterpolateStop!
 
 ENT.Desynchronize = () =>
     @CleanUp!
@@ -247,52 +269,23 @@ ENT.PuzzleStart = (nodeA, nodeB) =>
     if @sounds.solvingLoop
         @sounds.solvingLoop\Play!
 
-ENT.PenFade = (interval, clr) =>
-    delta = math.max 0.001, FrameTime! * 1000
-
-    if clr
-        @pen = Color clr.r, clr.g, clr.b, clr.a or 255
-
-    timer.Create @GetTimerName("penFade"), interval, 0, () ->
-        if not IsValid @
-            return
-
-        @pen.a -= delta
-        @shouldRepaintTrace = true
-
-        if @pen.a <= 0
-            @pen.a = 0
-            timer.Remove @GetTimerName "penFade"
-            return
-
-ENT.PenInterpolate = (interval, _from, to, callback) =>
-    delta = math.max 0.001, FrameTime! * 20
-    @__penInterp = 0
-
-    timer.Create @GetTimerName("penFade"), interval, 0, () ->
-        if not IsValid @
-            return
-
-        if @__penInterp > 1
-            @__penInterp = 1
-
-        @pen = gradient _from, to, @__penInterp
-
-        if @__penInterp == 1
-            timer.Remove @GetTimerName "penFade"
-
-            if callback
-                callback!
-
-            return
-
-        @__penInterp += delta
-        @shouldRepaintTrace = true
+ENT.PenInterpolate = (_from, to, delta = 1, callback) =>
+    @__penInterp         = 0
+    @__penInterpDeltaMod = delta
+    @__penInterpFrom     = _from
+    @__penInterpTo       = to
+    @__penInterpCallback = callback
 
 white = Color 255, 255, 255, 255
 ENT.PenInterpolateFinished = () =>
-    @PenInterpolate 0.01, @pen, white, () ->
-        @PenInterpolate 0.01, @pen, @colors.finished
+    @PenInterpolate @pen, white, nil, () ->
+        @PenInterpolate @pen, @colors.finished
+
+ENT.PenFade = (clr) =>
+    @PenInterpolate clr, (ColorAlpha clr, 0), 0.25
+
+ENT.PenInterpolateStop = =>
+    @__penInterp = nil
 
 ENT.PuzzleFinish = (data) =>
     if @sounds.pathComplete\IsPlaying!
@@ -323,6 +316,7 @@ ENT.PuzzleFinish = (data) =>
         timer.Create @GetTimerName("foreground"), REDOUT_TIME, 1, () ->
             if not @rendertargets or not IsValid @
                 return
+
             @rendertargets.foreground.always = false
             @redOut = nil
             @rendertargets.foreground.dirty = true
@@ -335,9 +329,13 @@ ENT.PuzzleFinish = (data) =>
             _oldPen = ColorAlpha @pen, @pen.a or 255
             err = @colors.errored
 
-            @PenFade 0.025, Color err.r, err.g, err.b, err.a or 255
+            @PenFade err
             timer.Create @GetTimerName("grayOut"), 0.75, 1, () ->
-                timer.Remove @GetTimerName "penFade"
+                if not @rendertargets or not IsValid @
+                    return
+
+                @PenInterpolateStop!
+
                 @redOut = nil
                 @grayOut = _grayOut
                 @grayOutStart = CurTime!
@@ -371,15 +369,18 @@ ENT.PuzzleFinish = (data) =>
                 @PlaySound @sounds.potentialFailure
 
             timer.Create @GetTimerName("grayOut"), 0.75, 1, () ->
+                if not @rendertargets or not IsValid @
+                    return
+
                 @grayOut = _grayOut
                 @grayOutStart = CurTime!
 
-                @PenFade 0.025, Color err.r, err.g, err.b
+                @PenFade err
                 if @sounds.failure
                     @PlaySound @sounds.failure
 
         else
-            @PenFade 0.01, Color err.r, err.g, err.b
+            @PenFade err
             if not data.sync and @sounds.failure
                 @PlaySound @sounds.failure
 
@@ -391,7 +392,7 @@ ENT.PuzzleFinish = (data) =>
             if data.forceFail
                 @pen.a = 0
             else
-                @PenFade 0.01, Color @pen.r, @pen.g, @pen.b, @pen.a or 255
+                @PenFade @pen
     
     @__wasSolutionAborted = aborted
     @shouldRepaintTrace = true
@@ -537,7 +538,7 @@ ENT.DrawForeground = () =>
 
         obj = entity.parent
         if grayOutAlpha and @grayOut[obj.type] and @grayOut[obj.type][obj.y] and @grayOut[obj.type][obj.y][obj.x]
-            clr = ColorAlpha clr, grayOutAlpha
+            clr = colorAlphaReuse clr, grayOutAlpha
 
         elseif @redOut and @redOut[obj.type] and @redOut[obj.type][obj.y] and @redOut[obj.type][obj.y][obj.x]
             alternate = ((obj.y + obj.x) % 2 == 0) and true or false
@@ -584,9 +585,32 @@ ENT.CalculateLineLength = (stackId) =>
 
     return length
 
+ENT.PenInterpolateThink = () =>
+    if not @__penInterp
+        return
+
+    delta = (@__penInterpDeltaMod or 1) * math.max 0.001, FrameTime! * 10
+
+    if @__penInterp > 1
+        @__penInterp = 1
+
+    @pen = s_curve_gradient @__penInterpFrom, @__penInterpTo, @__penInterp
+    @shouldRepaintTrace = true
+
+    if @__penInterp == 1
+        @__penInterp = nil
+        if @__penInterpCallback
+            @__penInterpCallback!
+        
+        return
+
+    @__penInterp += delta
+
 ENT.DrawTrace = () =>
     Clear 0, 0, 0, 0
     ClearDepth!
+
+    @PenInterpolateThink!
 
     draw.NoTexture!
 
@@ -639,7 +663,7 @@ ENT.DrawTrace = () =>
 
                     @__blinkDistance = (1 + math.cos(CurTime! * 16)) / 2
 
-                    @pen = gradient @colors.traced, (Color 255, 255, 255), @__blinkDistance
+                    @pen = gradient @colors.traced, white, @__blinkDistance
                     @rendertargets.trace.dirty = true
 
                 elseif @__blinkDistance and @__blinkDistance ~= 0 and IsValid(@GetNW2Entity "ActiveUser")
@@ -650,10 +674,10 @@ ENT.DrawTrace = () =>
                     if @__blinkDistance <= 0.01
                         @__blinkDistance = 0
 
-                    @pen = gradient @colors.traced, (Color 255, 255, 255), @__blinkDistance 
+                    @pen = s_curve_gradient @colors.traced, white, @__blinkDistance 
                     @rendertargets.trace.dirty = true
             
-            surface.SetDrawColor @pen
+            surface.SetDrawColor colorAlphaReuse @pen, 255
 
             cursor = cursors[stackId]
             length = @CalculateLineLength stackId
@@ -726,7 +750,7 @@ renderFunc = (x, y, w, h) ->
 ENT.DrawLoading = (powerStatePct) =>
     draw.NoTexture!
     if not @colors or @colors.background.a ~= 0
-        surface.SetDrawColor ColorAlpha COLOR_BLACK, (255 * powerStatePct)
+        surface.SetDrawColor colorAlphaReuse COLOR_BLACK, (255 * powerStatePct)
         surface.DrawRect 0, 0, @ScreenSize, @ScreenSize
 
     if not @synchronized
@@ -740,7 +764,7 @@ ENT.DrawLoading = (powerStatePct) =>
         surface.SetMaterial polyo
         for i = 0, num - 1
             pct = ((1 + (math.sin CurTime! * 2.5 - i * step)) / 2) 
-            surface.SetDrawColor ColorAlpha color, (255 * (1-pct)) * powerStatePct
+            surface.SetDrawColor colorAlphaReuse color, (255 * (1-pct)) * powerStatePct
             surface.DrawTexturedRect (@ScreenSize / 2) - (totalWidth / 2) + (i * width) + (i * spacing),
                 (@ScreenSize / 2) - (width / 2), width, width
 

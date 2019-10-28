@@ -228,7 +228,7 @@ ENT.SetupData = (data) =>
 ENT.ApplyDeltas = (dx, dy) =>
     if IsValid(@) and @.pathFinder and (dx ~= 0 or dy ~= 0)
         if CLIENT
-            @shouldRepaintTrace = true
+            @rendertargets.trace.dirty = true
             @__calculatedLineLength = nil
 
         else

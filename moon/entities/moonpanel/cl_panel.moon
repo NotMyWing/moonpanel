@@ -24,18 +24,27 @@ setRTTexture = (rt) ->
     RT_Material\SetTexture "$basetexture", rt
     surface.SetMaterial RT_Material
 
-__gradientColor = Color 0, 0, 0, 0
-gradient = (startColor, endColor, percentFade) ->
+gradientComponent = (startColor, endColor, percentFade) ->
     diffRed = endColor.r - startColor.r
     diffGreen = endColor.g - startColor.g
     diffBlue = endColor.b - startColor.b
     diffAlpha = endColor.a - startColor.a
 
+    r = (diffRed   * percentFade) + startColor.r
+    g = (diffGreen * percentFade) + startColor.g
+    b = (diffBlue  * percentFade) + startColor.b
+    a = (diffAlpha * percentFade) + startColor.a
+    return r, g, b, a        
+
+__gradientColor = Color 0, 0, 0, 0
+gradient = (startColor, endColor, percentFade) ->
+    r, g, b, a = gradientComponent startColor, endColor, percentFade
+
     with __gradientColor
-        .r = (diffRed   * percentFade) + startColor.r
-        .g = (diffGreen * percentFade) + startColor.g
-        .b = (diffBlue  * percentFade) + startColor.b
-        .a = (diffAlpha * percentFade) + startColor.a
+        .r = r
+        .g = g
+        .b = b
+        .a = a
 
     return __gradientColor
 
@@ -49,8 +58,12 @@ colorAlphaReuse = (color, alpha) ->
 
     return __colorAlphaReused
 
+colorCopy = (color) ->
+    with color
+        return Color .r, .g, .b, .a
+
 pow = math.pow
-s_curve = (x, p = 0.5, s = 0.5) ->
+s_curve = (x, p = 0.5, s = 0.75) ->
     c = (2 / (1 - s)) - 1
 
 	if (x <= p)
@@ -59,7 +72,7 @@ s_curve = (x, p = 0.5, s = 0.5) ->
 		return 1 - (pow(1 - x, c) / pow(1 - p, c - 1))
 
 s_curve_gradient = (startColor, endColor, percentFade, p = 0.5, s = 0.5) ->
-    return gradient startColor, endColor, s_curve percentFade, p, s
+    return gradientComponent startColor, endColor, s_curve percentFade, p, s
 
 ENT.PanelInit = () =>
     index = tostring @EntIndex!
@@ -158,7 +171,7 @@ ENT.ErrorifyColor = (color, alternate) =>
     if alternate
         pct = 1 - pct
 
-    return gradient color, clr, pctMod * pct
+    return gradientComponent color, clr, pctMod * pct
 
 ENT.CleanUp = () =>
     if @sounds
@@ -186,7 +199,11 @@ ENT.CleanUp = () =>
 
     @__lastShouldBlink = false
 
-    @PenInterpolateStop!
+    @__penInterp         = nil
+    @__penInterpDeltaMod = nil
+    @__penInterpFrom     = nil
+    @__penInterpTo       = nil
+    @__penInterpCallback = nil
 
 ENT.Desynchronize = () =>
     @CleanUp!
@@ -197,12 +214,6 @@ ENT.ClientThink = () =>
     if not @synchronized and CurTime! >= (@__nextSyncAttempt or 0)
         Moonpanel\requestData @
         @__nextSyncAttempt = CurTime! + RESYNC_ATTEMPT_TIME
-
-    elseif @shouldRepaintTrace and CurTime! >= (@nextTraceRepaint or 0)
-        @shouldRepaintTrace = false
-        @nextTraceRepaint = CurTime! + 0.02
-
-        @rendertargets.trace.dirty = true
 
     powerState = @synchronized and @GetNW2Bool "TheMP Powered"
     @__powerStatePct or= 0
@@ -256,7 +267,7 @@ ENT.PuzzleStart = (nodeA, nodeB) =>
         @PlaySound @sounds.start
 
     @pathFinder\restart nodeA, nodeB
-    @shouldRepaintTrace = true
+    @rendertargets.trace.dirty = true
 
     @__nextscint = CurTime! + 0.5
     @__firstscint = true
@@ -277,12 +288,19 @@ ENT.PenInterpolate = (_from, to, delta = 1, callback) =>
     @__penInterpCallback = callback
 
 white = Color 255, 255, 255, 255
-ENT.PenInterpolateFinished = () =>
-    @PenInterpolate @pen, white, nil, () ->
-        @PenInterpolate @pen, @colors.finished
+ENT.PenInterpolateFinished = (instant) =>
+    @rendertargets.trace.dirty = true
 
-ENT.PenFade = (clr) =>
-    @PenInterpolate clr, (ColorAlpha clr, 0), 0.25
+    cb = () ->
+        @PenInterpolate white, @colors.finished, 0.3
+    
+    if instant
+        cb!
+    else
+        @PenInterpolate @pen, white, nil, cb    
+
+ENT.PenFade = (clr, modifier = 0.075) =>
+    @PenInterpolate clr, (ColorAlpha clr, 0), modifier
 
 ENT.PenInterpolateStop = =>
     @__penInterp = nil
@@ -326,10 +344,7 @@ ENT.PuzzleFinish = (data) =>
             if @sounds.potentialFailure
                 @PlaySound @sounds.potentialFailure
 
-            _oldPen = ColorAlpha @pen, @pen.a or 255
-            err = @colors.errored
-
-            @PenFade err
+            @PenFade @colors.errored, 0.1
             timer.Create @GetTimerName("grayOut"), 0.75, 1, () ->
                 if not @rendertargets or not IsValid @
                     return
@@ -346,10 +361,9 @@ ENT.PuzzleFinish = (data) =>
                     if @sounds.success
                         @PlaySound @sounds.success
 
-                    if @pen ~= @colors.finished
-                        @PenInterpolateFinished!
+                    @PenInterpolateFinished true
                 else
-                    @pen = ColorAlpha @colors.finished, @colors.finished.a or 255
+                    @pen = colorCopy @colors.finished
 
         else
             if not data.sync
@@ -358,11 +372,11 @@ ENT.PuzzleFinish = (data) =>
                 if @pen ~= @colors.finished
                     @PenInterpolateFinished!
             else
-                @pen = ColorAlpha @colors.finished, @colors.finished.a or 255
+                @pen = colorCopy @colors.finished
 
     elseif not aborted
         err = @colors.errored
-        @pen = Color err.r, err.g, err.b, err.a or 255
+        @pen = colorCopy err
 
         if _grayOut.grayedOut
             if not data.sync and @sounds.potentialFailure
@@ -395,7 +409,7 @@ ENT.PuzzleFinish = (data) =>
                 @PenFade @pen
     
     @__wasSolutionAborted = aborted
-    @shouldRepaintTrace = true
+    @rendertargets.trace.dirty = true
 
 ENT.PlaySound = (sound) =>
     sound\Stop!
@@ -423,8 +437,7 @@ ENT.SetupDataClient = (data) =>
 
     @SetBackgroundColor @colors.background
 
-    tr = @colors.traced
-    @pen = Color tr.r, tr.g, tr.b, tr.a or 255
+    @pen = colorCopy @colors.traced
 
     cellsW = @tileData.Tile.Width
     cellsH = @tileData.Tile.Height
@@ -503,14 +516,15 @@ ENT.DrawBackground = () =>
     barCircle = @calculatedDimensions.barCircle
     startCircle = @calculatedDimensions.startCircle
 
+    seen = {}
     for _, connection in pairs @pathMapConnections
         nodeA = connection.to
         nodeB = connection.from
 
-        if not nodeA.break
+        if not nodeA.break and not seen[nodeA]
             Moonpanel.render.drawCircleAt nodeA.clickable and startCircle or barCircle, nodeA.screenX, nodeA.screenY
 
-        if not nodeB.break
+        if not nodeB.break and not seen[nodeB]
             Moonpanel.render.drawCircleAt nodeB.clickable and startCircle or barCircle, nodeB.screenX, nodeB.screenY
 
         length = nil
@@ -519,6 +533,9 @@ ENT.DrawBackground = () =>
 
         Moonpanel.render.drawThickLine nodeA.screenX, nodeA.screenY, 
             nodeB.screenX, nodeB.screenY, barWidth + 0.5, length
+
+        seen[nodeA] = true
+        seen[nodeB] = true
 
     for _, node in pairs @pathMapDisconnectedNodes
         Moonpanel.render.drawCircleAt node.clickable and startCircle or barCircle, node.screenX, node.screenY
@@ -538,13 +555,15 @@ ENT.DrawForeground = () =>
 
         obj = entity.parent
         if grayOutAlpha and @grayOut[obj.type] and @grayOut[obj.type][obj.y] and @grayOut[obj.type][obj.y][obj.x]
-            clr = colorAlphaReuse clr, grayOutAlpha
+            surface.SetDrawColor clr.r, clr.g, clr.b, grayOutAlpha
 
         elseif @redOut and @redOut[obj.type] and @redOut[obj.type][obj.y] and @redOut[obj.type][obj.y][obj.x]
             alternate = ((obj.y + obj.x) % 2 == 0) and true or false
-            clr = @ErrorifyColor clr, alternate
+            surface.SetDrawColor @ErrorifyColor clr, alternate
 
-        surface.SetDrawColor clr
+        else
+            surface.SetDrawColor clr
+
         draw.NoTexture!
         render.SetColorMaterial!
         entity\render!
@@ -590,12 +609,19 @@ ENT.PenInterpolateThink = () =>
         return
 
     delta = (@__penInterpDeltaMod or 1) * math.max 0.001, FrameTime! * 10
+    @__penInterp += delta
+
+    r, g, b, a = s_curve_gradient @__penInterpFrom, @__penInterpTo, @__penInterp
+    with @pen
+        .r = r
+        .g = g
+        .b = b
+        .a = a
+
+    @rendertargets.trace.dirty = true
 
     if @__penInterp > 1
         @__penInterp = 1
-
-    @pen = s_curve_gradient @__penInterpFrom, @__penInterpTo, @__penInterp
-    @shouldRepaintTrace = true
 
     if @__penInterp == 1
         @__penInterp = nil
@@ -603,8 +629,6 @@ ENT.PenInterpolateThink = () =>
             @__penInterpCallback!
         
         return
-
-    @__penInterp += delta
 
 ENT.DrawTrace = () =>
     Clear 0, 0, 0, 0
@@ -646,7 +670,7 @@ ENT.DrawTrace = () =>
         for stackId, stack in pairs nodeStacks
             shouldBlink = not @__finishTime and (stack[#stack].exit or 
                 @pathFinder.potentialNodes[stackId] and @pathFinder.potentialNodes[stackId].exit) or false
-            
+
             if not @__finishTime
                 if @__lastShouldBlink ~= shouldBlink
                     if @sounds.finishTracing and shouldBlink
@@ -663,7 +687,8 @@ ENT.DrawTrace = () =>
 
                     @__blinkDistance = (1 + math.cos(CurTime! * 16)) / 2
 
-                    @pen = gradient @colors.traced, white, @__blinkDistance
+                    r, g, b = gradientComponent @colors.traced, white, @__blinkDistance
+                    surface.SetDrawColor r, g, b, 255
                     @rendertargets.trace.dirty = true
 
                 elseif @__blinkDistance and @__blinkDistance ~= 0 and IsValid(@GetNW2Entity "ActiveUser")
@@ -674,10 +699,15 @@ ENT.DrawTrace = () =>
                     if @__blinkDistance <= 0.01
                         @__blinkDistance = 0
 
-                    @pen = s_curve_gradient @colors.traced, white, @__blinkDistance 
+                    r, g, b = s_curve_gradient @colors.traced, white, @__blinkDistance 
+                    surface.SetDrawColor r, g, b, 255
                     @rendertargets.trace.dirty = true
-            
-            surface.SetDrawColor colorAlphaReuse @pen, 255
+
+                else
+                    surface.SetDrawColor @pen.r, @pen.g, @pen.b, 255
+
+            else
+                surface.SetDrawColor @pen.r, @pen.g, @pen.b, 255
 
             cursor = cursors[stackId]
             length = @CalculateLineLength stackId
@@ -804,9 +834,11 @@ ENT.RenderPanel = () =>
         setRTTexture @rendertargets.background.rt
         renderFunc 0, 0, @ScreenSize, @ScreenSize
 
+        SetDrawColor 255, 255, 255, @colors.untraced.a * @__powerStatePct
         setRTTexture @rendertargets.foreground.rt
         renderFunc 0, 0, @ScreenSize, @ScreenSize
 
+        SetDrawColor 255, 255, 255, 255 * @__powerStatePct
         setRTTexture @rendertargets.ripple.rt
         renderFunc 0, 0, @ScreenSize, @ScreenSize
 

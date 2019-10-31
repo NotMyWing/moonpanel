@@ -1,14 +1,14 @@
 Moonpanel.sendMouseDeltas = (x, y) =>
     net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.ApplyDeltas, 8
+    net.WriteUInt Moonpanel.Flow.ApplyDeltas, Moonpanel.FlowSize
 
-    net.WriteInt x, 8
-    net.WriteInt y, 8
+    net.WriteFloat x
+    net.WriteFloat y
     net.SendToServer!
 
 Moonpanel.requestControl = (ent, x, y) =>
     net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.RequestControl, 8
+    net.WriteUInt Moonpanel.Flow.RequestControl, Moonpanel.FlowSize
 
     net.WriteEntity ent
     net.WriteUInt x, 10
@@ -17,7 +17,7 @@ Moonpanel.requestControl = (ent, x, y) =>
 
 Moonpanel.requestData = (ent) =>
     net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.RequestData, 8
+    net.WriteUInt Moonpanel.Flow.RequestData, Moonpanel.FlowSize
 
     net.WriteEntity ent
     net.SendToServer!
@@ -29,34 +29,6 @@ Moonpanel.getControlledPanel = () =>
 net.Receive "TheMP Editor", () ->
     Moonpanel.editor\Show! 
     Moonpanel.editor\MakePopup!
-
-net.Receive "TheMP NodeStacks", (len) ->
-    stacks, curs = {}, {}
-
-    panel = net.ReadEntity!
-    if IsValid panel
-        return
-
-    stackCount = net.ReadUInt 4
-    for i = 1, stackCount
-        pointCount = net.ReadUInt 10
-        stack = {}
-        for j = 1, pointCount
-            stack[#stack + 1] = {
-                x: net.ReadUInt 10
-                y: net.ReadUInt 10
-            }
-
-        stacks[#stacks + 1] = stack
-
-    curCount = net.ReadUInt 4
-    for i = 1, curCount
-        curs[#curs + 1] = {
-            x: net.ReadUInt 10
-            y: net.ReadUInt 10
-        }
-
-    panel.shouldRepaintTrace = true
 
 net.Receive "TheMP EditorData Req", () ->
     data = "{}"
@@ -70,7 +42,7 @@ net.Receive "TheMP EditorData Req", () ->
     net.SendToServer!
  
 net.Receive "TheMP Flow", () ->
-    flowType = net.ReadUInt 8
+    flowType = net.ReadUInt Moonpanel.FlowSize
     panel = net.ReadEntity!
 
     if not IsValid panel
@@ -112,7 +84,7 @@ net.Receive "TheMP Flow", () ->
             if not panel.Moonpanel or not panel.synchronized
                 return
 
-            x, y = net.ReadInt(8), net.ReadInt(8)
+            x, y = net.ReadFloat!, net.ReadFloat!
 
             panel\ApplyDeltas x, y
 

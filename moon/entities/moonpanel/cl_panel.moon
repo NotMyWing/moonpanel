@@ -1,6 +1,7 @@
 import SetDrawColor, DrawRect from surface
 import Clear, ClearDepth, OverrideAlphaWriteEnable from render
 import SetStencilEnable, SetViewPort, SetColorMaterial, PushRenderTarget, PopRenderTarget from render
+import sCurveGradient, gradient, colorCopy from Moonpanel.render
 
 RT_Material = CreateMaterial "TheMP_RT", "UnlitGeneric", {
     ["$nolod"]: 1,
@@ -24,56 +25,6 @@ setRTTexture = (rt) ->
     RT_Material\SetTexture "$basetexture", rt
     surface.SetMaterial RT_Material
 
-gradientComponent = (startColor, endColor, percentFade) ->
-    diffRed = endColor.r - startColor.r
-    diffGreen = endColor.g - startColor.g
-    diffBlue = endColor.b - startColor.b
-    diffAlpha = endColor.a - startColor.a
-
-    r = (diffRed   * percentFade) + startColor.r
-    g = (diffGreen * percentFade) + startColor.g
-    b = (diffBlue  * percentFade) + startColor.b
-    a = (diffAlpha * percentFade) + startColor.a
-    return r, g, b, a        
-
-__gradientColor = Color 0, 0, 0, 0
-gradient = (startColor, endColor, percentFade) ->
-    r, g, b, a = gradientComponent startColor, endColor, percentFade
-
-    with __gradientColor
-        .r = r
-        .g = g
-        .b = b
-        .a = a
-
-    return __gradientColor
-
-__colorAlphaReused = Color 0, 0, 0, 0
-colorAlphaReuse = (color, alpha) ->
-    with __colorAlphaReused
-        .r = color.r or 0
-        .g = color.g or 0
-        .b = color.b or 0
-        .a = alpha or color.a or 0
-
-    return __colorAlphaReused
-
-colorCopy = (color) ->
-    with color
-        return Color .r, .g, .b, .a
-
-pow = math.pow
-s_curve = (x, p = 0.5, s = 0.75) ->
-    c = (2 / (1 - s)) - 1
-
-	if (x <= p)
-		return pow(x, c) / pow(p, c - 1)
-    else
-		return 1 - (pow(1 - x, c) / pow(1 - p, c - 1))
-
-s_curve_gradient = (startColor, endColor, percentFade, p = 0.5, s = 0.5) ->
-    return gradientComponent startColor, endColor, s_curve percentFade, p, s
-
 ENT.PanelInit = () =>
     index = tostring @EntIndex!
     @rendertargets = {
@@ -91,7 +42,6 @@ ENT.PanelInit = () =>
             render: @DrawTrace
         }
         ripple: {
-            always: true
             rt: GetRenderTarget "TheMPRipple#{index}", @ScreenSize, @ScreenSize
             render: @DrawRipple
         }
@@ -154,7 +104,6 @@ ENT.OnRemove = () =>
 
 _err = Color 255, 0, 0, 255
 _errAlt = Color 0, 0, 0, 255
-
 ENT.ErrorifyColor = (color, alternate) =>
     pctMod = 1
     if @__finishTime
@@ -171,7 +120,7 @@ ENT.ErrorifyColor = (color, alternate) =>
     if alternate
         pct = 1 - pct
 
-    return gradientComponent color, clr, pctMod * pct
+    return gradient color, clr, pctMod * pct
 
 ENT.CleanUp = () =>
     if @sounds
@@ -211,6 +160,8 @@ ENT.Desynchronize = () =>
     @synchronized = false
 
 ENT.ClientThink = () =>
+    @__activeUser = @GetNW2Entity "ActiveUser"
+
     if not @synchronized and CurTime! >= (@__nextSyncAttempt or 0)
         Moonpanel\requestData @
         @__nextSyncAttempt = CurTime! + RESYNC_ATTEMPT_TIME
@@ -227,7 +178,7 @@ ENT.ClientTickrateThink = () =>
     if not @synchronized
         return
         
-    activeUser = @GetNW2Entity "ActiveUser"
+    activeUser = @__activeUser
     if IsValid activeUser
         if @__shouldScint and @__scintPower and @__scintPower >= 0.15 and CurTime! >= @__nextscint
             if @sounds.scint
@@ -329,8 +280,8 @@ ENT.PuzzleFinish = (data) =>
     @__scintPower = nil
     @__finishTime = CurTime!
 
-    @rendertargets.foreground.always = true
     if not aborted
+        @rendertargets.foreground.always = true
         timer.Create @GetTimerName("foreground"), REDOUT_TIME, 1, () ->
             if not @rendertargets or not IsValid @
                 return
@@ -611,7 +562,7 @@ ENT.PenInterpolateThink = () =>
     delta = (@__penInterpDeltaMod or 1) * math.max 0.001, FrameTime! * 10
     @__penInterp += delta
 
-    r, g, b, a = s_curve_gradient @__penInterpFrom, @__penInterpTo, @__penInterp
+    r, g, b, a = sCurveGradient @__penInterpFrom, @__penInterpTo, @__penInterp
     with @pen
         .r = r
         .g = g
@@ -687,11 +638,11 @@ ENT.DrawTrace = () =>
 
                     @__blinkDistance = (1 + math.cos(CurTime! * 16)) / 2
 
-                    r, g, b = gradientComponent @colors.traced, white, @__blinkDistance
+                    r, g, b = gradient @colors.traced, white, @__blinkDistance
                     surface.SetDrawColor r, g, b, 255
                     @rendertargets.trace.dirty = true
 
-                elseif @__blinkDistance and @__blinkDistance ~= 0 and IsValid(@GetNW2Entity "ActiveUser")
+                elseif @__blinkDistance and @__blinkDistance ~= 0 and IsValid @__activeUser
                     if @sounds.pathComplete\IsPlaying!
                         @sounds.pathComplete\Stop!
 
@@ -699,7 +650,7 @@ ENT.DrawTrace = () =>
                     if @__blinkDistance <= 0.01
                         @__blinkDistance = 0
 
-                    r, g, b = s_curve_gradient @colors.traced, white, @__blinkDistance 
+                    r, g, b = sCurveGradient @colors.traced, white, @__blinkDistance 
                     surface.SetDrawColor r, g, b, 255
                     @rendertargets.trace.dirty = true
 
@@ -766,10 +717,10 @@ ENT.DrawRipple = () =>
     Clear 0, 0, 0, 0
     ClearDepth!
 
-    draw.NoTexture!
-    render.SetColorMaterial!
-    activeUser = @GetNW2Entity "ActiveUser"
-    if @__shouldScint and @endRipples and @__nextscint and not @__firstscint and IsValid activeUser
+    if @__shouldScint and @endRipples and @__nextscint and not @__firstscint and IsValid @__activeUser
+        draw.NoTexture!
+        render.SetColorMaterial!
+    
         buf = 1 - ((@__nextscint - CurTime!) / 2)
         for _, ripple in pairs @endRipples
             Moonpanel.render.drawRipple ripple, buf * 2, (Color 255, 255, 255)
@@ -780,7 +731,7 @@ renderFunc = (x, y, w, h) ->
 ENT.DrawLoading = (powerStatePct) =>
     draw.NoTexture!
     if not @colors or @colors.background.a ~= 0
-        surface.SetDrawColor colorAlphaReuse COLOR_BLACK, (255 * powerStatePct)
+        surface.SetDrawColor COLOR_BLACK.r, COLOR_BLACK.g, COLOR_BLACK.b, (255 * powerStatePct)
         surface.DrawRect 0, 0, @ScreenSize, @ScreenSize
 
     if not @synchronized
@@ -794,7 +745,7 @@ ENT.DrawLoading = (powerStatePct) =>
         surface.SetMaterial polyo
         for i = 0, num - 1
             pct = ((1 + (math.sin CurTime! * 2.5 - i * step)) / 2) 
-            surface.SetDrawColor colorAlphaReuse color, (255 * (1-pct)) * powerStatePct
+            surface.SetDrawColor color.r, color.g, color.b, (255 * (1-pct)) * powerStatePct
             surface.DrawTexturedRect (@ScreenSize / 2) - (totalWidth / 2) + (i * width) + (i * spacing),
                 (@ScreenSize / 2) - (width / 2), width, width
 
@@ -805,6 +756,9 @@ ENT.RenderPanel = () =>
 
     shouldRender = @synchronized and @rendertargets and @calculatedDimensions
     if shouldRender
+        if IsValid @__activeUser
+            @rendertargets.ripple.dirty = true
+
         oldw, oldh = ScrW!, ScrH!
         for k, v in pairs @rendertargets
             if (v.always or v.dirty ~= false) and v.render

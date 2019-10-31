@@ -159,13 +159,14 @@ Moonpanel.requestControl = (ply, ent, x, y, force) =>
     if (ply.themp_nextrequest or 0) > CurTime!
         return
 
-    if ply\GetNW2Entity("TheMP Controlled Panel") == ent
-        ply.themp_nextrequest = CurTime! + 0.25
-        if ent.Moonpanel
-            ent\FinishPuzzle!
+    ply.themp_nextrequest = CurTime! + 0.25
+    
+    controlledPanel = ply\GetNW2Entity("TheMP Controlled Panel")
+    if IsValid controlledPanel
+        if controlledPanel.Moonpanel
+            controlledPanel\FinishPuzzle!
         ply\SetNW2Entity "TheMP Controlled Panel", nil
     else
-        ply.themp_nextrequest = CurTime! + 0.25
         if ent.Moonpanel
             if ent\StartPuzzle ply, x, y
                 ply\SetNW2Entity "TheMP Controlled Panel", ent

@@ -71,6 +71,9 @@ translucentMat = CreateMaterial "TheMP translucent", "UnlitGeneric", {
 }
 
 ENT.Draw = () =>
+    if halo.RenderedEntity! == @
+        return
+ 
     @DrawModel!
 
 ENT.DrawTranslucent = () =>
@@ -467,19 +470,19 @@ ENT.Monitor_Offsets = {
     }
 }
 
-properties.Add "themp", {
-    MenuLabel: "Desynchronize",
-    Order: 999,
-    MenuIcon: "icon16/wrench.png", -- We should create an icon
-    Filter: ( self, ent, ply ) ->
-        if not IsValid( ent )
-            return false
-        if not gamemode.Call( "CanProperty", ply, "themp", ent )
-            return false
-        return ent.Moonpanel
+if false
+    properties.Add "themp", {
+        MenuLabel: "Desynchronize",
+        Order: 999,
+        MenuIcon: "icon16/wrench.png", -- We should create an icon
+        Filter: ( self, ent, ply ) ->
+            if not IsValid( ent )
+                return false
+            if not gamemode.Call( "CanProperty", ply, "themp", ent )
+                return false
+            return ent.Moonpanel
 
-    MenuOpen: MenuOpen,
-    Action: (ent) =>
-        ent\Desynchronize!
-        Moonpanel\requestData ent
-}
+        MenuOpen: MenuOpen,
+        Action: (ent) =>
+            ent\Desynchronize!
+    }

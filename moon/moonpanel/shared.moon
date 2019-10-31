@@ -99,6 +99,8 @@ Moonpanel.Flow = {
     Desync:         7
 }
 
+Moonpanel.FlowSize = math.ceil(math.log(table.Count(Moonpanel.Flow), 2))
+
 Moonpanel.Color = {
     Black:   1
     White:   2

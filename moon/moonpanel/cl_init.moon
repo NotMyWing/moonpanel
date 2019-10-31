@@ -22,6 +22,7 @@ export MOONPANEL_ENTITY_GRAPHICS = {
 
 export Moonpanel = Moonpanel or {}
 
+import trunc from Moonpanel
 Moonpanel.applyDeltas = (panel, x = 0, y = 0) =>
     if false
         ang = math.atan2 y, x
@@ -31,7 +32,7 @@ Moonpanel.applyDeltas = (panel, x = 0, y = 0) =>
         x = len * math.cos ang
         y = len * math.sin ang
 
-    x, y = math.Clamp(math.floor(x), -100, 100), math.Clamp(math.floor(y), -100, 100)
+    x, y = math.Clamp(trunc(x, 3), -100, 100), math.Clamp(trunc(y, 3), -100, 100)
 
     if x == 0 and y == 0
         return
@@ -62,18 +63,6 @@ Moonpanel.init = () =>
 
     file.CreateDir "moonpanel"
 
-    Moonpanel.__oldhalo_Add or= halo.Add
-
-    halo.Add = (entities, ...) ->
-        if entities and type(entities) == "table"
-            newEntities = {}
-            for _, ent in pairs entities
-                if not ent.Moonpanel
-                    newEntities[#newEntities + 1] = ent
-            entities = newEntities
-
-        Moonpanel.__oldhalo_Add entities, ...
-
 Moonpanel.isFocused = () =>
     return LocalPlayer!\GetNW2Bool "TheMP Focused"
 
@@ -101,11 +90,11 @@ hook.Add "CreateMove", "TheMP Control", (cmd) ->
             y = -cmd\GetForwardMove!
             x = cmd\GetSideMove!
 
-            x = ((x > 0 and 1) or (x < 0 and -1) or 0) * 5
-            y = ((y > 0 and 1) or (y < 0 and -1) or 0) * 5
+            x = ((x > 0 and 1) or (x < 0 and -1) or 0) * 10
+            y = ((y > 0 and 1) or (y < 0 and -1) or 0) * 10
 
             if x ~= 0 or y ~= 0
-                Moonpanel.__nextMovementSend = CurTime! + 0.001
+                Moonpanel.__nextMovementSend = CurTime! + 0.01
                 Moonpanel\applyDeltas panel, x, y
         
         if IsValid panel
@@ -296,3 +285,47 @@ Moonpanel.render.precacheArc = (cx,cy,radius,thickness,startang,endang,roughness
 Moonpanel.render.drawArc = (arc) ->
     for k,v in ipairs(arc)
         surface.DrawPoly(v)
+
+--
+-- Interpolates the color and returns new components. [0 .. 1]
+--
+Moonpanel.render.gradient = (startColor, endColor, percentFade) ->
+    diffRed   = endColor.r - startColor.r
+    diffGreen = endColor.g - startColor.g
+    diffBlue  = endColor.b - startColor.b
+    diffAlpha = endColor.a - startColor.a
+
+    r = (diffRed   * percentFade) + startColor.r
+    g = (diffGreen * percentFade) + startColor.g
+    b = (diffBlue  * percentFade) + startColor.b
+    a = (diffAlpha * percentFade) + startColor.a
+    
+    return r, g, b, a
+
+--
+-- Copies the color. Yes.
+--
+Moonpanel.render.colorCopy = (color) ->
+    with color
+        return Color .r, .g, .b, .a
+
+--
+-- Sigmoid curve. [0 .. 1]
+--
+pow = math.pow
+Moonpanel.render.sCurve = (x, p = 0.5, s = 0.75) ->
+    c = (2 / (1 - s)) - 1
+
+	if (x <= p)
+		pow(x, c) / pow(p, c - 1)
+    else
+		1 - (pow(1 - x, c) / pow(1 - p, c - 1))
+
+--
+-- Interpolates the color based on the S-curve.
+--
+gradient = Moonpanel.render.gradient
+s_curve = Moonpanel.render.sCurve
+
+Moonpanel.render.sCurveGradient = (startColor, endColor, percentFade, p = 0.5, s = 0.5) ->
+    gradient startColor, endColor, s_curve percentFade, p, s

@@ -7,7 +7,7 @@ Moonpanel.sendNotify = (ply, message, sound, type) =>
 
 Moonpanel.broadcastFinish = (panel, data) =>
     net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.PuzzleFinish, 8
+    net.WriteUInt Moonpanel.Flow.PuzzleFinish, Moonpanel.FlowSize
     net.WriteEntity panel
 
     raw = util.Compress util.TableToJSON data
@@ -18,7 +18,7 @@ Moonpanel.broadcastFinish = (panel, data) =>
 
 Moonpanel.broadcastStart = (panel, node, symmNode) =>
     net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.PuzzleStart, 8
+    net.WriteUInt Moonpanel.Flow.PuzzleStart, Moonpanel.FlowSize
     net.WriteEntity panel
 
     net.WriteFloat node.x
@@ -30,36 +30,19 @@ Moonpanel.broadcastStart = (panel, node, symmNode) =>
         net.WriteFloat symmNode.y
     net.Broadcast!
 
-Moonpanel.broadcastNodeStacks = (ply, panel, nodeStacks, cursors) =>
-    net.Start "TheMP NodeStacks"
-    net.WriteEntity panel
-    net.WriteUInt #nodeStacks, 4
-    for _, stack in pairs nodeStacks
-        net.WriteUInt #stack, 10
-        for _, point in pairs stack
-            net.WriteUInt point.sx, 10
-            net.WriteUInt point.sy, 10
-
-    net.WriteUInt #cursors, 4
-    for _, cursor in pairs cursors
-        net.WriteUInt cursor.x, 10
-        net.WriteUInt cursor.y, 10
-
-    net.SendOmit ply
-
 Moonpanel.broadcastDeltas = (ply, panel, x, y) =>
     net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.ApplyDeltas, 8
+    net.WriteUInt Moonpanel.Flow.ApplyDeltas, Moonpanel.FlowSize
     net.WriteEntity panel
 
-    x, y = math.Clamp(math.floor(x), -100, 100), math.Clamp(math.floor(y), -100, 100)
-    net.WriteInt x, 8
-    net.WriteInt y, 8
+    x, y = math.Clamp(Moonpanel.trunc(x, 3), -100, 100), math.Clamp(Moonpanel.trunc(y, 3), -100, 100)
+    net.WriteFloat x
+    net.WriteFloat y
     net.SendOmit ply
 
 Moonpanel.broadcastDesync = (panel) =>
     net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.Desync, 8
+    net.WriteUInt Moonpanel.Flow.Desync, Moonpanel.FlowSize
     net.WriteEntity panel
     net.Broadcast!
 
@@ -88,7 +71,7 @@ Moonpanel.requestEditorConfig = (ply, callback, errorcallback) =>
                 break
 
 net.Receive "TheMP Flow", (len, ply) ->
-    flowType = net.ReadUInt 8
+    flowType = net.ReadUInt Moonpanel.FlowSize
     
     switch flowType
         when Moonpanel.Flow.RequestControl
@@ -102,8 +85,8 @@ net.Receive "TheMP Flow", (len, ply) ->
         when Moonpanel.Flow.ApplyDeltas
             panel = ply\GetNW2Entity "TheMP Controlled Panel"
             if IsValid panel
-                x = net.ReadInt 8
-                y = net.ReadInt 8
+                x = net.ReadFloat!
+                y = net.ReadFloat!
 
                 panel\ApplyDeltas x, y
 
@@ -129,7 +112,7 @@ net.Receive "TheMP Flow", (len, ply) ->
             raw = util.Compress util.TableToJSON data
 
             net.Start "TheMP Flow"
-            net.WriteUInt Moonpanel.Flow.PanelData, 8
+            net.WriteUInt Moonpanel.Flow.PanelData, Moonpanel.FlowSize
 
             net.WriteEntity panel
             net.WriteUInt #raw, 32

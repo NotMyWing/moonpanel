@@ -316,7 +316,7 @@ class Moonpanel.PathFinder
                     vecLength -= (@isFirst(neighbor) and @barWidth * 1.75) or (@isTraced(neighbor) and @barWidth) or 0
 
                 vec\Normalize!
-                mDot = math.ceil vec.x * localMouseX + vec.y * localMouseY
+                mDot = vec.x * localMouseX + vec.y * localMouseY
 
                 if mDot > 0 and mDot >= maxMDot
                     maxMDot = mDot
@@ -390,7 +390,10 @@ class Moonpanel.PathFinder
 
                 -- This might introduce several inaccuracies, but 
                 -- floating points is why we can't have nice things.
-                length = math.ceil math.max 0, (math.min maxVecLength, maxMDot)
+                length = trunc math.max 0, (math.min maxVecLength, maxMDot), 3
+                if length == 0
+                    @dotVectors[nodeStackId].maxNode = nil
+                    continue
 
                 maxDotVector.x = trunc length * maxDotVector.x, 3
                 maxDotVector.y = trunc length * maxDotVector.y, 3
@@ -514,8 +517,8 @@ class Moonpanel.PathFinder
 
             -- Snap cursors to lines
             if allNodesValid
-                nodeCursor.x = math.floor offsetNode.screenX + vector.maxDotVector.x
-                nodeCursor.y = math.floor offsetNode.screenY + vector.maxDotVector.y
+                nodeCursor.x = offsetNode.screenX + vector.maxDotVector.x
+                nodeCursor.y = offsetNode.screenY + vector.maxDotVector.y
 
                 @potentialNodes[nodeStackId] = vector.maxNode
             -- Snap cursors to last known nodes

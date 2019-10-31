@@ -410,7 +410,7 @@ TOOLSET_PATHENTITIES = {
         set: (button, gridElement, color) ->
             if gridElement.entity == Moonpanel.EntityTypes.End
                 gridElement.entity = nil
-            else
+            elseif gridElement\getAngle!
                 gridElement.entity = Moonpanel.EntityTypes.End 
     }
     ---------------------------

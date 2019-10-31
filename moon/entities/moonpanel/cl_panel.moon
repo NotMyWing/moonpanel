@@ -248,7 +248,7 @@ ENT.PenInterpolateFinished = (instant) =>
     if instant
         cb!
     else
-        @PenInterpolate @pen, white, nil, cb    
+        @PenInterpolate @pen, white, 0.3, cb    
 
 ENT.PenFade = (clr, modifier = 0.075) =>
     @PenInterpolate clr, (ColorAlpha clr, 0), modifier
@@ -326,13 +326,11 @@ ENT.PuzzleFinish = (data) =>
                 @pen = colorCopy @colors.finished
 
     elseif not aborted
-        err = @colors.errored
-        @pen = colorCopy err
-
         if _grayOut.grayedOut
             if not data.sync and @sounds.potentialFailure
                 @PlaySound @sounds.potentialFailure
 
+            @PenFade @colors.errored, 0.05
             timer.Create @GetTimerName("grayOut"), 0.75, 1, () ->
                 if not @rendertargets or not IsValid @
                     return
@@ -340,12 +338,12 @@ ENT.PuzzleFinish = (data) =>
                 @grayOut = _grayOut
                 @grayOutStart = CurTime!
 
-                @PenFade err
-                if @sounds.failure
+                @PenInterpolate colorCopy(@pen), ColorAlpha(@pen, 0), 0.1
+                if not data.sync and @sounds.failure
                     @PlaySound @sounds.failure
 
         else
-            @PenFade err
+            @PenFade @colors.errored
             if not data.sync and @sounds.failure
                 @PlaySound @sounds.failure
 
@@ -559,7 +557,7 @@ ENT.PenInterpolateThink = () =>
     if not @__penInterp
         return
 
-    delta = (@__penInterpDeltaMod or 1) * math.max 0.001, FrameTime! * 10
+    delta = (@__penInterpDeltaMod or 1) * math.max 0.001, FrameTime! * 5
     @__penInterp += delta
 
     r, g, b, a = sCurveGradient @__penInterpFrom, @__penInterpTo, @__penInterp

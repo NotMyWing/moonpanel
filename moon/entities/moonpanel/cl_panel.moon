@@ -737,7 +737,7 @@ ENT.DrawTrace = () =>
                     ))
                     @Interpolate stackId, nil, newPenColor, nil, interpMod, sCurve
 
-            if @tileData.Symmetry.Traces[stackId].Invisible
+            if @tileData.Symmetry.Colorful and @tileData.Symmetry.Traces[stackId].Invisible
                 continue
 
             with interp

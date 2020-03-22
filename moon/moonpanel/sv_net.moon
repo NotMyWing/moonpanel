@@ -1,3 +1,20 @@
+util.AddNetworkString "TheMP EditorData Req"
+util.AddNetworkString "TheMP EditorData"
+
+util.AddNetworkString "TheMP Flow"
+
+util.AddNetworkString "TheMP Editor"
+util.AddNetworkString "TheMP Focus"
+util.AddNetworkString "TheMP Notify"
+util.AddNetworkString "TheMP Reload"
+
+concommand.Add "themp_reload", ->
+    timer.Simple 0, ->
+        include "autorun/moonpanel.lua"
+
+    net.Start "TheMP Reload"
+    net.Broadcast!
+
 Moonpanel.sendNotify = (ply, message, sound, type) =>
     net.Start "TheMP Notify"
     net.WriteString message

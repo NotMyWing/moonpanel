@@ -125,5 +125,7 @@ net.Receive "TheMP Notify", () ->
         notification.AddLegacy message, type, 5
     surface.PlaySound sound
 
-if Moonpanel.__initialized
-    Moonpanel\init!
+net.Receive "TheMP Reload", ->
+    timer.Simple 0, ->
+        include "autorun/moonpanel.lua"
+        return

@@ -1019,14 +1019,7 @@ editor.Init = () =>
             \SetTextColor Color 0, 0, 0
             \SizeToContents!
             .OnChange = (_, value) ->
-                data = @Serialize!
-                if not data
-                    return
-
-                data.Tile.ColorfulSymmetry = value
-
-                @Deserialize data
-                @OnChange!
+                __editor.data.symmetry.colorful = value
 
         panel_checkBoxContainer\SizeToContents!
         panel_checkBoxContainer\InvalidateChildren!

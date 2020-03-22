@@ -26,15 +26,6 @@ AddCSLuaFile "moonpanel/editor/vgui_dhtmlcontrols.lua"
 AddCSLuaFile "entities/moonpanel/shared.lua"
 AddCSLuaFile "entities/moonpanel/cl_init.lua"
 
-util.AddNetworkString "TheMP EditorData Req"
-util.AddNetworkString "TheMP EditorData"
-
-util.AddNetworkString "TheMP Flow"
-
-util.AddNetworkString "TheMP Editor"
-util.AddNetworkString "TheMP Focus"
-util.AddNetworkString "TheMP Notify"
-
 sounds = {
     "eraser_apply.ogg"
     "focus_on.ogg"
@@ -89,11 +80,14 @@ materials = {
     "panel/translucent.vtf"
 }
 
-for _, sound in pairs sounds
-    resource.AddSingleFile "sound/moonpanel/#{sound}"
+resourceMap = {
+    [sounds   ]: "sound/moonpanel/%s"
+    [materials]: "materials/moonpanel/%s"
+}
 
-for _, mat in pairs materials
-    resource.AddSingleFile "materials/moonpanel/#{mat}"
+for resources, resourcePath in pairs resourceMap
+    for _, res in pairs resources
+        resource.AddSingleFile string.format resourcePath, res
 
 keysToIgnore = {
     IN_RUN

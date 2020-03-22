@@ -329,3 +329,6 @@ s_curve = Moonpanel.render.sCurve
 
 Moonpanel.render.sCurveGradient = (startColor, endColor, percentFade, p = 0.5, s = 0.5) ->
     gradient startColor, endColor, s_curve percentFade, p, s
+
+if Moonpanel.__initialized
+    Moonpanel\init!

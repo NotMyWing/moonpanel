@@ -133,6 +133,7 @@ ENT.CheckSolution = (errors) =>
         [Moonpanel.ObjectTypes.HPath]: {}
     }
 
+    areas = {}
     paths = {}
     intersections = {}
     everything = {}
@@ -160,42 +161,40 @@ ENT.CheckSolution = (errors) =>
             table.insert intersections, intersection
             table.insert everything, intersection
 
+    -- Check if traces are valid, and mark traced elements as areas
     for i, stack in pairs @pathFinder.nodeStacks
+        area = {}
         for j = 2, #stack - 1
             a = stack[j - 1]
             b = stack[j]
+            if not a.intersection or not b.intersection
+                return
 
-            found = false
+            local foundPath
             for _, path in pairs paths
-                if not a.intersection or not b.intersection
-                    return
-
-                elseif path.type == Moonpanel.ObjectTypes.HPath and
+                if path.type == Moonpanel.ObjectTypes.HPath and
                     (a.intersection == path\getLeft! and b.intersection == path\getRight!) or
                     (b.intersection == path\getLeft! and a.intersection == path\getRight!)
 
-                    path.solutionData.traced = true
-                    a.intersection.solutionData.traced = true
-                    b.intersection.solutionData.traced = true
-
-                    found = true
+                    foundPath = path
                     break
 
                 elseif path.type == Moonpanel.ObjectTypes.VPath and
                     (a.intersection == path\getTop! and b.intersection == path\getBottom!) or
                     (b.intersection == path\getTop! and a.intersection == path\getBottom!)
 
-                    path.solutionData.traced = true
-                    a.intersection.solutionData.traced = true
-                    b.intersection.solutionData.traced = true
-
-                    found = true
+                    foundPath = path
                     break
 
-            if not found
+            if foundPath
+                for _, element in pairs { a.intersection, b.intersection, foundPath }
+                    element.solutionData.traced = i
+                    element.solutionData.area   = area
+                    table.insert area, element
+            else
                 return
 
-    areas = {}
+        table.insert areas, area
 
     isBridge = (element, next) ->
         if element.entity and element.entity.type == Moonpanel.EntityTypes.Invisible
@@ -229,6 +228,7 @@ ENT.CheckSolution = (errors) =>
 
             traverse v, area
 
+    -- Mark areas
     while true do
         if os.clock! >= @__solutionCheckMaxTime
             error "Moonpanel ##{@EntIndex!}: area marking timed out."
@@ -247,6 +247,8 @@ ENT.CheckSolution = (errors) =>
         table.insert areas, area
 
     totalErrors = {}
+
+    -- Check areas
     for _, area in pairs areas
         if os.clock! >= @__solutionCheckMaxTime
             error "Moonpanel ##{@EntIndex!}: solution check timed out."
@@ -462,7 +464,7 @@ ENT.StartPuzzle = (ply, x, y) =>
             if not nodeA
                 return
 
-            if @tileData.Tile.Symmetry ~= Moonpanel.Symmetry.None
+            if @tileData.Symmetry.Type ~= Moonpanel.Symmetry.None
                 nodeB = @pathFinder\getSymmetricalClickableNode nodeA
                 if not nodeB
                     return

@@ -57,6 +57,9 @@ panel.Init = () =>
 
     @puzzlePanel = vgui.Create "DPanel", @centerPanel
     @puzzlePanel.Paint = (_, w, h) ->
+        if not @data
+            return
+
         surface.SetDrawColor @data.colors.cell
         draw.NoTexture!
         if @__flatCells

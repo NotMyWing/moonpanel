@@ -71,10 +71,6 @@ materials = {
     "editor/icon16_windmill.png"
     "editor/panel.png"
     "editor/polyo.png"
-    "editor/corner128/0.png"
-    "editor/corner128/1.png"
-    "editor/corner128/2.png"
-    "editor/corner128/3.png"
     "editor/slider/head.png"
     "editor/slider/left.png"
     "editor/slider/middle.png"
@@ -203,12 +199,12 @@ Moonpanel.sanitizeTileData = (input) =>
     input.Cells or= {}
     input.Colors or= {}
 
+    defSymColors = Moonpanel.ColorfulSymmetryDefaultColors
     sanitized = {
         Tile: {
             Title: input.Tile.Title and string.sub(input.Tile.Title, 1, 64) or nil
             Width: math.Clamp((sanitizeNumber input.Tile.Width, 3), 1, 10)
             Height: math.Clamp((sanitizeNumber input.Tile.Height, 3), 1, 10)
-            Symmetry: input.Tile.Symmetry and (math.floor math.Clamp((sanitizeNumber input.Tile.Symmetry, 0), 0, 3)) or 0
         }
         Dimensions: {
             BarWidth: input.Dimensions.BarWidth and
@@ -227,7 +223,29 @@ Moonpanel.sanitizeTileData = (input) =>
         Intersections: {}
         VPaths: {}
         HPaths: {}
+        Symmetry: {
+            Type: 0
+        }
     }
+
+    if input.Symmetry and input.Symmetry.Type ~= Moonpanel.Symmetry.None
+        sanitized.Symmetry.Type = math.floor math.Clamp((sanitizeNumber input.Symmetry.Type, 1), 1, table.Count(Moonpanel.Symmetry))
+        sanitized.Symmetry.Colorful = not not input.Symmetry.Colorful
+
+        if sanitized.Symmetry.Colorful
+            sanitized.Symmetry.Traces = {}
+            inputTraces = (type(input.Symmetry.Traces) == "table") and input.Symmetry.Traces or {}
+
+            for i = 1, 2
+                inputTrace = inputTraces[i]
+
+                sanitized.Symmetry.Traces[i] = {}
+                sanitized.Symmetry.Traces[i].Color = math.floor math.Clamp(
+                    sanitizeNumber(inputTrace.Color or defSymColors[i], 1),
+                    1,
+                    #Moonpanel.Colors
+                )
+                sanitized.Symmetry.Traces[i].Invisible = not not inputTrace.Invisible
 
     colors = input.Colors or {}
     defaults = Moonpanel.DefaultColors
@@ -241,8 +259,7 @@ Moonpanel.sanitizeTileData = (input) =>
     sanitized.Colors.Vignette   = sanitizeColor colors.Vignette, defaults.Vignette
     sanitized.Colors.Cell       = sanitizeColor colors.Cell, defaults.Cell
 
-    MAXENT = 10
-    MAXCOLOR = 9
+    MAXENT = table.Count Moonpanel.EntityTypes
 
     w, h = sanitized.Tile.Width, sanitized.Tile.Height
     for j = 1, h + 1
@@ -325,5 +342,9 @@ Moonpanel.sanitizeTileData = (input) =>
                         Hollow: not not atts.Hollow
                     }
                 }
+
+    PrintTable(input)
+    print "\n\n-----------------\n\n"
+    PrintTable(sanitized)
 
     return sanitized

@@ -65,7 +65,6 @@ Moonpanel.EntityTypes = {
     Color:              8
     Disjoint:           9
     Invisible:         10
-    NegativePolyomino: 11
 }
 
 Moonpanel.ObjectTypes = {
@@ -163,6 +162,22 @@ Moonpanel.DefaultColors = {
     Errored:    Color 0   , 0   , 0   , 255
     Cell:       Color 0   , 0   , 0   , 0
 }
+
+Moonpanel.ColorfulSymmetryDefaultColors = {
+    [1]: Moonpanel.Color.Cyan
+    [2]: Moonpanel.Color.Orange
+}
+
+mulColor = (c, mod) ->
+    Color math.floor(math.Clamp(c.r * mod, 0, 255)),
+        math.floor(math.Clamp(c.g * mod, 0, 255)),
+        math.floor(math.Clamp(c.b * mod, 0, 255)),
+        c.a
+        
+Moonpanel.ColorfulSymmetryEndColors = {}
+for i = 1, table.Count Moonpanel.Color
+    h, s, v = Moonpanel.Colors[i]\ToHSV!
+    Moonpanel.ColorfulSymmetryEndColors[i] = HSVToColor h, s, v * 0.8
 
 Moonpanel.Presets = {
     ["Default"]: {

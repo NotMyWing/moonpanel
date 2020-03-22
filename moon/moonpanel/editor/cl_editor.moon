@@ -620,30 +620,7 @@ editor.PerformLayout = (w, h) =>
     if @panel_middleContainer
         px, py = @panel_middleContainer\GetPos!
 
-        @panel_toolBar\SetPos px, 0
-        @panel_toolBar\SizeToContents!
         @label_tips\SizeToContents!
-
-        titleLabel = nil
-        for k, v in pairs @GetChildren!
-            if v\GetName! == "DLabel"
-                titleLabel = v
-                break
- 
-        if titleLabel
-            if not @panel_fileTreeContainer\IsVisible!
-                tx, ty = titleLabel\GetPos!
-                if not titleLabel.initialPos
-                    titleLabel.initialPos = { x: tx, y: ty }
-
-                offsety = ty
-                offsetx = 8 + @panel_toolBar\GetWide!
-            
-                bx, by = @panel_toolBar\GetPos!
-
-                titleLabel\SetPos bx + offsetx, by + offsety
-            elseif titleLabel.initialPos
-                titleLabel\SetPos titleLabel.initialPos.x, titleLabel.initialPos.y
 
 editor.Init = () =>
     __editor = @
@@ -799,6 +776,7 @@ editor.Init = () =>
         .Paint = nil
 
     @panel_toolBar = with vgui.Create "DPanel", @
+        \DockMargin 0, -4, 0, 0
         \SetZPos 1
         .Paint = nil
 
@@ -893,9 +871,11 @@ editor.Init = () =>
 
             @__windmillBrowser\Show!
             @__windmillBrowser\MakePopup!
-    
-    @panel_toolBar\SetWide 160
+
     @panel_toolBar\InvalidateLayout!
+    @panel_toolBar\SetParent @panel_middleContainer
+    @panel_toolBar\Dock TOP
+    @panel_toolBar\SizeToContents!
 
     @sheet_toolSheet = with vgui.Create "DPropertySheet", @panel_middleContainer
         \Dock FILL
@@ -904,7 +884,7 @@ editor.Init = () =>
         \Dock FILL
         \DockMargin 6, 0, 6, 6
 
-    @sheet_toolSheet\AddSheet "Panel", @panel_controls, "icon16/pencil.png"
+    @sheet_toolSheet\AddSheet "Panel", @panel_controls, "icon16/map.png"
 
     do
         panel_colorfulSymmetry = nil
@@ -994,23 +974,18 @@ editor.Init = () =>
 
             \ChooseOptionID 1
             .OnSelect = (_, index, value, d) ->
-                data = @Serialize!
-                if not data
-                    return
-
-                data.Tile.Symmetry = d
-                if IsValid panel_colorfulSymmetry
-                    if data.Tile.Symmetry ~= 0
-                        panel_colorfulSymmetry\Show!
-                        panel_colorfulSymmetry\SetTall panel_colorfulSymmetry.InitialTall
+                @data.symmetry = d
+                if IsValid @panel_colorfulSymmetry
+                    if d ~= 0
+                        @panel_colorfulSymmetry\Show!
+                        @panel_colorfulSymmetry\SetTall @panel_colorfulSymmetry.InitialTall
                     else
-                        panel_colorfulSymmetry\Hide!
-                        panel_colorfulSymmetry\SetTall 0
+                        @panel_colorfulSymmetry\Hide!
+                        @panel_colorfulSymmetry\SetTall 0
 
                     @InvalidateChildren!
                     @InvalidateLayout!
 
-                @Deserialize data
                 @OnChange!
 
         left\SizeToContents true, true
@@ -1044,14 +1019,21 @@ editor.Init = () =>
             \SetTextColor Color 0, 0, 0
             \SizeToContents!
             .OnChange = (_, value) ->
-                data.symmetry.colorful = value
+                data = @Serialize!
+                if not data
+                    return
+
+                data.Tile.ColorfulSymmetry = value
+
+                @Deserialize data
+                @OnChange!
 
         panel_checkBoxContainer\SizeToContents!
         panel_checkBoxContainer\InvalidateChildren!
         panel_checkBoxContainer\InvalidateLayout!
 
         symLeft = with vgui.Create "DPanel", @panel_colorfulSymmetry
-            \DockMargin 2, 2, 2, 2
+            \DockMargin 0, 2, 2, 2
             \Dock LEFT
             \SetBackgroundColor Color 255, 255, 255, 64
 
@@ -1077,13 +1059,19 @@ editor.Init = () =>
             \SetText "Main trace"
             \SetContentAlignment 5
 
-        @button_mainTraceColor = with vgui.Create "DButton", symLeft
+        @button_primaryTraceColor = with vgui.Create "DButton", symLeft
             \DockMargin 8, 2, 8, 2
             \SetTooltip "Choose a color and press this to change."
             \SetText ""
             \Dock FILL
             .Paint = (_, w, h) ->
-                draw.RoundedBox 8, 0, 0, w, h, Moonpanel.Colors[Moonpanel.Color.Cyan]  
+                color = _.color or Moonpanel.ColorfulSymmetryDefaultColors[1]
+                draw.RoundedBox 8, 0, 0, w, h, Moonpanel.Colors[color]
+            .DoClick = (_) ->
+                old = _.color
+                _.color = @selectedColor or Moonpanel.ColorfulSymmetryDefaultColors[1]
+                if old ~= _.color
+                    @OnChange!
 
         panel_mainInvisibleCheckBoxContainer = with vgui.Create "DPanel", symLeft
             \DockMargin 5, 2, 5, 2
@@ -1091,7 +1079,7 @@ editor.Init = () =>
             \SetTall 20
             .Paint = nil
 
-        @checkbox_secondaryTraceInvisible = with vgui.Create "DCheckBoxLabel", panel_mainInvisibleCheckBoxContainer
+        @checkbox_primaryTraceInvisible = with vgui.Create "DCheckBoxLabel", panel_mainInvisibleCheckBoxContainer
             \DockMargin 5, 2, 5, 2
             \Dock FILL
             \SetTall 20
@@ -1112,7 +1100,13 @@ editor.Init = () =>
             \SetText ""
             \Dock FILL
             .Paint = (_, w, h) ->
-                draw.RoundedBox 8, 0, 0, w, h, Moonpanel.Colors[Moonpanel.Color.Orange]  
+                color = _.color or Moonpanel.ColorfulSymmetryDefaultColors[2]
+                draw.RoundedBox 8, 0, 0, w, h, Moonpanel.Colors[color]
+            .DoClick = (_) ->
+                old = _.color
+                _.color = @selectedColor or Moonpanel.ColorfulSymmetryDefaultColors[2]
+                if old ~= _.color
+                    @OnChange!
 
         panel_secondaryInvisibleCheckBoxContainer = with vgui.Create "DPanel", symRight
             \DockMargin 5, 2, 5, 2
@@ -1129,7 +1123,7 @@ editor.Init = () =>
             \SizeToContents!
  
     with @slider_barWidth = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), @panel_controls
-        \DockMargin 5, 8, 5, 2
+        \DockMargin 5, -2, 5, -2
         \Dock TOP
         \SetText "Bar Width"
         \SetMin 1
@@ -1155,7 +1149,7 @@ editor.Init = () =>
         \SetValue 0
 
     with @slider_innerScreenRatio = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), @panel_controls
-        \DockMargin 5, 0, 5, 2
+        \DockMargin 5, 0, 5, -2
         \Dock TOP
         \SetValue 0
         \SetText "Inner Ratio"
@@ -1181,7 +1175,7 @@ editor.Init = () =>
                 __editor\OnChange!
 
     with @slider_maxBarLength = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), @panel_controls
-        \DockMargin 5, 0, 5, 2
+        \DockMargin 5, 0, 5, -2
         \Dock TOP
         \SetText "Max Bar Length"
         \SetMin 0
@@ -1207,7 +1201,7 @@ editor.Init = () =>
         \SetValue 0
 
     with @slider_disjointLength = vgui.CreateFromTable (include "moonpanel/editor/vgui_circlyslider.lua"), @panel_controls
-        \DockMargin 5, 0, 5, 2
+        \DockMargin 5, 0, 5, -2
         \Dock TOP
         \SetText "Disjoint Length"
         \SetMin 10
@@ -1238,7 +1232,7 @@ editor.Init = () =>
 
     -----------------------------------
     --                               --
-    -- Tools toolset. haha.          --
+    -- Tools toolset.                --
     --                               --
     -----------------------------------
     do
@@ -1289,8 +1283,8 @@ editor.Init = () =>
                     render.PushFilterMag TEXFILTER.ANISOTROPIC
                     render.PushFilterMin TEXFILTER.ANISOTROPIC
                     v.render w, h, color, _self
-                    render.PopFilterMag!
                     render.PopFilterMin!
+                    render.PopFilterMag!
 
                 if i == 1
                     \DoClick!
@@ -1393,8 +1387,9 @@ editor.Init = () =>
                     render.PushFilterMag TEXFILTER.ANISOTROPIC
                     render.PushFilterMin TEXFILTER.ANISOTROPIC
                     v.render w, h, color, _self
-                    render.PopFilterMag!
                     render.PopFilterMin!
+                    render.PopFilterMag!
+
                 if i == 1
                     \DoClick!
 
@@ -1454,8 +1449,9 @@ editor.Init = () =>
                     render.PushFilterMag TEXFILTER.ANISOTROPIC
                     render.PushFilterMin TEXFILTER.ANISOTROPIC
                     v.render w, h, bgColor, entColor, _self
-                    render.PopFilterMag!
                     render.PopFilterMin!
+                    render.PopFilterMag!
+
                 if i == 1
                     \DoClick!
 
@@ -1491,13 +1487,13 @@ editor.Init = () =>
             if type(preset) ~= "table"
                 return
 
-            @data.colors.background = sanitizeColor preset.Background, Moonpanel.DefaultColors.Background
-            @data.colors.vignette = sanitizeColor preset.Vignette, Moonpanel.DefaultColors.Vignette
-            @data.colors.cell = sanitizeColor preset.Cell, Moonpanel.DefaultColors.Cell
-            @data.colors.traced = sanitizeColor preset.Traced, Moonpanel.DefaultColors.Traced
-            @data.colors.untraced = sanitizeColor preset.Untraced, Moonpanel.DefaultColors.Untraced
-            @data.colors.finished = sanitizeColor preset.Finished, Moonpanel.DefaultColors.Finished
-            @data.colors.errored = sanitizeColor preset.Errored, Moonpanel.DefaultColors.Errored
+            @data.colors.background = sanitizeColor preset.Background , Moonpanel.DefaultColors.Background
+            @data.colors.vignette   = sanitizeColor preset.Vignette   , Moonpanel.DefaultColors.Vignette
+            @data.colors.cell       = sanitizeColor preset.Cell       , Moonpanel.DefaultColors.Cell
+            @data.colors.traced     = sanitizeColor preset.Traced     , Moonpanel.DefaultColors.Traced
+            @data.colors.untraced   = sanitizeColor preset.Untraced   , Moonpanel.DefaultColors.Untraced
+            @data.colors.finished   = sanitizeColor preset.Finished   , Moonpanel.DefaultColors.Finished
+            @data.colors.errored    = sanitizeColor preset.Errored    , Moonpanel.DefaultColors.Errored
             @OnChange! 
               
     do
@@ -1623,6 +1619,18 @@ editor.Init = () =>
                 @OnChange!   
                 presets\SetValue "Custom" 
 
+    -----------------------------------
+    --                               --
+    -- Vanity                        --
+    --                               --
+    -----------------------------------
+
+    panel_vanity = with vgui.Create "DScrollPanel", @sheet_toolSheet
+        \Dock FILL
+        \DockMargin 6, 0, 6, 6
+
+    @sheet_toolSheet\AddSheet "Vanity", panel_vanity, "icon16/paintbrush.png"
+    
     @data = {
         w: 3
         h: 3
@@ -1690,6 +1698,7 @@ editor.SetupGrid = (data) =>
 editor.Serialize = () =>
     if @__serializing
         return
+
     @__serializing = true
 
     data_colors = @data.colors or {}
@@ -1699,7 +1708,6 @@ editor.Serialize = () =>
             Title: @data.title
             Width: @data.w
             Height: @data.h
-            Symmetry: (@data.symmetry and @data.symmetry ~= 0) and @data.symmetry
         }
         Dimensions: {
             BarWidth: @data.barWidth
@@ -1721,6 +1729,36 @@ editor.Serialize = () =>
         VPaths: {}
         HPaths: {}
     }
+
+    if @data.symmetry and @data.symmetry ~= 0
+        colorful = @checkbox_colorfulSymmetry\GetChecked!
+
+        outputData.Symmetry = {
+            Type: @data.symmetry
+        }
+        if colorful
+            p_color = @button_primaryTraceColor.color 
+            s_color = @button_secondaryTraceColor.color
+            outputData.Symmetry.Colorful = true
+            outputData.Symmetry.Traces = {
+                {
+                    Color: p_color ~= Moonpanel.ColorfulSymmetryDefaultColors[1] and p_color
+                    Invisible: @checkbox_primaryTraceInvisible\GetChecked! and true or nil
+                },
+                {
+                    Color: s_color ~= Moonpanel.ColorfulSymmetryDefaultColors[2] and s_color
+                    Invisible: @checkbox_secondaryTraceInvisible\GetChecked! and true or nil
+                }
+            }
+
+            empty = true
+            for _, trace in pairs outputData.Symmetry.Traces
+                if trace.Color or trace.Invisible
+                    empty = false
+                    break
+
+            if empty
+                outputData.Symmetry.Traces = nil
 
     if @moonpanel_grid.rows
         for j, row in pairs @moonpanel_grid.rows
@@ -1798,7 +1836,6 @@ editor.Deserialize = (input, noChange) =>
         title: input_tile.Title
         w: input_tile.Width or 3
         h: input_tile.Height or 3
-        symmetry: input_tile.Symmetry or 0
         
         barWidth: input_dimensions.BarWidth
         innerScreenRatio: input_dimensions.InnerScreenRatio
@@ -1820,12 +1857,30 @@ editor.Deserialize = (input, noChange) =>
     @comboBox_widthCombo\SetText newData.w
     @comboBox_heightCombo\SetText newData.h
 
-    symmetry = @comboBox_symmetryCombo\GetOptionTextByData newData.symmetry
-    if type(symmetry) == "string"
-        @comboBox_symmetryCombo\SetText symmetry
+    symmetry = input.Symmetry or {}
 
-    @panel_colorfulSymmetry\SetVisible input_tile.Symmetry ~= 0
-    @panel_colorfulSymmetry\SetTall (input_tile.Symmetry and input_tile.Symmetry ~= 0) and @panel_colorfulSymmetry.InitialTall or 0
+    symmetryType = input.Tile.Symmetry or symmetry.Type
+    symmetryTypeText = @comboBox_symmetryCombo\GetOptionTextByData symmetryType
+    if type(symmetryTypeText) == "string"
+        newData.symmetry = symmetryType
+        @comboBox_symmetryCombo\SetText symmetryTypeText
+    else
+        newData.symmetry = 0
+        @comboBox_symmetryCombo\SetText @comboBox_symmetryCombo\GetOptionTextByData 0
+
+    @panel_colorfulSymmetry\SetVisible (symmetry.Symmetry ~= 0)
+    @panel_colorfulSymmetry\SetTall (symmetry.Symmetry ~= 0) and @panel_colorfulSymmetry.InitialTall or 0
+
+    @checkbox_colorfulSymmetry\SetChecked symmetry.Colorful or false
+    traces = symmetry.Traces or {}
+
+    trace = traces[1] or {}
+    @button_primaryTraceColor.color = trace.Color
+    @checkbox_primaryTraceInvisible\SetChecked trace.Invisible or false
+
+    trace = traces[2] or {}
+    @button_secondaryTraceColor.color = trace.Color
+    @checkbox_secondaryTraceInvisible\SetChecked trace.Invisible or false
 
     input.Colors or= {}
     newData.colors.background = sanitizeColor input.Colors.Background, Moonpanel.DefaultColors.Background
@@ -1930,6 +1985,8 @@ editor.Deserialize = (input, noChange) =>
     @panel_controls\InvalidateLayout!
 
     @__serializing = false
+
+    PrintTable @data
 
 editor.SetOpenedFile = (fileName, path = "DATA") =>
     @__openedFileName = fileName
@@ -2055,7 +2112,6 @@ editor.ParseWindmillData = (storage) =>
         --title: ""
         w: width or 3
         h: height or 3
-        symmetry: Moonpanel.TheWindmill_SymmetryTypes[contents.symmetry] or Moonpanel.Symmetry.None
 
         cells: {}
         intersections: {}
@@ -2201,6 +2257,9 @@ editor.ParseWindmillData = (storage) =>
     @panel_controls\InvalidateLayout!
 
     @__windmillBrowser\Hide!
+
+    @InvalidateChildren!
+    @InvalidateLayout!
 
 editor.OnClose = () =>
     @Autosave!

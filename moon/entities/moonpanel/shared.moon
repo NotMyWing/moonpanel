@@ -209,7 +209,7 @@ ENT.SetupData = (data) =>
     pfData = {
         screenWidth: @ScreenSize
         screenHeight: @ScreenSize
-        symmetry: @tileData.Tile.Symmetry
+        symmetry: @tileData.Symmetry.Type
         barLength: @calculatedDimensions.barLength
         barWidth: @calculatedDimensions.barWidth
     }

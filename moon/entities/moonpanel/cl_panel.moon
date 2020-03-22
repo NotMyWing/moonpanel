@@ -1,7 +1,7 @@
 import SetDrawColor, DrawRect from surface
 import Clear, ClearDepth, OverrideAlphaWriteEnable from render
 import SetStencilEnable, SetViewPort, SetColorMaterial, PushRenderTarget, PopRenderTarget from render
-import sCurveGradient, gradient, colorCopy from Moonpanel.render
+import sCurve, sCurveGradient, gradient, colorCopy from Moonpanel.render
 
 RT_Material = CreateMaterial "TheMP_RT", "UnlitGeneric", {
     ["$nolod"]: 1,
@@ -20,6 +20,23 @@ polyo = Material "moonpanel/common/polyomino_cell.png", "smooth"
 vignette = Material "moonpanel/common/vignette.png"
 
 COLOR_BLACK = Color 0, 0, 0, 255
+
+TraceState = {
+    None: 0
+    Errored: 1
+    GrayOut: 2
+    FadeIn: 3
+    FadeOut: 4
+}
+
+colorsEqual = (a, b) ->
+    return (a and b) and (a.r == b.r and a.g == b.g and a.b == b.b and a.a == b.a) or false
+
+blinkifyColor = (color, forcePositive) ->
+    h, s, v = color\ToHSV!
+
+    mod = 0.1
+    HSVToColor h, s, (forcePositive or (v + mod <= 1)) and (math.min 1, v + mod) or (v - mod)
 
 setRTTexture = (rt) ->
     RT_Material\SetTexture "$basetexture", rt
@@ -134,7 +151,8 @@ ENT.CleanUp = () =>
     @grayOut = nil
     @grayOutStart = nil
     @__finishTime = nil
-    @__wasSolutionAborted = false
+    @__isSolutionAborted = false
+    @__isSolutionSuccessful = false
     @__traceLerps or= {}
     table.Empty @__traceLerps
 
@@ -146,13 +164,52 @@ ENT.CleanUp = () =>
         @rendertargets.foreground.dirty = true
         @rendertargets.trace.dirty = true
 
-    @__lastShouldBlink = false
+    @__lastShouldBlink = {}
+    @__traceAlpha      = 0
+    @__traceState      = TraceState.None
+    
+    if @colors
+        @ResetInterps!
 
-    @__penInterp         = nil
-    @__penInterpDeltaMod = nil
-    @__penInterpFrom     = nil
-    @__penInterpTo       = nil
-    @__penInterpCallback = nil
+ENT.ResetInterps = =>
+    @__interps = {}
+    for i = 1, (@tileData.Symmetry.Type ~= 0) and 2 or 1
+        @__interps[i] = colorCopy @__startColors[i]
+
+ENT.Interpolate = (id, _from = nil, to, callback, mod = nil, sCurve = true) =>
+    with @__interps[id]
+        .finished = false
+        .sCurve   = sCurve
+        .callback = callback
+        .from     = _from or colorCopy @__interps[id]
+        .to       = to
+        .mod      = mod or 1
+        .acc      = 0
+
+ENT.InterpolateThink = (delta) =>
+    if not @__interps
+        return
+
+    dirty = false
+    for i = 1, (@tileData.Symmetry.Type ~= 0) and 2 or 1
+        with @__interps[i]
+            if .finished == false
+                dirty = true
+                .acc += delta * .mod
+
+                if .acc >= 1
+                    .acc = 1
+                    .finished = true
+
+                func = .sCurve and sCurveGradient or gradient
+                .r, .g, .b, .a = func .from, .to, .acc
+
+                if .finished
+                    if .callback
+                        .callback!
+
+    if dirty
+        @rendertargets.trace.dirty = true
 
 ENT.Desynchronize = () =>
     @CleanUp!
@@ -198,10 +255,10 @@ ENT.NW_OnPowered = (state) =>
             if @sounds.powerOn
                 @PlaySound @sounds.powerOn
         else
-            @pen.a = 0
             @CleanUp!
             if @sounds.presenceLoop
                 @sounds.presenceLoop\Stop!
+
             if @sounds.powerOff
                 @PlaySound @sounds.powerOff
 
@@ -210,12 +267,20 @@ ENT.PuzzleStart = (nodeA, nodeB) =>
         return
 
     @CleanUp!
-
-    tr = @colors.traced
-    @pen = Color tr.r, tr.g, tr.b, tr.a or 255
-
     if @sounds.start
         @PlaySound @sounds.start
+
+    if @sounds.presenceLoop
+        if not @sounds.presenceLoop\IsPlaying!
+            @sounds.presenceLoop\PlayEx 1, 100
+
+        @sounds.presenceLoop\ChangeVolume 0, 5
+
+    if @sounds.solvingLoop
+        if not @sounds.solvingLoop\IsPlaying!
+            @sounds.solvingLoop\PlayEx 0, 100
+
+        @sounds.solvingLoop\ChangeVolume 1, 0.25
 
     @pathFinder\restart nodeA, nodeB
     @rendertargets.trace.dirty = true
@@ -228,40 +293,32 @@ ENT.PuzzleStart = (nodeA, nodeB) =>
     barWidth = @calculatedDimensions.barWidth
     @__penSizeModifier = (barWidth / 2) / (barWidth * 1.25)
 
-    if @sounds.solvingLoop
-        @sounds.solvingLoop\Play!
+    @__traceAlpha           = 255
+    @__traceAlphaFadeMod    = 1
+    @__traceAlphaGrayingOut = false
 
-ENT.PenInterpolate = (_from, to, delta = 1, callback) =>
-    @__penInterp         = 0
-    @__penInterpDeltaMod = delta
-    @__penInterpFrom     = _from
-    @__penInterpTo       = to
-    @__penInterpCallback = callback
+ENT.BlinkFinish = =>
+    for i = 1, (@tileData.Symmetry.Type ~= 0) and 2 or 1
+        callback = () ->
+            @Interpolate i, nil, @__endColors[i], nil, 4
 
-white = Color 255, 255, 255, 255
-ENT.PenInterpolateFinished = (instant) =>
-    @rendertargets.trace.dirty = true
-
-    cb = () ->
-        @PenInterpolate white, @colors.finished, 0.3
-    
-    if instant
-        cb!
-    else
-        @PenInterpolate @pen, white, 0.3, cb    
-
-ENT.PenFade = (clr, modifier = 0.075) =>
-    @PenInterpolate clr, (ColorAlpha clr, 0), modifier
-
-ENT.PenInterpolateStop = =>
-    @__penInterp = nil
+        @Interpolate i, nil, @__fadeInOutColors[i], callback, 4
 
 ENT.PuzzleFinish = (data) =>
-    if @sounds.pathComplete\IsPlaying!
+    if @sounds.pathComplete and @sounds.pathComplete\IsPlaying!
         @sounds.pathComplete\Stop!
 
-    if @sounds.solvingLoop\IsPlaying!
-            @sounds.solvingLoop\FadeOut 0.1
+    if @sounds.solvingLoop
+        if not @sounds.solvingLoop\IsPlaying!
+            @sounds.solvingLoop\PlayEx 1, 100
+
+        @sounds.solvingLoop\ChangeVolume 0, 0.25
+
+    if @sounds.presenceLoop
+        if not @sounds.presenceLoop\IsPlaying!
+            @sounds.presenceLoop\PlayEx 0, 100
+
+        @sounds.presenceLoop\ChangeVolume 1, 1
 
     success = data.success or false
     aborted = data.aborted or false
@@ -295,55 +352,68 @@ ENT.PuzzleFinish = (data) =>
             if @sounds.potentialFailure
                 @PlaySound @sounds.potentialFailure
 
-            @PenFade @colors.errored, 0.1
+            for i = 1, (@tileData.Symmetry.Type ~= 0) and 2 or 1
+                @Interpolate i, nil, @colors.errored, nil, 10000
+                @__traceAlphaFadeMod = 0.1
+                @__traceAlphaGrayingOut = true
+
             timer.Create @GetTimerName("grayOut"), 0.75, 1, () ->
                 if not @rendertargets or not IsValid @
                     return
 
-                @PenInterpolateStop!
-
                 @redOut = nil
                 @grayOut = _grayOut
                 @grayOutStart = CurTime!
+                @__traceAlphaGrayingOut = false
+                @__traceAlpha = 255
+
+                @BlinkFinish!
 
                 if not data.sync
                     if @sounds.eraser
                         @PlaySound @sounds.eraser
                     if @sounds.success
                         @PlaySound @sounds.success
-
-                    @PenInterpolateFinished true
-                else
-                    @pen = colorCopy @colors.finished
+                
+                @__traceState = TraceState.FadeOut
 
         else
+            @BlinkFinish!
             if not data.sync
                 if @sounds.success
-                    @PlaySound  @sounds.success
-                if @pen ~= @colors.finished
-                    @PenInterpolateFinished!
-            else
-                @pen = colorCopy @colors.finished
+                    @PlaySound @sounds.success
 
     elseif not aborted
         if _grayOut.grayedOut
             if not data.sync and @sounds.potentialFailure
                 @PlaySound @sounds.potentialFailure
 
-            @PenFade @colors.errored, 0.05
+            @__traceAlphaFadeMod = 0.1
             timer.Create @GetTimerName("grayOut"), 0.75, 1, () ->
                 if not @rendertargets or not IsValid @
                     return
 
                 @grayOut = _grayOut
                 @grayOutStart = CurTime!
+                @__traceAlphaFadeMod = 1
 
-                @PenInterpolate colorCopy(@pen), ColorAlpha(@pen, 0), 0.1
                 if not data.sync and @sounds.failure
                     @PlaySound @sounds.failure
 
         else
-            @PenFade @colors.errored
+            @__traceAlphaFadeMod = 0
+            fired = false
+
+            for i = 1, (@tileData.Symmetry.Type ~= 0) and 2 or 1
+                callback = () ->
+                    if not fired
+                        fired = true
+                        @__traceAlphaFadeMod = 1
+
+                    @Interpolate i, nil, @colors.errored, nil, 10000
+
+                @Interpolate i, nil, @__startColors[i], callback, 10000
+                
             if not data.sync and @sounds.failure
                 @PlaySound @sounds.failure
 
@@ -351,13 +421,8 @@ ENT.PuzzleFinish = (data) =>
         if not data.sync and not data.forceFail and @sounds.abort
             @PlaySound @sounds.abort
 
-        if @pen
-            if data.forceFail
-                @pen.a = 0
-            else
-                @PenFade @pen
-    
-    @__wasSolutionAborted = aborted
+    @__isSolutionAborted = aborted
+    @__isSolutionSuccessful = success
     @rendertargets.trace.dirty = true
 
 ENT.PlaySound = (sound) =>
@@ -377,16 +442,14 @@ ENT.SetupDataClient = (data) =>
 
     @colors            = {}
     @colors.background = @tileData.Colors.Background or defs.Background
-    @colors.untraced   = @tileData.Colors.Untraced or defs.Untraced
-    @colors.traced     = @tileData.Colors.Traced or defs.Traced
-    @colors.vignette   = @tileData.Colors.Vignette or defs.Vignette
-    @colors.errored    = @tileData.Colors.Errored or defs.Errored
-    @colors.cell       = @tileData.Colors.Cell or defs.Cell
-    @colors.finished   = @tileData.Colors.Finished or defs.Finished
+    @colors.untraced   = @tileData.Colors.Untraced   or defs.Untraced
+    @colors.traced     = @tileData.Colors.Traced     or defs.Traced
+    @colors.vignette   = @tileData.Colors.Vignette   or defs.Vignette
+    @colors.errored    = @tileData.Colors.Errored    or defs.Errored
+    @colors.cell       = @tileData.Colors.Cell       or defs.Cell
+    @colors.finished   = @tileData.Colors.Finished   or defs.Finished
 
     @SetBackgroundColor @colors.background
-
-    @pen = colorCopy @colors.traced
 
     cellsW = @tileData.Tile.Width
     cellsH = @tileData.Tile.Height
@@ -431,6 +494,34 @@ ENT.SetupDataClient = (data) =>
     @rendertargets.background.dirty = true
     @rendertargets.foreground.dirty = true
     @rendertargets.trace.dirty = true
+
+    isColorful = (@tileData.Symmetry.Type ~= 0) and @tileData.Symmetry.Colorful
+
+    @__startColors     = {}
+    @__endColors       = {}
+    @__blinkColors     = {}
+    @__fadeInOutColors = {}
+
+    for i = 1, (@tileData.Symmetry.Type ~= 0) and 2 or 1
+        table.insert @__startColors, colorCopy (
+            isColorful and Moonpanel.Colors[@tileData.Symmetry.Traces[i].Color or
+                Moonpanel.ColorfulSymmetryDefaultColors[i]] or @colors.traced
+        )
+
+        table.insert @__endColors, colorCopy (
+            isColorful and Moonpanel.ColorfulSymmetryEndColors[@tileData.Symmetry.Traces[i].Color] or 
+                @colors.finished
+        )
+
+        table.insert @__blinkColors, blinkifyColor (
+            isColorful and Moonpanel.Colors[@tileData.Symmetry.Traces[i].Color or
+                Moonpanel.ColorfulSymmetryDefaultColors[i]] or @colors.traced
+        )
+        
+        table.insert @__fadeInOutColors, blinkifyColor (
+            isColorful and Moonpanel.Colors[@tileData.Symmetry.Traces[i].Color or
+                Moonpanel.ColorfulSymmetryDefaultColors[i]] or @colors.traced
+        ), true
 
 ENT.DrawBackground = () =>
     Clear 0, 0, 0, 0
@@ -525,7 +616,7 @@ ENT.CalculateLineLength = (stackId) =>
     stack = @pathFinder.nodeStacks[stackId]
 
     local cursorNode
-    if not @__finishTime or @__wasSolutionAborted
+    if not @__finishTime or @__isSolutionAborted
         cursorNode = {
             screenX: cursor.x
             screenY: cursor.y
@@ -553,37 +644,9 @@ ENT.CalculateLineLength = (stackId) =>
 
     return length
 
-ENT.PenInterpolateThink = () =>
-    if not @__penInterp
-        return
-
-    delta = (@__penInterpDeltaMod or 1) * math.max 0.001, FrameTime! * 5
-    @__penInterp += delta
-
-    r, g, b, a = sCurveGradient @__penInterpFrom, @__penInterpTo, @__penInterp
-    with @pen
-        .r = r
-        .g = g
-        .b = b
-        .a = a
-
-    @rendertargets.trace.dirty = true
-
-    if @__penInterp > 1
-        @__penInterp = 1
-
-    if @__penInterp == 1
-        @__penInterp = nil
-        if @__penInterpCallback
-            @__penInterpCallback!
-        
-        return
-
 ENT.DrawTrace = () =>
     Clear 0, 0, 0, 0
     ClearDepth!
-
-    @PenInterpolateThink!
 
     draw.NoTexture!
 
@@ -609,6 +672,12 @@ ENT.DrawTrace = () =>
 
     barWidth = @calculatedDimensions.barWidth
     if nodeStacks and #nodeStacks > 0
+        if @__finishTime and (@__traceAlphaGrayingOut or not @__isSolutionSuccessful) and @__traceAlpha > 0
+            @rendertargets.trace.dirty = true
+            @__traceAlpha -= FrameTime! * (300 * @__traceAlphaFadeMod)
+            if @__traceAlpha < 0
+                @__traceAlpha = 0
+
         if @__penSizeModifier
             @__penSizeModifier += math.max 0.001, FrameTime! * 5
             if @__penSizeModifier > 1
@@ -617,46 +686,62 @@ ENT.DrawTrace = () =>
                 @rendertargets.trace.dirty = true
 
         for stackId, stack in pairs nodeStacks
+            interp = @__interps[stackId]
+            if not interp
+                return
+                
+            interpMod = 1
+            sCurve = true
+
+            local newPenColor 
+            
             shouldBlink = not @__finishTime and (stack[#stack].exit or 
-                @pathFinder.potentialNodes[stackId] and @pathFinder.potentialNodes[stackId].exit) or false
-
-            if not @__finishTime
-                if @__lastShouldBlink ~= shouldBlink
-                    if @sounds.finishTracing and shouldBlink
-                        @PlaySound @sounds.finishTracing
-                    elseif @sounds.abortFinishTracing and not shouldBlink
-                        @PlaySound @sounds.abortFinishTracing
-                @__lastShouldBlink = shouldBlink
-
-                if shouldBlink
+                @pathFinder.potentialNodes[stackId] and @pathFinder.potentialNodes[stackId].exit)
+        
+            if stackId == 1 and @__lastShouldBlink[stackId] ~= shouldBlink
+                if @sounds.finishTracing and shouldBlink
+                    @PlaySound @sounds.finishTracing
                     if @__shouldScint
                         @__shouldScint = false
                     if not @sounds.pathComplete\IsPlaying!
                         @sounds.pathComplete\Play!
-
-                    @__blinkDistance = (1 + math.cos(CurTime! * 16)) / 2
-
-                    r, g, b = gradient @colors.traced, white, @__blinkDistance
-                    surface.SetDrawColor r, g, b, 255
-                    @rendertargets.trace.dirty = true
-
-                elseif @__blinkDistance and @__blinkDistance ~= 0 and IsValid @__activeUser
+                elseif @sounds.abortFinishTracing and not shouldBlink
+                    if not @__finishTime
+                        @PlaySound @sounds.abortFinishTracing
                     if @sounds.pathComplete\IsPlaying!
                         @sounds.pathComplete\Stop!
 
-                    @__blinkDistance = math.Approach @__blinkDistance, 0, @__blinkDistance * math.max 0.01, FrameTime! * 5
-                    if @__blinkDistance <= 0.01
-                        @__blinkDistance = 0
+            if shouldBlink
+                @rendertargets.trace.dirty = true
+                isHeadingToA = colorsEqual interp.to, @__blinkColors[stackId]
+                isHeadingToB = colorsEqual interp.to, @__startColors[stackId]
 
-                    r, g, b = sCurveGradient @colors.traced, white, @__blinkDistance 
-                    surface.SetDrawColor r, g, b, 255
-                    @rendertargets.trace.dirty = true
+                local newClr
+                if (not @__lastShouldBlink[stackId]) or (isHeadingToA and interp.finished)
+                    newClr = @__startColors[stackId]
+                elseif isHeadingToB and interp.finished
+                    newClr = @__blinkColors[stackId] 
 
-                else
-                    surface.SetDrawColor @pen.r, @pen.g, @pen.b, 255
+                if newClr
+                    @Interpolate stackId, nil, newClr, nil, (@__lastShouldBlink[stackId]) and 5 or 20, false
 
-            else
-                surface.SetDrawColor @pen.r, @pen.g, @pen.b, 255
+            elseif not @__finishTime
+                newPenColor = @__startColors[stackId]
+
+            @__lastShouldBlink[stackId] = shouldBlink
+
+            if newPenColor
+                if (newPenColor.r ~= interp.r or newPenColor.g ~= interp.g or newPenColor.b ~= interp.b) and
+                    (not interp.to or (
+                        newPenColor.r ~= interp.to.r or newPenColor.g ~= interp.to.g or newPenColor.b ~= interp.to.b
+                    ))
+                    @Interpolate stackId, nil, newPenColor, nil, interpMod, sCurve
+
+            if @tileData.Symmetry.Traces[stackId].Invisible
+                continue
+
+            with interp
+                surface.SetDrawColor .r, .g, .b, 255
 
             cursor = cursors[stackId]
             length = @CalculateLineLength stackId
@@ -670,7 +755,7 @@ ENT.DrawTrace = () =>
                 @__traceLerps[stackId] = lerped
 
             local cursorNode
-            if not @__finishTime or @__wasSolutionAborted
+            if not @__finishTime or @__isSolutionAborted
                 cursorNode = {
                     screenX: cursor.x
                     screenY: cursor.y
@@ -754,6 +839,8 @@ ENT.RenderPanel = () =>
 
     shouldRender = @synchronized and @rendertargets and @calculatedDimensions
     if shouldRender
+        @InterpolateThink FrameTime!
+
         if IsValid @__activeUser
             @rendertargets.ripple.dirty = true
 
@@ -794,7 +881,7 @@ ENT.RenderPanel = () =>
         setRTTexture @rendertargets.ripple.rt
         renderFunc 0, 0, @ScreenSize, @ScreenSize
 
-        surface.SetDrawColor @pen
+        surface.SetDrawColor 255, 255, 255, @__traceAlpha
         setRTTexture @rendertargets.trace.rt
         renderFunc 0, 0, @ScreenSize, @ScreenSize
 

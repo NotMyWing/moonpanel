@@ -16,7 +16,17 @@ class Hexagon extends Moonpanel.BaseEntity
         @attributes.hollow = defs.Hollow or false
 
     checkSolution: (areaData) =>
-        return @parent.solutionData.traced
+        symmetry = @parent.tile.tileData.Symmetry
+
+        if symmetry.Colorful
+            if @attributes.color == symmetry.Traces[1].Color
+                return @parent.solutionData.traced == 1
+            elseif @attributes.color == symmetry.Traces[2].Color
+                return @parent.solutionData.traced == 2
+            else
+                return false
+        else
+            return @parent.solutionData.traced
  
     render: =>
         if @attributes.hollow

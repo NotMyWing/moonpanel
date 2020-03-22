@@ -1,4 +1,4 @@
-const { src, watch, dest, series } = require('gulp');
+const { src, dest, task, series } = require('gulp');
 const { spawn } = require('child_process');
 const through2 = require('through2');
 const luamin = require('luamin');
@@ -71,10 +71,22 @@ function moon() {
 		.pipe(dest('lua'));
 }
 
+const build = gulp.series(lua, moon);
+
 function _watch() {
-	return watch(['moon/**/*.lua', 'moon/**/*.moon'], gulp.series(lua, moon));
+	return gulp.watch(
+		['moon/**/*.lua', 'moon/**/*.moon']
+		, build
+	)
 }
 
-exports.moon = moon;
-exports.watch = _watch;
-exports.default = _watch;
+function watch() {
+	return gulp.series(
+		build
+		, _watch
+	)()
+}
+
+exports.build = build;
+exports.watch = watch;
+exports.default = watch;

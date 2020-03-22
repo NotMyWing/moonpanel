@@ -1986,8 +1986,6 @@ editor.Deserialize = (input, noChange) =>
 
     @__serializing = false
 
-    PrintTable @data
-
 editor.SetOpenedFile = (fileName, path = "DATA") =>
     @__openedFileName = fileName
     @__openedPath = path

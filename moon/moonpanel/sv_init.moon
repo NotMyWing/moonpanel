@@ -343,8 +343,4 @@ Moonpanel.sanitizeTileData = (input) =>
                     }
                 }
 
-    PrintTable(input)
-    print "\n\n-----------------\n\n"
-    PrintTable(sanitized)
-
     return sanitized

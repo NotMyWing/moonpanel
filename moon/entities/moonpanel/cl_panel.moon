@@ -3,6 +3,8 @@ import Clear, ClearDepth, OverrideAlphaWriteEnable from render
 import SetStencilEnable, SetViewPort, SetColorMaterial, PushRenderTarget, PopRenderTarget from render
 import sCurve, sCurveGradient, gradient, colorCopy from Moonpanel.render
 
+CVAR_DRAW_GRID = CreateClientConVar "themp_debug_drawnavgrid", "0", true 
+
 RT_Material = CreateMaterial "TheMP_RT", "UnlitGeneric", {
     ["$nolod"]: 1,
     ["$ignorez"]: 1,
@@ -13,7 +15,6 @@ RT_Material = CreateMaterial "TheMP_RT", "UnlitGeneric", {
 }
 
 REDOUT_TIME = 10
-POWERSTATE_TIME = 1
 RESYNC_ATTEMPT_TIME = 0.5
 
 polyo = Material "moonpanel/common/polyomino_cell.png", "smooth"
@@ -21,26 +22,11 @@ vignette = Material "moonpanel/common/vignette.png"
 
 COLOR_BLACK = Color 0, 0, 0, 255
 
-TraceState = {
-    None: 0
-    Errored: 1
-    GrayOut: 2
-    FadeIn: 3
-    FadeOut: 4
-}
-
-colorsEqual = (a, b) ->
-    return (a and b) and (a.r == b.r and a.g == b.g and a.b == b.b and a.a == b.a) or false
-
 blinkifyColor = (color, forcePositive) ->
     h, s, v = color\ToHSV!
 
     mod = 0.1
     HSVToColor h, s, (forcePositive or (v + mod <= 1)) and (math.min 1, v + mod) or (v - mod)
-
-setRTTexture = (rt) ->
-    RT_Material\SetTexture "$basetexture", rt
-    surface.SetMaterial RT_Material
 
 ENT.PanelInit = () =>
     index = tostring @EntIndex!
@@ -165,51 +151,12 @@ ENT.CleanUp = () =>
         @rendertargets.trace.dirty = true
 
     @__lastShouldBlink = {}
-    @__traceAlpha      = 0
-    @__traceState      = TraceState.None
+    @__traceAlpha      = 255
     
     if @colors
-        @ResetInterps!
+        @ResetTraceInterps!
 
-ENT.ResetInterps = =>
-    @__interps = {}
-    for i = 1, (@tileData.Symmetry.Type ~= 0) and 2 or 1
-        @__interps[i] = colorCopy @__startColors[i]
-
-ENT.Interpolate = (id, _from = nil, to, callback, mod = nil, sCurve = true) =>
-    with @__interps[id]
-        .finished = false
-        .sCurve   = sCurve
-        .callback = callback
-        .from     = _from or colorCopy @__interps[id]
-        .to       = to
-        .mod      = mod or 1
-        .acc      = 0
-
-ENT.InterpolateThink = (delta) =>
-    if not @__interps
-        return
-
-    dirty = false
-    for i = 1, (@tileData.Symmetry.Type ~= 0) and 2 or 1
-        with @__interps[i]
-            if .finished == false
-                dirty = true
-                .acc += delta * .mod
-
-                if .acc >= 1
-                    .acc = 1
-                    .finished = true
-
-                func = .sCurve and sCurveGradient or gradient
-                .r, .g, .b, .a = func .from, .to, .acc
-
-                if .finished
-                    if .callback
-                        .callback!
-
-    if dirty
-        @rendertargets.trace.dirty = true
+    @__touchingExit = false
 
 ENT.Desynchronize = () =>
     @CleanUp!
@@ -262,7 +209,7 @@ ENT.NW_OnPowered = (state) =>
             if @sounds.powerOff
                 @PlaySound @sounds.powerOff
 
-ENT.PuzzleStart = (nodeA, nodeB) =>
+ENT.PuzzleStart = (user, nodeA, nodeB) =>
     if not @synchronized
         return
 
@@ -282,7 +229,6 @@ ENT.PuzzleStart = (nodeA, nodeB) =>
 
         @sounds.solvingLoop\ChangeVolume 1, 0.25
 
-    @pathFinder\restart nodeA, nodeB
     @rendertargets.trace.dirty = true
 
     @__nextscint = CurTime! + 0.5
@@ -293,16 +239,27 @@ ENT.PuzzleStart = (nodeA, nodeB) =>
     barWidth = @calculatedDimensions.barWidth
     @__penSizeModifier = (barWidth / 2) / (barWidth * 1.25)
 
-    @__traceAlpha           = 255
     @__traceAlphaFadeMod    = 1
     @__traceAlphaGrayingOut = false
+
+    @__branchAnimators = {}
+    for stackId, node in ipairs { nodeA, nodeB }
+        if node
+            animator = Moonpanel.BranchAnimator node.screenX, node.screenY
+            @__branchAnimators[stackId] = animator
+
+            if user == LocalPlayer!
+                animator\setSpeedModifier 12
+
+    if user == LocalPlayer!
+        @pathFinder\restart nodeA, nodeB
 
 ENT.BlinkFinish = =>
     for i = 1, (@tileData.Symmetry.Type ~= 0) and 2 or 1
         callback = () ->
-            @Interpolate i, nil, @__endColors[i], nil, 4
+            @TraceInterpolate i, nil, @__endColors[i], nil, 4
 
-        @Interpolate i, nil, @__fadeInOutColors[i], callback, 4
+        @TraceInterpolate i, nil, @__fadeInOutColors[i], callback, 4
 
 ENT.PuzzleFinish = (data) =>
     if @sounds.pathComplete and @sounds.pathComplete\IsPlaying!
@@ -324,15 +281,6 @@ ENT.PuzzleFinish = (data) =>
     aborted = data.aborted or false
     @redOut = data.redOut or {}
     _grayOut = data.grayOut or {}
-    stacks = data.stacks or {}
-
-    @pathFinder.cursors = data.cursors
-    @pathFinder.nodeStacks = {}
-    for _, inStack in pairs stacks 
-        stack = {}
-        @pathFinder.nodeStacks[#@pathFinder.nodeStacks + 1] = stack
-        for _, i in pairs inStack
-            stack[#stack + 1] = @pathFinder.nodeMap[i]
 
     @__scintPower = nil
     @__finishTime = CurTime!
@@ -347,13 +295,17 @@ ENT.PuzzleFinish = (data) =>
             @redOut = nil
             @rendertargets.foreground.dirty = true
 
+        for _, animator in ipairs @__branchAnimators
+            animator\setCursor 1
+            animator\setSpeedModifier 1
+
     if success
         if _grayOut.grayedOut
             if @sounds.potentialFailure
                 @PlaySound @sounds.potentialFailure
 
             for i = 1, (@tileData.Symmetry.Type ~= 0) and 2 or 1
-                @Interpolate i, nil, @colors.errored, nil, 10000
+                @TraceInterpolate i, nil, @colors.errored, nil, 10000
                 @__traceAlphaFadeMod = 0.1
                 @__traceAlphaGrayingOut = true
 
@@ -369,23 +321,19 @@ ENT.PuzzleFinish = (data) =>
 
                 @BlinkFinish!
 
-                if not data.sync
-                    if @sounds.eraser
-                        @PlaySound @sounds.eraser
-                    if @sounds.success
-                        @PlaySound @sounds.success
-                
-                @__traceState = TraceState.FadeOut
-
-        else
-            @BlinkFinish!
-            if not data.sync
+                if @sounds.eraser
+                    @PlaySound @sounds.eraser
                 if @sounds.success
                     @PlaySound @sounds.success
 
+        else
+            @BlinkFinish!
+            if @sounds.success
+                @PlaySound @sounds.success
+
     elseif not aborted
         if _grayOut.grayedOut
-            if not data.sync and @sounds.potentialFailure
+            if @sounds.potentialFailure
                 @PlaySound @sounds.potentialFailure
 
             @__traceAlphaFadeMod = 0.1
@@ -397,7 +345,7 @@ ENT.PuzzleFinish = (data) =>
                 @grayOutStart = CurTime!
                 @__traceAlphaFadeMod = 1
 
-                if not data.sync and @sounds.failure
+                if @sounds.failure
                     @PlaySound @sounds.failure
 
         else
@@ -410,15 +358,15 @@ ENT.PuzzleFinish = (data) =>
                         fired = true
                         @__traceAlphaFadeMod = 1
 
-                    @Interpolate i, nil, @colors.errored, nil, 10000
+                    @TraceInterpolate i, nil, @colors.errored, nil, 10000
 
-                @Interpolate i, nil, @__startColors[i], callback, 10000
+                @TraceInterpolate i, nil, @__startColors[i], callback, 10000
                 
-            if not data.sync and @sounds.failure
+            if @sounds.failure
                 @PlaySound @sounds.failure
 
     else
-        if not data.sync and not data.forceFail and @sounds.abort
+        if data.forceFail and @sounds.abort
             @PlaySound @sounds.abort
 
     @__isSolutionAborted = aborted
@@ -468,23 +416,6 @@ ENT.SetupDataClient = (data) =>
 
     @synchronized = true
 
-    if data.lastSolution
-        data.lastSolution.sync = true
-        data.lastSolution.stacks = data.stacks
-        data.lastSolution.cursors = data.cursors
-        @PuzzleFinish data.lastSolution
-    
-    else
-        stacks = data.stacks or {}
-
-        @pathFinder.cursors = data.cursors
-        @pathFinder.nodeStacks = {}
-        for _, inStack in pairs stacks 
-            stack = {}
-            @pathFinder.nodeStacks[#@pathFinder.nodeStacks + 1] = stack
-            for _, i in pairs inStack
-                stack[#stack + 1] = @pathFinder.nodeMap[i]
-
     timer.Simple 0.5, () ->
         if IsValid @
             @NW_OnPowered @GetNW2Bool("TheMP Powered")
@@ -522,6 +453,37 @@ ENT.SetupDataClient = (data) =>
             isColorful and Moonpanel.Colors[@tileData.Symmetry.Traces[i].Color or
                 Moonpanel.ColorfulSymmetryDefaultColors[i]] or @colors.traced
         ), true
+
+    if data.lastSolution
+        @__finishTime = CurTime!
+        @__isSolutionSuccessful = true
+
+        --
+        -- If the solution has grayed-out entities, gray them out.
+        --
+        @grayOut = data.lastSolution.grayOut
+        if @grayOut
+            @grayOutStart = 0
+
+        --
+        -- Inflate received node stacks and reconstruct the trace.
+        --
+        @__branchAnimators = {}
+
+        for stackId, stack in ipairs data.stacks
+            @TraceInterpolate stackId, nil, @__endColors[stackId], nil, 10000
+
+            local animator
+            for i, nodeId in ipairs stack
+                node = @pathFinder.nodeMap[nodeId]
+
+                if i == 1
+                    animator = Moonpanel.BranchAnimator node.screenX, node.screenY
+                    @__branchAnimators[stackId] = animator
+                else
+                    animator\pushNode node.screenX, node.screenY    
+        
+            animator\bumpCursor!
 
 ENT.DrawBackground = () =>
     Clear 0, 0, 0, 0
@@ -579,6 +541,23 @@ ENT.DrawBackground = () =>
 
     for _, node in pairs @pathMapDisconnectedNodes
         Moonpanel.render.drawCircleAt node.clickable and startCircle or barCircle, node.screenX, node.screenY
+
+    if CVAR_DRAW_GRID\GetBool!
+        for _, node in pairs @pathMap
+            if node.hili
+                surface.SetDrawColor (Color 0, 255, 255, 255)
+            else
+                surface.SetDrawColor (Color 255, 0, 0, 255)
+
+            w, h = 32, 32
+            if node.clickable
+                w, h = w * 2, h * 2
+            x, y = node.screenX - w/2, node.screenY - w/2
+            Moonpanel.render.drawCircleAt @calculatedDimensions.barCircle, node.screenX, node.screenY, 0.5
+
+            surface.SetDrawColor (Color 255, 0, 0, 255)
+            for _, neighbor in pairs node.neighbors
+                surface.DrawLine node.screenX, node.screenY, neighbor.screenX, neighbor.screenY
     
 ENT.DrawForeground = () =>
     Clear 0, 0, 0, 0
@@ -608,194 +587,6 @@ ENT.DrawForeground = () =>
         render.SetColorMaterial!
         entity\render!
 
-ENT.CalculateLineLength = (stackId) =>
-    if @__calculatedLineLength and @__calculatedLineLength[stack]
-        return @__calculatedLineLength[stack]
-
-    cursor = @pathFinder.cursors[stackId]
-    stack = @pathFinder.nodeStacks[stackId]
-
-    local cursorNode
-    if not @__finishTime or @__isSolutionAborted
-        cursorNode = {
-            screenX: cursor.x
-            screenY: cursor.y
-        }
-
-        table.insert stack, cursorNode
-
-    stackLength = #stack
-    cursor = cursor
-    last = stack[#stack]
-
-    length = 0
-    for nodeId, node in pairs stack
-        if nodeId == 1
-            continue
-
-        prev = stack[nodeId - 1]
-        delta = math.sqrt (prev.screenX - node.screenX)^2 + (prev.screenY - node.screenY)^2
-        
-        prev.__delta = delta
-        length += delta
-
-    if cursorNode
-        table.remove stack, #stack
-
-    return length
-
-ENT.DrawTrace = () =>
-    Clear 0, 0, 0, 0
-    ClearDepth!
-
-    draw.NoTexture!
-
-    if false
-        for _, node in pairs @pathMap
-            if node.hili
-                surface.SetDrawColor (Color 0, 255, 255, 255)
-            else
-                surface.SetDrawColor (Color 255, 0, 0, 255)
-
-            w, h = 32, 32
-            if node.clickable
-                w, h = w * 2, h * 2
-            x, y = node.screenX - w/2, node.screenY - w/2
-            Moonpanel.render.drawCircleAt @calculatedDimensions.barCircle, node.screenX, node.screenY, 0.5
-
-            surface.SetDrawColor (Color 255, 0, 0, 255)
-            for _, neighbor in pairs node.neighbors
-                surface.DrawLine node.screenX, node.screenY, neighbor.screenX, neighbor.screenY
-
-    nodeStacks = @pathFinder.nodeStacks
-    cursors = @pathFinder.cursors
-
-    barWidth = @calculatedDimensions.barWidth
-    if nodeStacks and #nodeStacks > 0
-        if @__finishTime and (@__traceAlphaGrayingOut or not @__isSolutionSuccessful) and @__traceAlpha > 0
-            @rendertargets.trace.dirty = true
-            @__traceAlpha -= FrameTime! * (300 * @__traceAlphaFadeMod)
-            if @__traceAlpha < 0
-                @__traceAlpha = 0
-
-        if @__penSizeModifier
-            @__penSizeModifier += math.max 0.001, FrameTime! * 5
-            if @__penSizeModifier > 1
-                @__penSizeModifier = 1
-            elseif @__penSizeModifier < 1
-                @rendertargets.trace.dirty = true
-
-        for stackId, stack in pairs nodeStacks
-            interp = @__interps[stackId]
-            if not interp
-                return
-                
-            interpMod = 1
-            sCurve = true
-
-            local newPenColor 
-            
-            shouldBlink = not @__finishTime and (stack[#stack].exit or 
-                @pathFinder.potentialNodes[stackId] and @pathFinder.potentialNodes[stackId].exit)
-        
-            if stackId == 1 and @__lastShouldBlink[stackId] ~= shouldBlink
-                if @sounds.finishTracing and shouldBlink
-                    @PlaySound @sounds.finishTracing
-                    if @__shouldScint
-                        @__shouldScint = false
-                    if not @sounds.pathComplete\IsPlaying!
-                        @sounds.pathComplete\Play!
-                elseif @sounds.abortFinishTracing and not shouldBlink
-                    if not @__finishTime
-                        @PlaySound @sounds.abortFinishTracing
-                    if @sounds.pathComplete\IsPlaying!
-                        @sounds.pathComplete\Stop!
-
-            if shouldBlink
-                @rendertargets.trace.dirty = true
-                isHeadingToA = colorsEqual interp.to, @__blinkColors[stackId]
-                isHeadingToB = colorsEqual interp.to, @__startColors[stackId]
-
-                local newClr
-                if (not @__lastShouldBlink[stackId]) or (isHeadingToA and interp.finished)
-                    newClr = @__startColors[stackId]
-                elseif isHeadingToB and interp.finished
-                    newClr = @__blinkColors[stackId] 
-
-                if newClr
-                    @Interpolate stackId, nil, newClr, nil, (@__lastShouldBlink[stackId]) and 5 or 20, false
-
-            elseif not @__finishTime
-                newPenColor = @__startColors[stackId]
-
-            @__lastShouldBlink[stackId] = shouldBlink
-
-            if newPenColor
-                if (newPenColor.r ~= interp.r or newPenColor.g ~= interp.g or newPenColor.b ~= interp.b) and
-                    (not interp.to or (
-                        newPenColor.r ~= interp.to.r or newPenColor.g ~= interp.to.g or newPenColor.b ~= interp.to.b
-                    ))
-                    @Interpolate stackId, nil, newPenColor, nil, interpMod, sCurve
-
-            if @tileData.Symmetry.Colorful and @tileData.Symmetry.Traces[stackId].Invisible
-                continue
-
-            with interp
-                surface.SetDrawColor .r, .g, .b, 255
-
-            cursor = cursors[stackId]
-            length = @CalculateLineLength stackId
-
-            @__traceLerps[stackId] or= 0
-            lerped = @__traceLerps[stackId]
-            if lerped ~= length
-                @rendertargets.trace.dirty = true
-
-                lerped = math.Approach lerped, length, math.max 1, math.abs(lerped - length) * math.max 0.01, FrameTime! * 25
-                @__traceLerps[stackId] = lerped
-
-            local cursorNode
-            if not @__finishTime or @__isSolutionAborted
-                cursorNode = {
-                    screenX: cursor.x
-                    screenY: cursor.y
-                }
-
-                table.insert stack, cursorNode
-
-            accumulator = 0
-            for nodeId, node in pairs stack
-                delta = node.__delta
-
-                circ = nodeId == 1 and @calculatedDimensions.startCircle or @calculatedDimensions.barCircle
-                scale = nodeId == 1 and @__penSizeModifier or 1
-                Moonpanel.render.drawCircleAt circ, node.screenX, node.screenY, scale
-
-                next = stack[nodeId + 1]
-                if not next
-                    break
-
-                if accumulator + delta <= lerped
-                    accumulator += delta
-                    
-                    Moonpanel.render.drawThickLine node.screenX, node.screenY, next.screenX, next.screenY, barWidth + 0.5
-                    continue
-                else
-                    delta = lerped - accumulator
-                    
-                    dx = next.screenX - node.screenX
-                    dy = next.screenY - node.screenY
-                    mag = math.sqrt dx^2 + dy^2
-                    dx = dx / mag * delta
-                    dy = dy / mag * delta
-
-                    Moonpanel.render.drawThickLine node.screenX, node.screenY, dx + node.screenX, dy + node.screenY, barWidth + 0.5
-                    Moonpanel.render.drawCircleAt @calculatedDimensions.barCircle, dx + node.screenX, dy + node.screenY
-                    break
-
-            if cursorNode
-                table.remove stack, #stack
-
 ENT.DrawRipple = () =>
     Clear 0, 0, 0, 0
     ClearDepth!
@@ -807,9 +598,6 @@ ENT.DrawRipple = () =>
         buf = 1 - ((@__nextscint - CurTime!) / 2)
         for _, ripple in pairs @endRipples
             Moonpanel.render.drawRipple ripple, buf * 2, (Color 255, 255, 255)
-
-renderFunc = (x, y, w, h) ->
-    surface.DrawTexturedRect x, y, w, h
 
 ENT.DrawLoading = (powerStatePct) =>
     draw.NoTexture!
@@ -832,6 +620,13 @@ ENT.DrawLoading = (powerStatePct) =>
             surface.DrawTexturedRect (@ScreenSize / 2) - (totalWidth / 2) + (i * width) + (i * spacing),
                 (@ScreenSize / 2) - (width / 2), width, width
 
+renderFunc = (x, y, w, h) ->
+    surface.DrawTexturedRect x, y, w, h
+
+setRTTexture = (rt) ->
+    RT_Material\SetTexture "$basetexture", rt
+    surface.SetMaterial RT_Material
+
 ENT.RenderPanel = () =>
     if not @synchronized or @__powerStatePct == 0
         @DrawLoading 1 - @__powerStatePct
@@ -839,7 +634,7 @@ ENT.RenderPanel = () =>
 
     shouldRender = @synchronized and @rendertargets and @calculatedDimensions
     if shouldRender
-        @InterpolateThink FrameTime!
+        @TraceInterpolateThink FrameTime!
 
         if IsValid @__activeUser
             @rendertargets.ripple.dirty = true

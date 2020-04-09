@@ -250,7 +250,7 @@ class Moonpanel.PathFinder
             }
 
     -------------------------------------------
-    -- Applies delta movement. Invokes think.
+    -- Applies delta movement. Returns true if there was an update.
     -------------------------------------------
     applyDeltas: (x, y) =>
         if not @dotVectors or not @nodeStacks or not @cursors
@@ -274,7 +274,7 @@ class Moonpanel.PathFinder
                 @cursors[2].x = math.ceil @cursors[2].ix - dx
                 @cursors[2].y = math.floor @cursors[2].iy + dy
 
-        @think!
+        return @think!
 
     ----------------------------------------
     -- Thinks.
@@ -284,6 +284,8 @@ class Moonpanel.PathFinder
     -- Danger: loads of math ahead.
     -----------------------------------------
     think: () =>
+        updated = false
+
         -- Calculate valid nodes
         for nodeStackId, nodeStack in pairs @nodeStacks
             if not @dotVectors[nodeStackId]
@@ -307,7 +309,7 @@ class Moonpanel.PathFinder
             maxVecLength = nil
 
             -- Iterate through all neighboring nodes to find the best match
-            for _, neighbor in pairs last.neighbors
+            for _, neighbor in ipairs last.neighbors
                 vec = Vector neighbor.screenX - last.screenX, neighbor.screenY - last.screenY, 0
 
                 vecLength = vec\Length!
@@ -335,7 +337,7 @@ class Moonpanel.PathFinder
         if @symmetry and (@dotVectors[1].maxNode == @dotVectors[2].maxNode)
             areSnapsDistinct = false
 
-        for nodeStackId, nodeStack in pairs @nodeStacks
+        for nodeStackId, nodeStack in ipairs @nodeStacks
             maxNode = @dotVectors[nodeStackId].maxNode
             if maxNode
                 maxMDot = @dotVectors[nodeStackId].maxMDot
@@ -365,7 +367,7 @@ class Moonpanel.PathFinder
             
                 -- Find the max dotProduct of p to neighbouring lines
                 maxSnapDot = 0
-                for _, snapNode in pairs snapOrigin.neighbors
+                for _, snapNode in ipairs snapOrigin.neighbors
                     if snapNode == last or snapNode == maxNode
                         continue
 
@@ -406,7 +408,7 @@ class Moonpanel.PathFinder
         -- Determine the minVector and setup cursor offset nodes
         allNodesValid = true
         local minVector
-        for nodeStackId, nodeStack in pairs @nodeStacks
+        for nodeStackId, nodeStack in ipairs @nodeStacks
             @cursorOffsetNodes[nodeStackId] = nodeStack[#nodeStack]
             
             if allNodesValid
@@ -421,7 +423,7 @@ class Moonpanel.PathFinder
             -- If symmetry, ensure that vectors are symmetrical
             if @symmetry
                 -- Clamp all other nodes to minVector magnitude
-                for nodeStackId, nodeStack in pairs @nodeStacks
+                for nodeStackId, nodeStack in ipairs @nodeStacks
                     vector = @dotVectors[nodeStackId]
                     dotVector = vector.maxDotVector
                     if dotVector.x ~= minVector.x or dotVector.y ~= minVector.y
@@ -429,6 +431,8 @@ class Moonpanel.PathFinder
                         vector.maxDotVector.x = trunc (minVector.maxMDot * (vector.maxDotVector.x / vector.maxMDot)), 3
                         vector.maxDotVector.y = trunc (minVector.maxMDot * (vector.maxDotVector.y / vector.maxMDot)), 3
                         vector.maxMDot = minVector.maxMDot
+
+                        updated = true
 
                 vec_1 = @dotVectors[1].maxDotVector
                 vec_2 = @dotVectors[2].maxDotVector
@@ -444,7 +448,7 @@ class Moonpanel.PathFinder
             -- Check for overlaps
             seen = {}
             isOverlapping = false
-            for nodeStackId, nodeStack in pairs @nodeStacks
+            for nodeStackId, nodeStack in ipairs @nodeStacks
                 vector = @dotVectors[nodeStackId]
                 if not @isFirst(vector.maxNode) and seen[vector.maxNode]
                     isOverlapping = true
@@ -454,7 +458,7 @@ class Moonpanel.PathFinder
 
             -- If there are overlaps, clamp cursors
             if isOverlapping
-                for nodeStackId, nodeStack in pairs @nodeStacks
+                for nodeStackId, nodeStack in ipairs @nodeStacks
                     vector = @dotVectors[nodeStackId]
 
                     newLength = (vector.maxVecLength - @barWidth / 2)
@@ -463,13 +467,15 @@ class Moonpanel.PathFinder
                         vector.maxDotVector.y = trunc newLength * (vector.maxDotVector.y / vector.maxMDot), 3
                         vector.maxMDot = newLength
 
+                        updated = true
+
             toInsert = {}
             toInsertCount = 0
             toRemove = {}
             toRemoveCount = 0
 
             -- Determine inserts/removes for this round
-            for nodeStackId, nodeStack in pairs @nodeStacks
+            for nodeStackId, nodeStack in ipairs @nodeStacks
                 nodeCursor = @cursors[nodeStackId]
                 vector = @dotVectors[nodeStackId]
                 to = vector.maxNode
@@ -494,8 +500,9 @@ class Moonpanel.PathFinder
                 -- If there are nodes to insert, insert them
                 if toInsertCount == #@nodeStacks
                     allNodesValid = false
+                    updated = true
 
-                    for nodeStackId, nodeStack in pairs @nodeStacks
+                    for nodeStackId, nodeStack in ipairs @nodeStacks
                         table.insert @nodeStacks[nodeStackId], toInsert[nodeStackId]
                         @cursorOffsetNodes[nodeStackId] = toInsert[nodeStackId]
                         @tracedNodes[toInsert[nodeStackId]] = true
@@ -503,14 +510,16 @@ class Moonpanel.PathFinder
                 -- If there are nodes to remove, remove them
                 elseif toRemoveCount == #@nodeStacks
                     allNodesValid = false
-                    for nodeStackId, nodeStack in pairs @nodeStacks
+                    updated = true
+
+                    for nodeStackId, nodeStack in ipairs @nodeStacks
                         @potentialNodes[nodeStackId] = nodeStack[toRemove[nodeStackId]]
 
                         @tracedNodes[@potentialNodes[nodeStackId]] = nil
                         table.remove @nodeStacks[nodeStackId], toRemove[nodeStackId]
 
         -- Finally, determine new cursor positions
-        for nodeStackId, nodeStack in pairs @nodeStacks
+        for nodeStackId, nodeStack in ipairs @nodeStacks
             nodeCursor = @cursors[nodeStackId]
             offsetNode = @cursorOffsetNodes[nodeStackId]
             vector = @dotVectors[nodeStackId]
@@ -521,7 +530,17 @@ class Moonpanel.PathFinder
                 nodeCursor.y = offsetNode.screenY + vector.maxDotVector.y
 
                 @potentialNodes[nodeStackId] = vector.maxNode
+
+                updated = true
             -- Snap cursors to last known nodes
             else
+                oldx = nodeCursor.x
+                oldy = nodeCursor.y
+
                 nodeCursor.x = offsetNode.screenX
                 nodeCursor.y = offsetNode.screenY
+
+                if oldx ~= nodeCursor.x or oldy ~= nodeCursor.y
+                    updated = true
+
+        return updated

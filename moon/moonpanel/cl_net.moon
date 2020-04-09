@@ -53,6 +53,8 @@ net.Receive "TheMP Flow", () ->
             if not panel.Moonpanel or not panel.synchronized
                 return
 
+            user = net.ReadEntity!
+
             _nodeA, _nodeB = {
                 x: net.ReadFloat!
                 y: net.ReadFloat!
@@ -78,7 +80,7 @@ net.Receive "TheMP Flow", () ->
                             break
 
                 if nodeA
-                    panel\PuzzleStart nodeA, nodeB
+                    panel\PuzzleStart user, nodeA, nodeB
         
         when Moonpanel.Flow.ApplyDeltas
             if not panel.Moonpanel or not panel.synchronized
@@ -113,6 +115,57 @@ net.Receive "TheMP Flow", () ->
                 return
 
             panel.synchronized = false
+
+        when Moonpanel.Flow.UpdateCursor
+            if not panel.Moonpanel or not panel.synchronized
+                return
+
+            precision = Moonpanel.TraceCursorPrecision
+            cursor = net.ReadUInt precision
+
+            panel\UpdateTraceCursor cursor / (2 ^ precision)
+
+        when Moonpanel.Flow.PushNodes
+            if not panel.Moonpanel or not panel.synchronized
+                return
+
+            nodeStacks = net.ReadUInt 4
+            for stackId = 1, nodeStacks
+                nodes = net.ReadUInt 4
+                for nodeId = 1, nodes
+                    screenX, screenY = net.ReadFloat!, net.ReadFloat!
+
+                    panel\TracePushNode stackId, screenX, screenY
+        
+        when Moonpanel.Flow.UpdatePotential
+            if not panel.Moonpanel or not panel.synchronized
+                return
+
+            nodeStacks = net.ReadUInt 4
+            for stackId = 1, nodeStacks
+                screenX, screenY = net.ReadFloat!, net.ReadFloat!
+
+                panel\TracePotentialNode stackId, screenX, screenY
+
+        when Moonpanel.Flow.PopNodes
+            if not panel.Moonpanel or not panel.synchronized
+                return
+
+            pops = net.ReadUInt 4
+            for i = 1, pops
+                amount = net.ReadUInt 4
+
+                for pop = 1, amount
+                    panel\TracePopNode i
+
+        when Moonpanel.Flow.TouchingExit
+            if not panel.Moonpanel or not panel.synchronized
+                return
+
+            state = net.ReadBool!
+
+            panel\UpdateTouchingExit state
+
 
 net.Receive "TheMP Notify", () ->
     message = net.ReadString!

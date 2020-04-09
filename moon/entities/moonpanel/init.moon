@@ -1,5 +1,6 @@
 AddCSLuaFile "cl_init.lua"
 AddCSLuaFile "cl_panel.lua"
+AddCSLuaFile "cl_trace.lua"
 AddCSLuaFile "shared.lua"
 include "shared.lua"
 
@@ -474,10 +475,12 @@ ENT.StartPuzzle = (ply, x, y) =>
     if not shouldStart
         return false
 
-    @SetNW2Entity "ActiveUser", ply
-    Moonpanel\broadcastStart @, nodeA, nodeB
-    @pathFinder\restart nodeA, nodeB
+    @__oldTouchingExit = false
     @__lastSolution = nil
+    
+    @SetNW2Entity "ActiveUser", ply
+    Moonpanel\broadcastStart ply, @, nodeA, nodeB
+    @pathFinder\restart nodeA, nodeB
 
     if WireLib
         timer.Remove @GetTimerName("WireOutput")
@@ -540,7 +543,6 @@ ENT.FinishPuzzle = (forceFail) =>
         :redOut
         :grayOut
         :stacks
-        :cursors
         :forceFail
     }
 

@@ -1,5 +1,3 @@
-include "moonpanel/cl_net.lua"
-
 setDrawColor = surface.SetDrawColor
 setScissor = render.SetScissorRect
 drawRect = surface.DrawRect
@@ -81,10 +79,18 @@ hook.Add "CreateMove", "TheMP Control", (cmd) ->
             if IsValid(ent) and ent.Moonpanel
                 x, y = ent\GetCursorPos!
                 if x and y
-                    Moonpanel\requestControl ent, x, y
+                    LocalPlayer!\SetNW2Entity "TheMP Controlled Panel", nil
 
+                    timer.Simple 0, ->
+                        Moonpanel\requestControl ent, x, y
+                    return
+                    
             elseif IsValid(panel) and panel.Moonpanel
-                Moonpanel\requestControl panel, 0, 0
+                LocalPlayer!\SetNW2Entity "TheMP Controlled Panel", nil
+
+                timer.Simple 0, ->
+                    Moonpanel\requestControl panel, 0, 0
+                return
 
         if IsValid(panel) and CurTime! >= (Moonpanel.__nextMovementSend or 0)
             y = -cmd\GetForwardMove!
@@ -332,3 +338,16 @@ Moonpanel.render.sCurveGradient = (startColor, endColor, percentFade, p = 0.5, s
 
 if Moonpanel.__initialized
     Moonpanel\init!
+
+barWidth = 20
+circle = draw.NewCircle CIRCLE_FILLED
+with circle
+    \SetPos 0, 0
+    \SetRadius math.floor barWidth / 2
+
+--------------
+-- Includes --
+--------------
+
+include "moonpanel/cl_net.lua"
+include "moonpanel/panel/cl_branchanimator.lua"

@@ -1,5 +1,6 @@
 include "shared.lua"
 include "cl_panel.lua"
+include "cl_trace.lua"
 
 ENT.Initialize = () =>
     @BaseClass.Initialize @
@@ -166,6 +167,23 @@ ENT.GetCursorPos = () =>
 
 ENT.GetResolution = () =>
     return @ScreenSize / @Aspect, @ScreenSize
+
+properties.Add "themp", {
+    MenuLabel: "Desynchronize",
+    Order: 999,
+    MenuIcon: "icon16/wrench.png", -- We should create an icon
+    Filter: ( self, ent, ply ) ->
+        if not IsValid( ent )
+            return false
+        if not gamemode.Call( "CanProperty", ply, "themp", ent )
+            return false
+        return ent.Moonpanel
+
+    MenuOpen: MenuOpen,
+    Action: (ent) =>
+        ent\Desynchronize!
+        Moonpanel\requestData ent
+}
 
 ENT.Monitor_Offsets = {
     ["models//cheeze/pcb/pcb4.mdl"]: {

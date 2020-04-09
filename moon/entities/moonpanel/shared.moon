@@ -227,18 +227,142 @@ ENT.SetupData = (data) =>
 
 ENT.ApplyDeltas = (dx, dy) =>
     if IsValid(@) and @.pathFinder and (dx ~= 0 or dy ~= 0)
-        if CLIENT
-            @rendertargets.trace.dirty = true
-            @__calculatedLineLength = nil
-
-        else
-            activeUser = @GetNW2Entity "ActiveUser"
-            Moonpanel\broadcastDeltas activeUser, @, dx, dy
-
         dx = dx * @calculatedDimensions.barWidth * 0.035
         dy = dy * @calculatedDimensions.barWidth * 0.035
 
-        @pathFinder\applyDeltas dx, dy
+        local snapshotNodes
+        local snapshotPotentialNodes
+
+        -- Take a snapshot of node stacks and potential nodes
+        snapshotNodes = {}
+        snapshotPotentialNodes = {}
+        for stackId, stack in ipairs @pathFinder.nodeStacks
+            snapshotNodes[stackId] = #stack
+            snapshotPotentialNodes[stackId] = @pathFinder.potentialNodes[stackId]
+
+        updated = @pathFinder\applyDeltas dx, dy
+        if CLIENT
+            @rendertargets.trace.dirty = true
+
+        if updated
+            local activeUser
+            if SERVER
+                activeUser = @GetNW2Entity "ActiveUser"
+
+            -- Compare snapshots
+            local diff
+            validDiff = true
+            local newPotentialNodes
+            local lowestDelta
+            touchingExit = false
+
+            for stackId, stack in ipairs @pathFinder.nodeStacks
+                count = #stack
+                potentialNode = @pathFinder.potentialNodes[stackId]
+
+                if not touchingExit
+                    touchingExit = stack[count].exit or (potentialNode and potentialNode.exit)
+
+                if snapshotPotentialNodes[stackId] ~= potentialNode
+                    if not newPotentialNodes
+                        newPotentialNodes = {}
+
+                    table.insert newPotentialNodes, {
+                        screenX: potentialNode.screenX
+                        screenY: potentialNode.screenY
+                    }
+
+                if potentialNode
+                    last = stack[count]
+
+                    deltaNodesX = math.abs last.screenX - potentialNode.screenX
+                    deltaNodesY = math.abs last.screenY - potentialNode.screenY
+                    deltaNodes = deltaNodesX + deltaNodesY
+
+                    delta = if (deltaNodes >= 0.01)
+                        cursor = @pathFinder.cursors[stackId]
+
+                        deltaCursorX = math.abs potentialNode.screenX - cursor.x
+                        deltaCursorY = math.abs potentialNode.screenY - cursor.y
+
+                        1 - ((deltaCursorX+deltaCursorY)/deltaNodes)
+                    else
+                        0.99
+    
+                    if not lowestDelta
+                        lowestDelta = delta
+                    else
+                        lowestDelta = math.min lowestDelta, delta
+                    
+                if validDiff
+                    newDiff = count - snapshotNodes[stackId]
+
+                    if snapshotNodes[stackId] ~= count
+                        if not diff
+                            diff = newDiff
+                        elseif diff ~= newDiff
+                            validDiff = false
+
+            if lowestDelta
+                if lowestDelta ~= @__oldLowestDelta
+                    if SERVER
+                        compressedDelta = math.floor lowestDelta * (2 ^ Moonpanel.TraceCursorPrecision)
+                        Moonpanel\broadcastTraceCursor activeUser, @, lowestDelta
+                    else
+                        @UpdateTraceCursor lowestDelta
+
+                    @__oldLowestDelta = lowestDelta
+
+            if validDiff and diff and diff ~= 0
+                -- If diff if positive, broadcast new points
+                if diff > 0
+                    local newPoints
+                    if SERVER
+                        newPoints = {}
+
+                    for stackId, stack in ipairs @pathFinder.nodeStacks
+                        if SERVER
+                            table.insert newPoints, {}
+
+                        for i = snapshotNodes[stackId] + 1, snapshotNodes[stackId] + diff
+                            if SERVER
+                                table.insert newPoints[stackId], {
+                                    screenX: stack[i].screenX
+                                    screenY: stack[i].screenY
+                                }
+                            else
+                                @TracePushNode stackId, stack[i].screenX, stack[i].screenY
+
+                    if SERVER
+                        Moonpanel\broadcastTracePush activeUser, @, newPoints
+
+                -- otherwise broadcast pops
+                else
+                    pops = {}
+                    for stackId, stack in ipairs @pathFinder.nodeStacks
+                        if SERVER
+                            table.insert pops, -diff
+                        else
+                            @TracePopNode stackId
+
+                    if SERVER
+                        Moonpanel\broadcastTracePop activeUser, @, pops
+
+            if newPotentialNodes
+                if SERVER
+                    Moonpanel\broadcastTracePotential activeUser, @, newPotentialNodes
+                else
+                    for stackId, potentialNode in pairs newPotentialNodes
+                        @TracePotentialNode stackId, potentialNode.screenX, potentialNode.screenY
+
+            touchingExit = touchingExit == true
+            if touchingExit ~= @__oldTouchingExit
+                @__oldTouchingExit = touchingExit
+                if SERVER
+                    Moonpanel\broadcastTouchingExit activeUser, @, touchingExit
+                else
+                    @UpdateTouchingExit touchingExit
+            
 
 ENT.Think = () =>
     if SERVER

@@ -33,11 +33,12 @@ Moonpanel.broadcastFinish = (panel, data) =>
 
     net.Broadcast!
 
-Moonpanel.broadcastStart = (panel, node, symmNode) =>
+Moonpanel.broadcastStart = (user, panel, node, symmNode) =>
     net.Start "TheMP Flow"
     net.WriteUInt Moonpanel.Flow.PuzzleStart, Moonpanel.FlowSize
     net.WriteEntity panel
 
+    net.WriteEntity user
     net.WriteFloat node.x
     net.WriteFloat node.y
     net.WriteBool symmNode and true or false
@@ -47,14 +48,59 @@ Moonpanel.broadcastStart = (panel, node, symmNode) =>
         net.WriteFloat symmNode.y
     net.Broadcast!
 
-Moonpanel.broadcastDeltas = (ply, panel, x, y) =>
+Moonpanel.broadcastTraceCursor = (ply, panel, cursor) =>
     net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.ApplyDeltas, Moonpanel.FlowSize
-    net.WriteEntity panel
+    net.WriteUInt Moonpanel.Flow.UpdateCursor, Moonpanel.FlowSize
 
-    x, y = math.Clamp(Moonpanel.trunc(x, 3), -100, 100), math.Clamp(Moonpanel.trunc(y, 3), -100, 100)
-    net.WriteFloat x
-    net.WriteFloat y
+    net.WriteEntity panel
+    net.WriteUInt cursor, Moonpanel.TraceCursorPrecision
+    
+    net.SendOmit ply
+
+Moonpanel.broadcastTracePotential = (ply, panel, potentialNodes) =>
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.UpdatePotential, Moonpanel.FlowSize
+
+    net.WriteEntity panel
+    net.WriteUInt #potentialNodes, 4
+    for _, node in ipairs potentialNodes
+        net.WriteFloat node.screenX
+        net.WriteFloat node.screenY
+    
+    net.SendOmit ply
+
+Moonpanel.broadcastTracePush = (ply, panel, nodeStacks) =>
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.PushNodes, Moonpanel.FlowSize
+
+    net.WriteEntity panel
+    net.WriteUInt #nodeStacks, 4
+    for stackId, stack in ipairs nodeStacks
+        net.WriteUInt #stack, 4
+        for _, node in ipairs stack
+            net.WriteFloat node.screenX
+            net.WriteFloat node.screenY
+    
+    net.SendOmit ply
+
+Moonpanel.broadcastTracePop = (ply, panel, pops) =>
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.PopNodes, Moonpanel.FlowSize
+
+    net.WriteEntity panel
+    net.WriteUInt #pops, 4
+    for _, pop in ipairs pops
+        net.WriteUInt pop, 4
+    
+    net.SendOmit ply
+
+Moonpanel.broadcastTouchingExit = (ply, panel, state) =>
+    net.Start "TheMP Flow"
+    net.WriteUInt Moonpanel.Flow.TouchingExit, Moonpanel.FlowSize
+
+    net.WriteEntity panel
+    net.WriteBool state == true
+    
     net.SendOmit ply
 
 Moonpanel.broadcastDesync = (panel) =>
@@ -114,7 +160,6 @@ net.Receive "TheMP Flow", (len, ply) ->
 
             data = {
                 tileData: panel.tileData
-                cursors: panel.pathFinder.cursors
                 lastSolution: panel.lastSolution
             }
 

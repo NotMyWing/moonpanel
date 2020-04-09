@@ -6,6 +6,7 @@ AddCSLuaFile "moonpanel/cl_net.lua"
 AddCSLuaFile "moonpanel/cl_circles.lua"
 AddCSLuaFile "moonpanel/shared.lua"
 
+AddCSLuaFile "moonpanel/panel/cl_branchanimator.lua"
 AddCSLuaFile "moonpanel/panel/sh_pathfinder.lua"
 AddCSLuaFile "moonpanel/panel/sh_elements.lua"
 AddCSLuaFile "moonpanel/panel/ents/sh_cell.lua"

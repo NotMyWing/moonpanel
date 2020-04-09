@@ -53,6 +53,8 @@ export MOONPANEL_DEFAULTEST_RESOLUTION = {
 -- Globals --
 -------------
 
+Moonpanel.TraceCursorPrecision = 16
+
 Moonpanel.EntityTypes = {
     None:               0
     Start:              1
@@ -89,13 +91,18 @@ Moonpanel.PanelState = {
 }
 
 Moonpanel.Flow = {
-    ApplyDeltas:    1
-    PanelData:      2
-    PuzzleFinish:   3
-    PuzzleStart:    4
-    RequestControl: 5
-    RequestData:    6
-    Desync:         7
+    ApplyDeltas:      1
+    PanelData:        2
+    PuzzleFinish:     3
+    PuzzleStart:      4
+    RequestControl:   5
+    RequestData:      6
+    Desync:           7
+    PushNodes:        8
+    PopNodes:         9
+    UpdateCursor:    10
+    UpdatePotential: 11
+    TouchingExit:    12
 }
 
 Moonpanel.FlowSize = math.ceil(math.log(table.Count(Moonpanel.Flow), 2))

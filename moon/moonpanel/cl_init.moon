@@ -339,12 +339,6 @@ Moonpanel.render.sCurveGradient = (startColor, endColor, percentFade, p = 0.5, s
 if Moonpanel.__initialized
     Moonpanel\init!
 
-barWidth = 20
-circle = draw.NewCircle CIRCLE_FILLED
-with circle
-    \SetPos 0, 0
-    \SetRadius math.floor barWidth / 2
-
 --------------
 -- Includes --
 --------------

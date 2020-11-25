@@ -1,7 +1,6 @@
 const { src, dest, task, series } = require('gulp');
 const { spawn } = require('child_process');
 const through2 = require('through2');
-const luamin = require('luamin');
 const del = require('del');
 const gulp = require('gulp');
 
@@ -29,7 +28,6 @@ const _compileMoonScript = () => through2.obj((file, _, cb) => {
 			if (stderr) cb(stderr);
 			else {
 				file.path = file.path.substr(0, file.path.lastIndexOf('.')) + '.lua';
-				// file.contents = Buffer.from(header + luamin.minify(stdout));
 				file.contents = Buffer.from(header + stdout);
 				cb(null, file);
 			}
@@ -47,7 +45,6 @@ const _moveLuaFiles = () => through2.obj((file, _, cb) => {
 			header += line + '\n';
 		}
 
-		file.contents = Buffer.from(header + luamin.minify(file.contents.toString()));
 		file.path = file.path.substr(0, file.path.lastIndexOf('.')) + '.lua';
 		cb(null, file);
 	}

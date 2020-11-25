@@ -10,14 +10,8 @@
   "license": "MIT",
   "devDependencies": {
     "child_process": "^1.0.2",
-    "gulp": "^4.0.2",
-    "luamin": "^1.0.4",
     "del": "^4.1.1",
-    "through2": "^3.0.1"
-  },
-  "dependencies": {
-    "prompts": "^2.1.0",
-    "protobufjs": "^6.8.8",
-    "sanitize-filename": "^1.6.1"
+    "gulp": "^4.0.2",
+    "through2": "^3.0.2"
   }
 }

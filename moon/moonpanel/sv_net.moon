@@ -1,77 +1,61 @@
-util.AddNetworkString "TheMP EditorData Req"
-util.AddNetworkString "TheMP EditorData"
+receive = Moonpanel.Net.Receive
+flowTypes = Moonpanel.Net.FlowTypes
+startFlow = Moonpanel.Net.StartFlow
 
-util.AddNetworkString "TheMP Flow"
+------------------------------------------------
+-- Tells everyone that the panel is now being --
+-- controlled by the player in question.      --
+------------------------------------------------
+Moonpanel.Net.SendSolveStart = (panel, ply, nodeId) ->
+	startFlow flowTypes.PanelSolveStart
 
-util.AddNetworkString "TheMP Editor"
-util.AddNetworkString "TheMP Focus"
-util.AddNetworkString "TheMP Notify"
-util.AddNetworkString "TheMP Reload"
+	net.WriteEntity panel
+	net.WriteEntity ply
+	net.WriteUInt nodeId, 16
+	net.Broadcast!
 
-concommand.Add "themp_reload", ->
-    timer.Simple 0, ->
-        include "autorun/moonpanel.lua"
+------------------------------------------------------
+-- Tells everyone that the panel is no longer being --
+-- controlled by someone.                           --
+------------------------------------------------------
+Moonpanel.Net.SendSolveStop = (panel) ->
+	startFlow flowTypes.PanelSolveStop
 
-    net.Start "TheMP Reload"
-    net.Broadcast!
+	net.WriteEntity panel
+	net.Broadcast!
 
-Moonpanel.sendNotify = (ply, message, sound, type) =>
-    net.Start "TheMP Notify"
-    net.WriteString message
-    net.WriteString sound
-    net.WriteUInt type, 8
-    net.Send ply
-
-Moonpanel.broadcastFinish = (panel, data) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.PuzzleFinish, Moonpanel.FlowSize
-    net.WriteEntity panel
-
-    raw = util.Compress util.TableToJSON data
-    net.WriteUInt #raw, 32
-    net.WriteData raw, #raw
-
-    net.Broadcast!
-
-Moonpanel.broadcastStart = (user, panel, node, symmNode) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.PuzzleStart, Moonpanel.FlowSize
-    net.WriteEntity panel
-
-    net.WriteEntity user
-    net.WriteFloat node.x
-    net.WriteFloat node.y
-    net.WriteBool symmNode and true or false
-
-    if symmNode
-        net.WriteFloat symmNode.x
-        net.WriteFloat symmNode.y
-    net.Broadcast!
-
-Moonpanel.broadcastTraceCursor = (ply, panel, cursor) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.UpdateCursor, Moonpanel.FlowSize
+----------------------------------------------------
+-- Updates everyone except the chosen player with --
+-- the new trace cursor value.                    --
+----------------------------------------------------
+Moonpanel.Net.BroadcastTraceUpdateCursor = (ply, panel, cursor) ->
+    startFlow flowTypes.TraceUpdateCursor
 
     net.WriteEntity panel
-    net.WriteUInt cursor, Moonpanel.TraceCursorPrecision
-    
+    net.WriteUInt cursor, Moonpanel.Canvas.TraceCursorPrecision
     net.SendOmit ply
 
-Moonpanel.broadcastTracePotential = (ply, panel, potentialNodes) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.UpdatePotential, Moonpanel.FlowSize
+----------------------------------------------------
+-- Updates everyone except the chosen player with --
+-- the new trace potential node.                  --
+----------------------------------------------------
+Moonpanel.Net.BroadcastTraceUpdatePotential = (ply, panel, potentialNodes) ->
+    startFlow flowTypes.TraceUpdatePotential
 
     net.WriteEntity panel
     net.WriteUInt #potentialNodes, 4
     for _, node in ipairs potentialNodes
         net.WriteFloat node.screenX
         net.WriteFloat node.screenY
-    
+
     net.SendOmit ply
 
-Moonpanel.broadcastTracePush = (ply, panel, nodeStacks) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.PushNodes, Moonpanel.FlowSize
+----------------------------------------------------
+-- Updates everyone except the chosen player with --
+-- the new nodes to push into their BA stacks.    --
+----------------------------------------------------
+Moonpanel.Net.BroadcastTracePushNodes = (ply, panel, nodeStacks) ->
+    startFlow flowTypes.TracePushNodes
 
     net.WriteEntity panel
     net.WriteUInt #nodeStacks, 4
@@ -80,131 +64,108 @@ Moonpanel.broadcastTracePush = (ply, panel, nodeStacks) =>
         for _, node in ipairs stack
             net.WriteFloat node.screenX
             net.WriteFloat node.screenY
-    
+
     net.SendOmit ply
 
-Moonpanel.broadcastTracePop = (ply, panel, pops) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.PopNodes, Moonpanel.FlowSize
+----------------------------------------------------
+-- Updates everyone except the chosen player with --
+-- the list number of nodes they need to pop from --
+-- their BA stacks.                               --
+----------------------------------------------------
+Moonpanel.Net.BroadcastTracePopNodes = (ply, panel, pops) ->
+	startFlow flowTypes.TracePopNodes
 
     net.WriteEntity panel
     net.WriteUInt #pops, 4
     for _, pop in ipairs pops
         net.WriteUInt pop, 4
-    
+
     net.SendOmit ply
 
-Moonpanel.broadcastTouchingExit = (ply, panel, state) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.TouchingExit, Moonpanel.FlowSize
-
+----------------------------------------------------
+-- Updates everyone except the chosen player with --
+-- the new trace touching-exit-state.             --
+----------------------------------------------------
+Moonpanel.Net.BroadcastTraceTouchingExit = (ply, panel, state) ->
+    startFlow flowTypes.TraceTouchingExit
     net.WriteEntity panel
     net.WriteBool state == true
-    
     net.SendOmit ply
 
-Moonpanel.broadcastDesync = (panel) =>
-    net.Start "TheMP Flow"
-    net.WriteUInt Moonpanel.Flow.Desync, Moonpanel.FlowSize
+------------------------------------
+-- Dispatches panel data packets. --
+------------------------------------
+Moonpanel.Net.SendPanelData = (ply, panel, data) ->
+    startFlow flowTypes.PanelRequestData
     net.WriteEntity panel
-    net.Broadcast!
-
-Moonpanel.pendingEditorData = {}
-pendingEditorData = Moonpanel.pendingEditorData
-
-counter = 1
-Moonpanel.requestEditorConfig = (ply, callback, errorcallback) =>
-    pending = {
-        player: ply
-        callback: callback
-        timer: "TheMP RemovePending #{tostring counter}"
-    }
-    pendingEditorData[#pendingEditorData + 1] = pending
-
-    counter = (counter % 10000) + 1
-
-    net.Start "TheMP EditorData Req"
+    net.WriteTable data
     net.Send ply
-    
-    timer.Create pending.timer, 4, 1, () ->
-        errorcallback!
-        for i = 1, #pendingEditorData
-            if pendingEditorData[i] == pending
-                table.remove pendingEditorData, i
-                break
 
-net.Receive "TheMP Flow", (len, ply) ->
-    flowType = net.ReadUInt Moonpanel.FlowSize
-    
-    switch flowType
-        when Moonpanel.Flow.RequestControl
-            panel = net.ReadEntity!
+-------------------------------------------------------
+-- Creates a client->server panel data request.      --
+-- Sweeps invalid requests so we don't end up having --
+-- leaks from endless unfulfilled requests.          --
+-------------------------------------------------------
+Moonpanel.Net.PanelRequestDataFromPlayer = (ply, panel, callback) ->
+    -- Sweep old requests.
+    for panel, data in pairs Moonpanel.Net.PendingPlayerDataRequests
+        if not (IsValid panel) or not (IsValid data.ply)
+            Moonpanel.Net.PendingPlayerDataRequests[panel] = nil
 
-            x = net.ReadUInt 10
-            y = net.ReadUInt 10
+	Moonpanel.Net.PendingPlayerDataRequests[panel] = {
+        :ply
+        :callback
+    }
 
-            Moonpanel\requestControl ply, panel, x, y
+Moonpanel.Net.PendingPlayerDataRequests or= {}
 
-        when Moonpanel.Flow.ApplyDeltas
-            panel = ply\GetNW2Entity "TheMP Controlled Panel"
-            if IsValid panel
-                x = net.ReadFloat!
-                y = net.ReadFloat!
+--------------------------------------------
+-- Receive control requests from players. --
+--------------------------------------------
+receive flowTypes.PanelRequestControl, (len, ply) ->
+	Moonpanel\RequestControl ply, net.ReadEntity!,
+		(net.ReadUInt 16), net.ReadUInt 16
 
-                panel\ApplyDeltas x, y
+----------------------------------------
+-- Receive panel deltas from players. --
+----------------------------------------
+receive flowTypes.TraceDeltas, (len, ply) ->
+	dX = net.ReadInt 8
+	dY = net.ReadInt 8
 
-        when Moonpanel.Flow.RequestData
-            panel = net.ReadEntity!
-            if not panel.pathFinder
-                return
+	Moonpanel\ApplyDeltas ply, dX, dY
 
-            data = {
-                tileData: panel.tileData
-                lastSolution: panel.lastSolution
-            }
+---------------------------------------------------------
+-- Receive panel data update requests from players and --
+-- tell players to supply the actual data once we've   --
+-- confirmed that the panel exists on their side.      --
+---------------------------------------------------------
+receive flowTypes.PanelRequestData, (len, ply) ->
+	entity = net.ReadEntity!
+    return unless (IsValid entity) and entity.Moonpanel and entity.GetCanvas
 
-            data.stacks = {}
-            for _, nodeStack in pairs panel.pathFinder.nodeStacks
-                stack = {}
-                data.stacks[#data.stacks + 1] = stack
+    -- If there's a pending client->server data request,
+    -- ask the player to fulfill it.
+    request = Moonpanel.Net.PendingPlayerDataRequests[entity]
+    if request and request.ply == ply
+        startFlow flowTypes.PanelRequestDataFromPlayer
+        net.WriteEntity entity
+        net.Send ply
 
-                for _, node in pairs nodeStack
-                    stack[#stack + 1] = panel.pathFinder.nodeIds[node]
+    entity\SyncPlayer ply
 
-            raw = util.Compress util.TableToJSON data
+----------------------------------------------------------
+-- Receive panel datas from players and apply to panels --
+-- in case there's a pending update.                    --
+----------------------------------------------------------
+receive flowTypes.PanelRequestDataFromPlayer, (len, ply) ->
+	entity = net.ReadEntity!
+    request = Moonpanel.Net.PendingPlayerDataRequests[entity]
 
-            net.Start "TheMP Flow"
-            net.WriteUInt Moonpanel.Flow.PanelData, Moonpanel.FlowSize
+    return unless request
+    return unless (IsValid entity) and entity.Moonpanel and entity.GetCanvas
 
-            net.WriteEntity panel
-            net.WriteUInt #raw, 32
-            net.WriteData raw, #raw
+    data = net.ReadTable! or {}
+    return if not data or not istable data
 
-            net.Send ply
-
-net.Receive "TheMP EditorData", (len, ply) ->
-    pending = nil
-    pendingEditorData = Moonpanel.pendingEditorData
-
-    for k, v in pairs pendingEditorData
-        if v.player == ply
-            pending = v
-            break
-
-    if not pending
-        return
-
-    for i = 1, #pendingEditorData
-        if pendingEditorData[i] == pending
-            table.remove pendingEditorData, i
-            break
-
-    timer.Remove pending.timer
-
-    length = net.ReadUInt 32
-    raw = net.ReadData length
-    
-    data = util.JSONToTable((util.Decompress raw) or "{}") or {}
-    data = Moonpanel\sanitizeTileData data
-
-    pending.callback data
+    request.callback data

@@ -1,9 +1,7 @@
 include "shared.lua"
-include "cl_panel.lua"
-include "cl_trace.lua"
 
-ENT.Initialize = () =>
-    @BaseClass.Initialize @
+ENT.InitializeSided = () =>
+    res = Moonpanel.Canvas.Resolution
 
     info = @Monitor_Offsets[@GetModel!]
     if not info
@@ -18,9 +16,9 @@ ENT.Initialize = () =>
 
         info = {
             Name: ""
-            RS: ((math.max(size.x, size.y) - 1) / @ScreenSize) * 2
+            RS: size.y / Moonpanel.Canvas.Resolution
             RatioX: size.y / size.x
-            offset: @OBBCenter! + Vector 0, 0, maxs.z
+            offset: @OBBCenter! + Vector 0, 0, maxs.z - 0.24
             rot: Angle 0, 90, 180
             x1: 0
             x2: 0
@@ -30,122 +28,110 @@ ENT.Initialize = () =>
         }
 
     rotation, translation, translation2, scale = Matrix!, Matrix!, Matrix!, Matrix!
+    scalefactor = 512 / Moonpanel.Canvas.Resolution
 
     rotation\SetAngles          info.rot
     translation\SetTranslation  info.offset
-    translation2\SetTranslation Vector -512,  -512,       0
-    scale\SetScale              Vector info.RS / 2, info.RS / 2, info.RS / 2
+    translation2\SetTranslation Vector -(res * 0.5) / info.RatioX, -(res * 0.5), 0
+    scale\SetScale              scalefactor * Vector info.RS, info.RS, info.RS
 
     @ScreenMatrix = translation * rotation * scale * translation2
     @ScreenInfo = info
     @Aspect = info.RatioX
-    @Scale = info.RS / 2
+    @Scale = info.RS
     @Origin = info.offset
 
-    w, maxh, h = @ScreenSize, @ScreenSize, @ScreenSize / @Aspect
-    @ScreenQuad = {
-        Vector 0, maxh/2 - h/2, 0
-        Vector w, maxh/2 - h/2, 0
-        Vector w, maxh/2 + h/2, 0
-        Vector 0, maxh/2 + h/2, 0
-
-        Color 0, 0, 0, 0
+	w, h = @GetResolution!
+	self.ScreenQuad = {
+        Vector(0, 0, 0)
+        Vector(w, 0, 0)
+        Vector(w, h, 0)
+        Vector(0, h, 0)
     }
 
-    @PanelInit!
+    -- Workaround to stop HDR affecting the RT.
+    -- I know, it stinks.
+    id = tostring @
+    hook.Add "Think", id, ->
+        if not IsValid @
+            hook.Remove "Think", id
+            return
 
-writez = Material("engine/writez")
+        if @__canvas
+            @__canvas\RenderRT!
 
-renderFunc = (self) ->
-    self\RenderPanel!
+    @__lastFrameNumber = 0
+
+    canvas = @GetCanvas!
+    Moonpanel.Net.PanelRequestData @, (panel, data) ->
+        canvas\SetData data.panelData
+
+        canvas\RebuildNodes!
+        canvas\InitPathFinder!
+
+        canvas\ImportPlayData data.playData
+
+surface.CreateFont "TheMP",
+	font: "Roboto"
+	extended: false
+	size: 160
+
+renderFunc = =>
+    if @__canvas
+		@__canvas\Paint Moonpanel.Canvas.Resolution,
+			Moonpanel.Canvas.Resolution
 
 errorFunc = (err) ->
     print "Rendering error: #{err}"
     print debug.traceback!
 
-translucentMat = CreateMaterial "TheMP translucent", "UnlitGeneric", {
-    ["$basetexture"]: "moonpanel/panel/translucent",
-    ["$nolod"]: 1,
-    ["$model"]: 1,
-    ["$nocull"]: 1
-    ["$translucent"]: 1
-}
-
 ENT.Draw = () =>
-    if halo.RenderedEntity! == @
-        return
- 
+
+ENT.Think = =>
+    @__canvas\Think! if @__canvas
+
+    if @__rendering and FrameNumber! - @__lastFrameNumber > 10
+        @__rendering = false
+        @__canvas\DeallocateRT!
+
+ENT.OnRemove = =>
+    @__canvas\DeallocateRT!
+
+ENT.DrawTranslucent = =>
     @DrawModel!
 
-ENT.DrawTranslucent = () =>
-    if not @ScreenMatrix
-        return
+    return if not @ScreenMatrix
 
-    -- Draw screen here
-    transform = @GetBoneMatrix(0) * @ScreenMatrix
-    @Transform = transform
-    cam.PushModelMatrix transform
+    @Transform = @GetBoneMatrix(0) * @ScreenMatrix
 
-    render.ClearStencil!
-    render.SetStencilEnable true
-    render.SetStencilFailOperation STENCILOPERATION_KEEP
-    render.SetStencilZFailOperation STENCILOPERATION_KEEP
-    render.SetStencilPassOperation STENCILOPERATION_REPLACE
-    render.SetStencilCompareFunction STENCILCOMPARISONFUNCTION_ALWAYS
-    render.SetStencilWriteMask 1
-    render.SetStencilReferenceValue 1
+    if not @__canvas\CanRender!
+        @__rendering = false
 
-    --First draw a quad that defines the visible area
-    render.SetMaterial translucentMat
-    render.DrawQuad @ScreenQuad[1], @ScreenQuad[2], @ScreenQuad[3], @ScreenQuad[4]
+    if not @__rendering and @__canvas\AllocateRT!
+        @__rendering = true
 
-    render.SetStencilCompareFunction STENCILCOMPARISONFUNCTION_EQUAL
-    render.SetStencilTestMask 1
+    return if not @__rendering
 
-    --Clear it to the clear color and clear depth as well	
-    color = @ScreenQuad[5]	
-    if color.a == 255	
-        render.ClearBuffersObeyStencil color.r, color.g, color.b, color.a, true
+    @__lastFrameNumber = FrameNumber!
 
-    --Render the starfall stuff
-    render.PushFilterMag TEXFILTER.ANISOTROPIC
-    render.PushFilterMin TEXFILTER.ANISOTROPIC
-
+    cam.PushModelMatrix @Transform
     xpcall renderFunc, errorFunc, @
-
-    render.PopFilterMag!
-    render.PopFilterMin!
-
-    render.SetStencilEnable false
-
-    --Give the screen back its depth
-    render.SetMaterial writez
-    render.DrawQuad @ScreenQuad[1], @ScreenQuad[2], @ScreenQuad[3], @ScreenQuad[4]
-
     cam.PopModelMatrix!
-
-ENT.SetBackgroundColor = (r, g, b, a) =>	
-    if type(r) ~= "number" and r.r	
-        g = r.g	
-        b = r.b	
-        a = r.a	
-        r = r.r	
-
-    @ScreenQuad[5] = Color r, g, b, (math.max a, 1)
 
 ENT.GetCursorPos = () =>
     ply = LocalPlayer()
     screen = @
 
-    local Normal, Pos
     -- Get monitor screen pos & size
-
     Pos = screen\LocalToWorld screen.Origin
-
     Normal = -screen.Transform\GetUp!\GetNormalized!
 
-    Start = ply\GetShootPos!
-    Dir = ply\GetAimVector!
+    Start = ply\EyePos!
+    Dir = if Moonpanel\IsFocused ply
+        x, y = input.GetCursorPos!
+        gui.ScreenToVector x, y
+    else
+        ply\GetAimVector!
 
     A = Normal\Dot Dir
 
@@ -155,35 +141,20 @@ ENT.GetCursorPos = () =>
 
     B = Normal\Dot(Pos-Start) / A
     if (B >= 0)
-        w = @ScreenSize
+        w = Moonpanel.Canvas.Resolution
         HitPos = screen.Transform\GetInverseTR! * (Start + Dir * B)
         x = HitPos.x / screen.Scale^2
         y = HitPos.y / screen.Scale^2
-        if x < 0 or x > w or y < 0 or y > @ScreenSize
+        if x < 0 or x > w or y < 0 or y > Moonpanel.Canvas.Resolution
             return nil
         return x, y
 
     return nil
 
 ENT.GetResolution = () =>
-    return @ScreenSize / @Aspect, @ScreenSize
+    Moonpanel.Canvas.Resolution / @Aspect, Moonpanel.Canvas.Resolution
 
-properties.Add "themp", {
-    MenuLabel: "Desynchronize",
-    Order: 999,
-    MenuIcon: "icon16/wrench.png", -- We should create an icon
-    Filter: ( self, ent, ply ) ->
-        if not IsValid( ent )
-            return false
-        if not gamemode.Call( "CanProperty", ply, "themp", ent )
-            return false
-        return ent.Moonpanel
-
-    MenuOpen: MenuOpen,
-    Action: (ent) =>
-        ent\Desynchronize!
-        Moonpanel\requestData ent
-}
+ENT.IsSynchonized = => @__canvas\GetData! ~= nil
 
 ENT.Monitor_Offsets = {
     ["models//cheeze/pcb/pcb4.mdl"]: {
@@ -487,20 +458,3 @@ ENT.Monitor_Offsets = {
         z:	192,
     }
 }
-
-if false
-    properties.Add "themp", {
-        MenuLabel: "Desynchronize",
-        Order: 999,
-        MenuIcon: "icon16/wrench.png", -- We should create an icon
-        Filter: ( self, ent, ply ) ->
-            if not IsValid( ent )
-                return false
-            if not gamemode.Call( "CanProperty", ply, "themp", ent )
-                return false
-            return ent.Moonpanel
-
-        MenuOpen: MenuOpen,
-        Action: (ent) =>
-            ent\Desynchronize!
-    }

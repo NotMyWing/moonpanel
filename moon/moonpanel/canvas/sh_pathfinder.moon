@@ -1,34 +1,33 @@
-trunc = Moonpanel.trunc
+AddCSLuaFile!
 
-class Moonpanel.PathFinder
+trunc = (num, n) ->
+	mult = 10^(n or 0)
+	math.floor(num * mult + 0.5) / mult
+
+class Moonpanel.Canvas.PathFinder
     nodeStacks: {}
 
     -----------------------------------
     -- Constructor
     -----------------------------------
-    new: (@nodeMap, @data, @updateCallback, @cursorCallback) =>
+    new: (@data, @updateCallback, @cursorCallback) =>
         with @data
+            @nodeMap = .nodes
             @barLength = .barLength
             @barWidth = .barWidth
             @screenWidth = .screenWidth
             @screenHeight = .screenHeight
-            @symmetry = (.symmetry and .symmetry ~= Moonpanel.Symmetry.None) and .symmetry or false
+            @symmetry = (.symmetry and .symmetry ~= Moonpanel.Canvas.Symmetry.None) and .symmetry or false
 
         -- Prepare clickable nodes
         @clickableNodes = {}
-        for k, node in pairs @nodeMap
+        for node in *@nodeMap
             if node.clickable
                 @clickableNodes[#@clickableNodes + 1] = node
 
         if @symmetry
             @symmetrizePathmap!
 
-        -- Cache the nodemap IDs so we can communicate them easily.
-        -- This is highly unsafe since nodemaps might end up
-        -- being different on a client. To make it a bit safe,
-        -- we can append the nodemap length to a message.
-        -- Normally, this SHOULDN'T ever happen.
-        @__nodeLength = #@nodeMap
         @nodeIds = {}
         for i, node in pairs @nodeMap
             @nodeIds[node] = i
@@ -40,6 +39,7 @@ class Moonpanel.PathFinder
         for k, nodeStack in pairs @nodeStacks
             if nodeStack[1] == node
                 return true
+
         return false
 
     --------------------------------------
@@ -55,9 +55,9 @@ class Moonpanel.PathFinder
         if not @symmetry or not a or not b
             return false
 
-        rotational = (@symmetry == Moonpanel.Symmetry.Rotational) and (a.x == -b.x) and (a.y == -b.y)
-        vertical = (@symmetry == Moonpanel.Symmetry.Vertical) and (a.x == b.x) and (a.y == -b.y)
-        horizontal = (@symmetry == Moonpanel.Symmetry.Horizontal) and (a.x == -b.x) and (a.y == b.y)
+        rotational = (@symmetry == Moonpanel.Canvas.Symmetry.Rotational) and (a.x == -b.x) and (a.y == -b.y)
+        vertical = (@symmetry == Moonpanel.Canvas.Symmetry.Vertical) and (a.x == b.x) and (a.y == -b.y)
+        horizontal = (@symmetry == Moonpanel.Canvas.Symmetry.Horizontal) and (a.x == -b.x) and (a.y == b.y)
 
         return rotational or vertical or horizontal
 
@@ -114,16 +114,16 @@ class Moonpanel.PathFinder
         newNodes = {}
 
         @remapSymmetricalNodes!
-        for _, node in pairs @nodeMap
+        for node in *@nodeMap
             if seen[node]
                 continue
-            
+
             symmNode = @symmetricalNodes
 
             -- If not doesn't have any symmetrical nodes and isn't a break
             -- remove it from the map and rewire all neighbouring nodes
             if not node.break and not symmNode
-                for _, neighbor in pairs node.neighbors
+                for neighbor in *node.neighbors
                     for id, otherNeighbor in pairs neighbor.neighbors
                         if otherNeighbor == node
                             table.remove neighbor.neighbors, id
@@ -135,26 +135,26 @@ class Moonpanel.PathFinder
             elseif node.break and symmNode
                 seen[node] = true
                 seen[node.pairedBreak] = true
-                
+
                 breakNodes = { node, node.pairedBreak }
                 breakParents = {}
 
-                for _, breakNode in pairs breakNodes
+                for breakNode in *breakNodes
                     parent = breakNode.neighbors[1]
                     symmBreakParent = @symmetricalNodes[parent]
 
                     breakParents[#breakParents + 1] = symmBreakParent
 
                 -- Rewire parents from each other
-                for parentId, parent in pairs breakParents
-                    otherParent = breakParents[1 + (2 - parentId)] 
-                    for id, neighbor in pairs parent.neighbors
+                for parentId, parent in ipairs breakParents
+                    otherParent = breakParents[1 + (2 - parentId)]
+                    for id, neighbor in ipairs parent.neighbors
                         if otherParent == neighbor
                             table.remove parent.neighbors, id
 
                 -- Create symmetrical breaks
                 newBreaks = {}
-                for id, breakNode in pairs breakNodes
+                for id, breakNode in ipairs breakNodes
                     parent = breakNode.neighbors[1]
                     symmParent = breakParents[id]
 
@@ -162,7 +162,7 @@ class Moonpanel.PathFinder
                     dy = parent.y - breakNode.y
 
                     dsx = parent.screenX - breakNode.screenX
-                    dsy = parent.screenY - breakNode.screenY 
+                    dsy = parent.screenY - breakNode.screenY
 
                     newBreak = {
                         x: symmParent.x + dx
@@ -176,7 +176,7 @@ class Moonpanel.PathFinder
                     table.insert newNodes, newBreak
 
         -- Populate the map with new nodes
-        for _, newNode in pairs newNodes
+        for newNode in *newNodes
             @nodeMap[#@nodeMap + 1] = newNode
 
         if newNodes[1]
@@ -185,9 +185,9 @@ class Moonpanel.PathFinder
         -- Find all distinct connections
         distinctConnections = {}
         memo = {}
-        for _, nodeA in pairs @nodeMap
+        for nodeA in *@nodeMap
             memo[nodeA] = true
-            for _, nodeB in pairs nodeA.neighbors
+            for nodeB in *nodeA.neighbors
                 if not memo[nodeB]
                     distinctConnections[#distinctConnections + 1] = {
                         from: nodeA
@@ -196,32 +196,41 @@ class Moonpanel.PathFinder
 
         -- Iterate through every connection
         count = #distinctConnections
-        for connectionId, connection in pairs distinctConnections
+        for connection in *distinctConnections
             symmNodeA = @symmetricalNodes[connection.from]
             symmNodeB = @symmetricalNodes[connection.to]
 
             connected = false
             if symmNodeA and symmNodeB
-                for _, neighbor in pairs symmNodeA.neighbors
+                for neighbor in *symmNodeA.neighbors
                     if neighbor == symmNodeB
                         connected = true
                         break
 
             -- If there isn't a symmetrical pair of nodes
             -- rewire current pair from each other
-            if not connected               
+            if not connected
                 count -= 1
                 nodes = { connection.from, connection.to }
-                for nodeId, nodeA in pairs nodes
-                    otherNode = nodes[1 + (2 - nodeId)] 
-                    for id, nodeB in pairs nodeA.neighbors
+                for nodeId, nodeA in ipairs nodes
+                    otherNode = nodes[1 + (2 - nodeId)]
+                    for id, nodeB in ipairs nodeA.neighbors
                         if otherNode == nodeB
                             table.remove nodeA.neighbors, id
 
     -----------------------------------
     -- Restarts the PathFinder.
     -----------------------------------
-    restart: (firstNode, secondNode) =>
+    restart: (firstNode) =>
+        local secondNode
+
+        if "number" == type firstNode
+            firstNode = @nodeMap[firstNode]
+
+        if @symmetry
+            secondNode = @getSymmetricalClickableNode firstNode
+            return if not secondNode
+
         @dotVectors = {}
         @cursorOffsetNodes = {}
 
@@ -249,6 +258,8 @@ class Moonpanel.PathFinder
                 iy: secondNode.screenY
             }
 
+        true
+
     -------------------------------------------
     -- Applies delta movement. Returns true if there was an update.
     -------------------------------------------
@@ -262,15 +273,15 @@ class Moonpanel.PathFinder
         if @cursors[2]
             dx = @cursors[1].x - @cursors[1].ix
             dy = @cursors[1].y - @cursors[1].iy
-            if @symmetry == Moonpanel.Symmetry.Rotational
+            if @symmetry == Moonpanel.Canvas.Symmetry.Rotational
                 @cursors[2].x = math.ceil @cursors[2].ix - dx
                 @cursors[2].y = math.ceil @cursors[2].iy - dy
 
-            if @symmetry == Moonpanel.Symmetry.Vertical
+            if @symmetry == Moonpanel.Canvas.Symmetry.Vertical
                 @cursors[2].x = math.floor @cursors[2].ix + dx
                 @cursors[2].y = math.ceil @cursors[2].iy - dy
 
-            if @symmetry == Moonpanel.Symmetry.Horizontal
+            if @symmetry == Moonpanel.Canvas.Symmetry.Horizontal
                 @cursors[2].x = math.ceil @cursors[2].ix - dx
                 @cursors[2].y = math.floor @cursors[2].iy + dy
 
@@ -287,7 +298,7 @@ class Moonpanel.PathFinder
         updated = false
 
         -- Calculate valid nodes
-        for nodeStackId, nodeStack in pairs @nodeStacks
+        for nodeStackId, nodeStack in ipairs @nodeStacks
             if not @dotVectors[nodeStackId]
                 @dotVectors[nodeStackId] = {}
 
@@ -296,7 +307,7 @@ class Moonpanel.PathFinder
             @dotVectors[nodeStackId].maxDotVector = nil
             @dotVectors[nodeStackId].maxMDot = nil
             @dotVectors[nodeStackId].maxVecLength = nil
-        
+
             nodeCursor = @cursors[nodeStackId]
             last = nodeStack[#nodeStack]
 
@@ -313,7 +324,6 @@ class Moonpanel.PathFinder
                 vec = Vector neighbor.screenX - last.screenX, neighbor.screenY - last.screenY, 0
 
                 vecLength = vec\Length!
-
                 if neighbor ~= nodeStack[#nodeStack - 1]
                     vecLength -= (@isFirst(neighbor) and @barWidth * 1.75) or (@isTraced(neighbor) and @barWidth) or 0
 
@@ -364,7 +374,7 @@ class Moonpanel.PathFinder
 
                 -- Equality comparison tolerance
                 tolerance = 0.001
-            
+
                 -- Find the max dotProduct of p to neighbouring lines
                 maxSnapDot = 0
                 for _, snapNode in ipairs snapOrigin.neighbors
@@ -376,7 +386,7 @@ class Moonpanel.PathFinder
                     mag = math.sqrt dx^2 + dy^2
 
                     modifier = 0.75
-                    
+
                     -- Don't prefer dead-end pathes
                     if @isTraced(snapNode)
                         modifier *= 0.8
@@ -386,13 +396,13 @@ class Moonpanel.PathFinder
                         maxSnapDot = dotProduct
 
                 if snapOrigin == last
-                    maxMDot -= math.floor maxSnapDot
+                    maxMDot -= maxSnapDot
                 else
-                    maxMDot += math.floor maxSnapDot
+                    maxMDot += maxSnapDot
 
-                -- This might introduce several inaccuracies, but 
+                -- This might introduce several inaccuracies, but
                 -- floating points is why we can't have nice things.
-                length = trunc math.max 0, (math.min maxVecLength, maxMDot), 3
+                length = math.max 0, (math.min maxVecLength, maxMDot), 3
                 if length == 0
                     @dotVectors[nodeStackId].maxNode = nil
                     continue
@@ -410,7 +420,7 @@ class Moonpanel.PathFinder
         local minVector
         for nodeStackId, nodeStack in ipairs @nodeStacks
             @cursorOffsetNodes[nodeStackId] = nodeStack[#nodeStack]
-            
+
             if allNodesValid
                 vector = @dotVectors[nodeStackId]
                 if not vector or not vector.maxNode or not vector.maxVecLength or vector.maxMDot == 0
@@ -437,11 +447,11 @@ class Moonpanel.PathFinder
                 vec_1 = @dotVectors[1].maxDotVector
                 vec_2 = @dotVectors[2].maxDotVector
 
-                allNodesValid = if @symmetry == Moonpanel.Symmetry.Rotational
+                allNodesValid = if @symmetry == Moonpanel.Canvas.Symmetry.Rotational
                     (vec_1.x == -vec_2.x) and (vec_1.y == -vec_2.y)
-                elseif @symmetry == Moonpanel.Symmetry.Vertical
+                elseif @symmetry == Moonpanel.Canvas.Symmetry.Vertical
                     (vec_1.x ==  vec_2.x) and (vec_1.y == -vec_2.y)
-                elseif @symmetry == Moonpanel.Symmetry.Horizontal
+                elseif @symmetry == Moonpanel.Canvas.Symmetry.Horizontal
                     (vec_1.x == -vec_2.x) and (vec_1.y ==  vec_2.y)
 
         if allNodesValid
@@ -479,7 +489,7 @@ class Moonpanel.PathFinder
                 nodeCursor = @cursors[nodeStackId]
                 vector = @dotVectors[nodeStackId]
                 to = vector.maxNode
-            
+
                 if not to.break and vector.maxMDot >= vector.maxVecLength
                     if to ~= nodeStack[1] and to == nodeStack[#nodeStack - 1]
                         table.insert toRemove, #nodeStack

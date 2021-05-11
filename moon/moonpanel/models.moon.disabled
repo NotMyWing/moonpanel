@@ -1,0 +1,159 @@
+AddCSLuaFile!
+
+class Model
+	new: (data) =>
+		@fromJSON data if data
+
+	setValue: (value) => @__data = value
+	getValue: => @__data
+	getDefaultValue: => nil
+
+	toJSON: (optional) =>
+		with value = @getValue!
+			if value == nil and optional
+				value = @getDefaultValue!
+
+	fromJSON: (value) => value
+
+	writeNet: => error "Can't write abstract models"
+	readNet: => error "Can't read abstract models"
+
+class CompoundModel
+	new: (data) =>
+		@components or= {}
+		@optComponents or= {}
+
+		componentObjects = {}
+		@__componentObjects = componentObjects
+
+		optComponentObjects = {}
+		@__optComponentObjects = optComponentObjects
+
+		for component, componentClass in pairs @components
+			@__componentObjects[component] = componentClass!
+
+		for component, componentClass in pairs @optComponents
+			@__optComponentObjects[component] = componentClass!
+
+		mt = getmetatable @
+
+		base = mt.__index or {}
+		mt.__index = (key) =>
+			object = componentObjects[key] or optComponentObjects[key]
+			if object ~= nil
+				object
+			else
+				base[key]
+
+		setmetatable @, mt
+
+		@fromJSON data if data
+
+	getComponent: (component) =>
+		@__optComponentObjects[component] or
+			@__componentObjects[component]
+
+	toJSON: => with object = {}
+		for componentTable in *{ @__optComponentObjects, @__componentObjects }
+			for component, instance in pairs componentTable
+				object[component] = instance\toJSON componentTable == @__componentObjects
+
+	fromJSON: (object) =>
+		for component, compClass in pairs @optComponents
+			value = object[component]
+
+			continue if not value
+
+			component = @__componentObjects[component]
+			continue if value == component\getDefaultValue!
+
+			component\fromJSON value
+
+		for component, compClass in pairs @components
+			value = object[component]
+			error "Component value #{component} not found" if value == nil
+
+			@__componentObjects[component]\fromJSON value
+
+	writeNet: =>
+		for _, instance in pairs @__componentObjects
+			instance\writeNet!
+
+		count = table.Count @optComponents
+		toWrite = for component in pairs @optComponents
+			instance = @__optComponentObjects[component]
+
+			continue if not instance\getValue!
+			continue if instance\getValue! == instance\getDefaultValue!
+
+			component
+
+		net.WriteUInt #toWrite, 8
+		for component in *toWrite
+			net.WriteString component
+			@__optComponentObjects[component]\writeNet!
+
+	readNet: =>
+		for _, instance in pairs @__componentObjects
+			instance\readNet!
+
+		count = net.ReadUInt 8
+		for i = 1, count
+			component = net.ReadString!
+
+			instance = @__optComponentObjects[component]
+			instance\readNet!
+
+class StringModel extends Model
+	fromJSON: (value) => tostring value
+	getDefaultValue: => ""
+
+	writeNet: => net.WriteString (@toJSON true)
+	readNet: => @setValue net.ReadString!
+
+class UIntModel extends Model
+	setValue: (value) =>
+		value = math.floor tonumber value
+		error "#{value} is not an unsigned int" if value < 0
+
+		super value
+
+	getDefaultValue: => 0
+
+	writeNet: => net.WriteUInt (@toJSON true), 16
+	readNet: => @setValue net.ReadInt 16
+
+
+
+class TileDataModel extends CompoundModel
+	components:
+		"width": UIntModel
+		"height": UIntModel
+		"elements"
+
+class PanelModel extends CompoundModel
+	components:
+		"tileData": TileDataModel
+
+-- if SERVER
+-- 	util.AddNetworkString "TheMP ModelTest"
+--
+-- 	net.Receive "TheMP ModelTest", (len, ply) ->
+-- 		panelModel = PanelModel!
+-- 		panelModel\readNet!
+--
+-- 		print util.TableToJSON panelModel\toJSON!
+--
+-- else
+-- 	net.Start "TheMP ModelTest"
+-- 	panelModel = PanelModel!
+--
+-- 	with panelModel.tileData
+-- 		.name\setValue "test"
+-- 		.width\setValue 123
+-- 		.height\setValue 456
+--
+-- 	panelModel\writeNet!
+-- 	net.SendToServer!
+--
+-- 	print util.TableToJSON panelModel\toJSON!

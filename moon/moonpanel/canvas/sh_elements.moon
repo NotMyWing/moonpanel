@@ -48,7 +48,7 @@ class VPath extends Path
 
     getBottom: =>
         @cachedBottom or= (@tile.elements.intersections[@y + 1] or EMPTY_TABLE)[@x]
-        return @cachedBottom 
+        return @cachedBottom
 
 class HPath extends Path
     type: Moonpanel.ObjectTypes.HPath
@@ -105,7 +105,7 @@ class Cell extends Element
     getLeft: =>
         @cachedLeft or= (@tile.elements.vpaths[@y] or EMPTY_TABLE)[@x]
         return @cachedLeft
-        
+
     getRight: =>
         @cachedRight or= (@tile.elements.vpaths[@y] or EMPTY_TABLE)[@x + 1]
         return @cachedRight

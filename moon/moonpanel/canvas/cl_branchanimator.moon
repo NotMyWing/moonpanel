@@ -1,5 +1,3 @@
-import sCurve from Moonpanel.render
-
 --
 -- Arcane bullshit.
 --
@@ -25,7 +23,7 @@ travelSpeed = (current, start, finish) ->
 
 	return speed
 
-class Moonpanel.BranchAnimator
+class Moonpanel.Canvas.BranchAnimator
 	new: (x, y) =>
 		@__nodeStack = {
 			{
@@ -116,7 +114,7 @@ class Moonpanel.BranchAnimator
 		if #@__auxiliaryStack == 0 and #@__nodeStack > 1
 			last = @__nodeStack[#@__nodeStack]
 			secondToLast = @__nodeStack[#@__nodeStack - 1]
-                    
+
 			dx = (1 - (@__cursor or 1)) * (last.x - secondToLast.x)
 			dy = (1 - (@__cursor or 1)) * (last.y - secondToLast.y)
 

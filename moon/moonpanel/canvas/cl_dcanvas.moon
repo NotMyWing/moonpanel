@@ -54,6 +54,10 @@ vgui.Register "DMoonCanvas", {
 				elseif @__hoveredEntity and @DoClick
 					@DoClick @__hoveredEntity
 
+			.DoRightClick = ->
+				if not @__playMode and @__hoveredEntity and @DoRightClick
+					@DoRightClick @__hoveredEntity
+
 			.Think = ->
 				if @__playMode
 					pathfinder = @__canvas\GetPathFinder!
@@ -89,7 +93,8 @@ vgui.Register "DMoonCanvas", {
 						x = Moonpanel.Canvas.Resolution * (x / @GetWide!)
 						y = Moonpanel.Canvas.Resolution * (y / @GetTall!)
 
-						not not pathfinder\getClosestNode x, y, 32
+						node = pathfinder\getClosestNode x, y, 32
+						not not node
 				else
 					x = Moonpanel.Canvas.Resolution * (x / @GetWide!)
 					y = Moonpanel.Canvas.Resolution * (y / @GetTall!)
@@ -115,6 +120,14 @@ vgui.Register "DMoonCanvas", {
 
 }, "Panel"
 
+surface.CreateFont "Roboto1",
+	font: "Roboto"
+	size: 32
+
+surface.CreateFont "Roboto2",
+	font: "Roboto"
+	size: 24
+
 concommand.Add "themp_test_vgui", ->
 	with vgui.Create "DFrame"
 		\SetSize Moonpanel.Canvas.Resolution,
@@ -128,31 +141,101 @@ concommand.Add "themp_test_vgui", ->
 			\Dock FILL
 			\ImportData Moonpanel.Canvas.SanitizeData Moonpanel.Canvas.SampleData
 			.PaintOver = (_, w, h) ->
-				return if panel\GetPlayMode!
-
 				margin = 0.015 * math.min w, h
 
+				text = panel\GetPlayMode! and "Play Mode" or "Edit Mode"
+
+				draw.SimpleText text, "Roboto1",
+					margin, margin, Color(255, 255, 255), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP
+
+				text = switch panel\GetCanvas!\GetSymmetryType!
+					when 0
+						"No Symmetry"
+					when 1
+						"Vertical Symmetry"
+					when 2
+						"Horizontal Symmetry"
+					when 3
+						"Rotational Symmetry"
+
+				draw.SimpleText text, "Roboto2",
+					margin, margin + 36, Color(255, 255, 255), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP
+
 				if hovered = panel\GetHoveredEntity!
-					draw.SimpleText hovered.__class.__name, "DermaLarge",
+					draw.SimpleText hovered.__class.__name, "Roboto1",
 						w - margin, margin, Color(255, 255, 255), TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP
 
-			.DoClick = (entity) =>
-				if entity\GetHandlerType! == Moonpanel.Canvas.HandlerType.Intersection
-					canvas = panel\GetCanvas!
+					if entity = hovered\GetEntity!
+						draw.SimpleText entity.__class.__name, "Roboto2",
+							w - margin, margin + 36, Color(255, 255, 255), TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP
 
-					x, y = entity\GetX!, entity\GetY!
+			.DoClick = (socket) =>
+				if socket\GetSocketType! == Moonpanel.Canvas.SocketType.Intersection
+					if entity = socket\GetEntity!
+						if entity.__class == Moonpanel.Canvas.Entities.Start
+							socket\SetEntity!
+							return
 
-					canvas\SetIntersectionAt x, y, Moonpanel.Canvas.Entities.Start canvas
+					socket\SetEntity Moonpanel.Canvas.Entities.Start!
+					socket\GetCanvas!\RecalculateClient!
 
-		with \Add "DButton"
+			.DoRightClick = (socket) =>
+				if socket\GetSocketType! == Moonpanel.Canvas.SocketType.Intersection
+					if entity = socket\GetEntity!
+						if entity.__class == Moonpanel.Canvas.Entities.End
+							socket\SetEntity!
+							return
+
+					socket\SetEntity Moonpanel.Canvas.Entities.End!
+					socket\GetCanvas!\RecalculateClient!
+
+		with \Add "Panel"
 			\Dock BOTTOM
+			\InvalidateParent true
 
-			\SetText "Switch to Edit Mode"
-			.DoClick = ->
-				nextPlayMode = not panel\GetPlayMode!
-				\SetText if nextPlayMode
-					"Switch to Edit Mode"
-				else
-					"Switch to Play Mode"
+			width = \GetWide!
 
-				panel\SetPlayMode nextPlayMode
+			with \Add "DButton"
+				\Dock LEFT
+				\SetWide width / 2
+
+				\SetText "Switch to Edit Mode"
+				.DoClick = ->
+					nextPlayMode = not panel\GetPlayMode!
+					\SetText if nextPlayMode
+						"Switch to Edit Mode"
+					else
+						"Switch to Play Mode"
+
+					panel\SetPlayMode nextPlayMode
+
+			with \Add "DButton"
+				\Dock LEFT
+				\SetWide width / 2
+
+				\SetText "Switch to Vertical Symmetry"
+
+				symmetries = { 0, 1, 2, 3 }
+				currentSymmetry = 1
+				.DoClick = ->
+					canvas = panel\GetCanvas!
+					currentSymmetry = next symmetries, currentSymmetry
+					if not currentSymmetry
+						currentSymmetry = 1
+
+					print symmetries[currentSymmetry]
+					canvas\SetSymmetryType symmetries[currentSymmetry]
+
+					nextSymmetry = next symmetries, currentSymmetry
+					if not nextSymmetry
+						nextSymmetry = 1
+
+					\SetText switch symmetries[nextSymmetry]
+						when 0
+							"Switch to No Symmetry"
+						when 1
+							"Switch to Vertical Symmetry"
+						when 2
+							"Switch to Horizontal Symmetry"
+						when 3
+							"Switch to Rotational Symmetry"

@@ -17,20 +17,9 @@ class Moonpanel.Canvas.PathFinder
             @barWidth = .barWidth
             @screenWidth = .screenWidth
             @screenHeight = .screenHeight
-            @symmetry = (.symmetry and .symmetry ~= Moonpanel.Canvas.Symmetry.None) and .symmetry or false
+            @symmetry = .symmetry or 0
 
-        -- Prepare clickable nodes
-        @clickableNodes = {}
-        for node in *@nodeMap
-            if node.clickable
-                @clickableNodes[#@clickableNodes + 1] = node
-
-        if @symmetry
-            @symmetrizePathmap!
-
-        @nodeIds = {}
-        for i, node in pairs @nodeMap
-            @nodeIds[node] = i
+        @rebuildCache!
 
     ---------------------------------------------------------
     -- Checks if a given node is one of the initial nodes.
@@ -52,7 +41,7 @@ class Moonpanel.Canvas.PathFinder
     -- Checks if two nodes are symmetrical.
     ----------------------------------------
     checkSymmetry: (a, b) =>
-        return false if not @symmetry or not a or not b
+        return false if not (@symmetry > 0) or not a or not b
 
         switch @symmetry
             when Moonpanel.Canvas.Symmetry.Rotational
@@ -78,7 +67,7 @@ class Moonpanel.Canvas.PathFinder
     --------------------------------------------------
     getSymmetricalClickableNode: (firstNode) =>
         node = @symmetricalNodes[firstNode]
-        return node.clickable and node or nil
+        return node and node.clickable and node or nil
 
     --------------------------------------------------
     -- ...gets the symmetrical node for a given node.
@@ -86,14 +75,25 @@ class Moonpanel.Canvas.PathFinder
     getSymmetricalNode: (firstNode) =>
         return @symmetricalNodes[firstNode]
 
-    -----------------------------
-    -- Pushes potential nodes. --
-    -----------------------------
-    pushPotentialNodes: =>
-        for nodeStackId, nodeStack in ipairs @nodeStacks
-            table.insert nodeStack, @potentialNodes[nodeStackId]
+    -------------------------
+    -- Rebuilds the cache. --
+    -------------------------
+    rebuildCache: =>
+        -- Prepare clickable nodes
+        @clickableNodes = {}
+        for node in *@nodeMap
+            if node.clickable
+                @clickableNodes[#@clickableNodes + 1] = node
 
-        @potentialNodes = {}
+        if @symmetry > 0
+            @symmetrizePathmap!
+        else
+            @symmetrizedNeighbors = nil
+            @symmetryMap = nil
+
+        @nodeIds = {}
+        for i, node in pairs @nodeMap
+            @nodeIds[node] = i
 
     ----------------------------------------------
     -- Creates a hashmap of symmetrical nodes for
@@ -102,13 +102,21 @@ class Moonpanel.Canvas.PathFinder
     remapSymmetricalNodes: =>
         seen = {}
         @symmetricalNodes = {}
-        for _, firstNode in pairs @nodeMap
-            for _, secondNode in pairs @nodeMap
-                if not seen[firstNode] and not seen[secondNode] and @checkSymmetry firstNode, secondNode
-                    @symmetricalNodes[secondNode] = firstNode
-                    @symmetricalNodes[firstNode]  = secondNode
-                    seen[firstNode]  = true
-                    seen[secondNode] = true
+        for map in *{ @nodeMap, @symmetryMap }
+            for firstNode in *map
+                for secondNode in *map
+                    if not seen[firstNode] and not seen[secondNode] and @checkSymmetry firstNode, secondNode
+                        @symmetricalNodes[secondNode] = firstNode
+                        @symmetricalNodes[firstNode]  = secondNode
+                        seen[firstNode]  = true
+                        seen[secondNode] = true
+
+    createSymmetrizedNeighbors: (node) =>
+        neighbors = {}
+        for neighbor in *node.neighbors
+            table.insert neighbors, neighbor
+
+        @symmetrizedNeighbors[node] = neighbors
 
     --------------------------------------------------
     -- Symmetrizes the pathmap, ensuring that
@@ -119,27 +127,34 @@ class Moonpanel.Canvas.PathFinder
     -- This is only useful for snapping.
     --------------------------------------------------
     symmetrizePathmap: =>
+        @symmetrizedNeighbors = {}
+        @symmetryMap = {}
+
         time = os.clock!
         seen = {}
-        newNodes = {}
+        shouldRemap = false
 
         @remapSymmetricalNodes!
+
         for node in *@nodeMap
             if seen[node]
                 continue
 
             symmNode = @symmetricalNodes
 
-            -- If not doesn't have any symmetrical nodes and isn't a break
+            -- If node doesn't have any symmetrical nodes and isn't a break
             -- remove it from the map and rewire all neighbouring nodes
             if not node.break and not symmNode
                 for neighbor in *node.neighbors
                     for id, otherNeighbor in pairs neighbor.neighbors
                         if otherNeighbor == node
-                            table.remove neighbor.neighbors, id
+                            if not @symmetrizedNeighbors neighbor
+                                @createSymmetrizedNeighbors neighbor
+
+                            table.remove @symmetrizedNeighbors[neighbor], id
                             break
 
-                node.neighbors = {}
+                @symmetrizedNeighbors[node] = {}
 
             -- If node is a break, then break the symmetrical node
             elseif node.break and symmNode
@@ -161,6 +176,7 @@ class Moonpanel.Canvas.PathFinder
                     for id, neighbor in ipairs parent.neighbors
                         if otherParent == neighbor
                             table.remove parent.neighbors, id
+                            break
 
                 -- Create symmetrical breaks
                 newBreaks = {}
@@ -182,22 +198,18 @@ class Moonpanel.Canvas.PathFinder
                         break: true
                         neighbors: { symmParent }
                     }
+
                     table.insert symmParent.neighbors, newBreak
-                    table.insert newNodes, newBreak
+                    table.insert @symmetryMap, newBreak
 
-        -- Populate the map with new nodes
-        for newNode in *newNodes
-            @nodeMap[#@nodeMap + 1] = newNode
-
-        if newNodes[1]
-            @remapSymmetricalNodes!
+        @remapSymmetricalNodes!
 
         -- Find all distinct connections
         distinctConnections = {}
         memo = {}
         for nodeA in *@nodeMap
             memo[nodeA] = true
-            for nodeB in *nodeA.neighbors
+            for nodeB in *@getNeighbors nodeA
                 if not memo[nodeB]
                     distinctConnections[#distinctConnections + 1] = {
                         from: nodeA
@@ -205,14 +217,13 @@ class Moonpanel.Canvas.PathFinder
                     }
 
         -- Iterate through every connection
-        count = #distinctConnections
         for connection in *distinctConnections
             symmNodeA = @symmetricalNodes[connection.from]
             symmNodeB = @symmetricalNodes[connection.to]
 
             connected = false
             if symmNodeA and symmNodeB
-                for neighbor in *symmNodeA.neighbors
+                for neighbor in *@getNeighbors symmNodeA
                     if neighbor == symmNodeB
                         connected = true
                         break
@@ -220,13 +231,24 @@ class Moonpanel.Canvas.PathFinder
             -- If there isn't a symmetrical pair of nodes
             -- rewire current pair from each other
             if not connected
-                count -= 1
                 nodes = { connection.from, connection.to }
                 for nodeId, nodeA in ipairs nodes
                     otherNode = nodes[1 + (2 - nodeId)]
-                    for id, nodeB in ipairs nodeA.neighbors
+
+                    if not @symmetrizedNeighbors[nodeA]
+                        @createSymmetrizedNeighbors nodeA
+
+                    neighbors = @symmetrizedNeighbors[nodeA]
+
+                    for id, nodeB in ipairs neighbors
                         if otherNode == nodeB
-                            table.remove nodeA.neighbors, id
+                            table.remove neighbors, id
+
+    getNeighbors: (node) =>
+        if @symmetrizedNeighbors
+            @symmetrizedNeighbors[node] or node.neighbors
+        else
+            node.neighbors
 
     -----------------------------------
     -- Restarts the PathFinder.
@@ -237,7 +259,7 @@ class Moonpanel.Canvas.PathFinder
         if "number" == type firstNode
             firstNode = @nodeMap[firstNode]
 
-        if @symmetry
+        if @symmetry > 0
             secondNode = @getSymmetricalClickableNode firstNode
             return if not secondNode
 
@@ -330,7 +352,7 @@ class Moonpanel.Canvas.PathFinder
             maxVecLength = nil
 
             -- Iterate through all neighboring nodes to find the best match
-            for neighbor in *last.neighbors
+            for neighbor in *@getNeighbors last
                 vec = Vector neighbor.screenX - last.screenX, neighbor.screenY - last.screenY, 0
 
                 vecLength = vec\Length!
@@ -354,7 +376,7 @@ class Moonpanel.Canvas.PathFinder
 
         -- Snapping
         areSnapsDistinct = true
-        if @symmetry and (@dotVectors[1].maxNode == @dotVectors[2].maxNode)
+        if @symmetry > 0 and (@dotVectors[1].maxNode == @dotVectors[2].maxNode)
             areSnapsDistinct = false
 
         for nodeStackId, nodeStack in ipairs @nodeStacks
@@ -387,7 +409,7 @@ class Moonpanel.Canvas.PathFinder
 
                 -- Find the max dotProduct of p to neighbouring lines
                 maxSnapDot = 0
-                for snapNode in *snapOrigin.neighbors
+                for snapNode in *@getNeighbors snapOrigin
                     if snapNode == last or snapNode == maxNode
                         continue
 
@@ -441,7 +463,7 @@ class Moonpanel.Canvas.PathFinder
 
         if allNodesValid
             -- If symmetry, ensure that vectors are symmetrical
-            if @symmetry
+            if @symmetry > 0
                 -- Clamp all other nodes to minVector magnitude
                 for nodeStackId, nodeStack in ipairs @nodeStacks
                     vector = @dotVectors[nodeStackId]

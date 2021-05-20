@@ -6,8 +6,11 @@ class Moonpanel.Canvas.Entities.Start extends Moonpanel.Canvas.Entities.BaseInte
 
         0.5 * 2.5 * Moonpanel.Canvas.Resolution * (data.Dim.BarWidth / 100)
 
-	PopulatePathMap: =>
-		@GetPathNode!.clickable = true
+	PopulatePathNodes: =>
+		@GetSocket!\GetPathNode!.clickable = true
+
+    CleanUpPathNodes: =>
+        @GetSocket!\GetPathNode!.clickable = nil
 
 trunc = (num, n) ->
 	mult = 10^(n or 0)
@@ -28,10 +31,11 @@ class Moonpanel.Canvas.Entities.End extends Moonpanel.Canvas.Entities.BaseInters
             @__angle = (->
                 --invis = Moonpanel.EntityTypes.Invisible
 
-                left = @GetLeft!
-                right = @GetRight!
-                top = @GetAbove!
-                bottom = @GetBelow!
+                socket = @GetSocket!
+                left = socket\GetLeft!
+                right = socket\GetRight!
+                top = socket\GetAbove!
+                bottom = socket\GetBelow!
 
                 --left   = left   and not (left.entity   and left.entity.type   == invis) and left
                 --right  = right  and not (right.entity  and right.entity.type  == invis) and right
@@ -45,7 +49,7 @@ class Moonpanel.Canvas.Entities.End extends Moonpanel.Canvas.Entities.BaseInters
                 screenWidth  = Moonpanel.Canvas.Resolution
                 screenHeight = Moonpanel.Canvas.Resolution
 
-				ro = @GetRenderOrigin!
+				ro = socket\GetRenderOrigin!
                 isLeftMost = ro.x <= screenWidth  / 2
                 isTopMost  = ro.y <= screenHeight / 2
 
@@ -106,23 +110,42 @@ class Moonpanel.Canvas.Entities.End extends Moonpanel.Canvas.Entities.BaseInters
 
         @__angle
 
-    PopulatePathMap: (pathMap) =>
-		super pathMap
+    PopulatePathNodes: (pathNodes) =>
+		super pathNodes
 
         if dir = @CalculateAngle!
-			ro = @GetRenderOrigin!
-            currentNode = @GetPathNode!
-            barWidth = @GetCanvas!\GetBarWidth!
+            socket = @GetSocket!
+
+			ro = socket\GetRenderOrigin!
+            parentNode = socket\GetPathNode!
+            barWidth = socket\GetCanvas!\GetBarWidth!
 
 			exitNode = {
-                x: currentNode.x + (dir.x) * 0.25
-                y: currentNode.y + (dir.y) * 0.25
+                x: parentNode.x + (dir.x) * 0.25
+                y: parentNode.y + (dir.y) * 0.25
                 screenX: math.Round ro.x + dir.x * barWidth
                 screenY: math.Round ro.y + dir.y * barWidth
-                neighbors: { currentNode }
+                neighbors: { parentNode }
                 intersection: @parent
                 exit: true
             }
 
-            table.insert currentNode.neighbors, exitNode
-            table.insert pathMap, exitNode
+            table.insert parentNode.neighbors, exitNode
+            table.insert pathNodes, exitNode
+
+            @__exitNode = exitNode
+
+    CleanUpPathNodes: (pathNodes) =>
+        if @__exitNode
+            socket = @GetSocket!
+            parentNode = socket\GetPathNode!
+
+            for i, neighbor in ipairs parentNode.neighbors
+                if @__exitNode == neighbor
+                    table.remove parentNode.neighbors, i
+                    break
+
+            for i, node in ipairs pathNodes
+                if node == @__exitNode
+                    table.remove pathNodes, i
+                    break

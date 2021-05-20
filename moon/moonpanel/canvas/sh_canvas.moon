@@ -2,12 +2,12 @@ Moonpanel.Canvas or= {}
 
 Moonpanel.Canvas.Symmetry = {
     None:       0
-    Rotational: 1
-    Vertical:   2
-    Horizontal: 3
+    Vertical:   1
+    Horizontal: 2
+	Rotational: 3
 }
 
-Moonpanel.Canvas.HandlerType = {
+Moonpanel.Canvas.SocketType = {
 	Intersection: 1
 	Path: 2
 	Cell: 3
@@ -24,6 +24,7 @@ AddCSLuaFile "cl_rtpool.lua"
 include "sh_paneldata.lua"
 include "sh_pathfinder.lua"
 include "sh_entities.lua"
+include "sh_entitysocket.lua"
 if CLIENT
 	include "cl_dcanvas.lua"
 	include "cl_branchanimator.lua"
@@ -37,7 +38,7 @@ Moonpanel.Canvas.SampleData = {
 	Meta: {
 		Width: 3
 		Height: 3
-		Symmetry: 0 --Moonpanel.Canvas.Symmetry.Rotational
+		Symmetry: 0
 	}
 
 	Dim: {
@@ -238,6 +239,21 @@ class Canvas
 
 			return false
 
+	SetSymmetryType: (type) =>
+		return if not @__data
+
+		@__pathFinder.symmetry = type
+		@__data.Meta.Symmetry = type
+
+		@RebuildPathFinderCache!
+
+	GetSymmetryType: =>
+		return if not @__data
+
+		@__data.Meta.Symmetry
+
+	GetPathNodes: => @__nodes
+
 	------------------------------------
 	-- Imports data from given table. --
 	------------------------------------
@@ -252,7 +268,7 @@ class Canvas
 			@__data = nil
 			@__pathFinder = nil
 			@__clientData = nil
-			@__entArrays = nil
+			@__socketArrays = nil
 
 			return
 
@@ -261,61 +277,75 @@ class Canvas
 		numCols = @__data.Meta.Width  * 2 + 1
 		numRows = @__data.Meta.Height * 2 + 1
 
-		@__entities = {}
-		with @__entArrays = {}
+		@__sockets = {}
+		with @__socketArrays = {}
 			.cells = {}
 			.vpaths = {}
 			.hpaths = {}
 			.intersections = {}
 
-		for _, t in pairs @__entArrays
-			table.insert @__entities, t
+		entityClasses = {}
+
+		for _, t in pairs @__socketArrays
+			table.insert @__sockets, t
 
 		-- Initialize the node map.
 		for i = 1, numCols * numRows
 			row = math.ceil i / numCols
 			column = 1 + (i - 1) % numCols
 
-			local handler, dest, isHorizontalPath
-			handler = ents[i] and Moonpanel.Canvas.Entities[ents[i].Type]
+			local socketClass, dest, isHorizontalPath
 
 			if row % 2 == 1
 				-- Intersection
 				if column % 2 == 1
-					dest = @__entArrays.intersections
-					if not handler or handler.HandlerType ~= Moonpanel.Canvas.HandlerType.Intersection
-						handler = Moonpanel.Canvas.Entities.BaseIntersection
+					dest = @__socketArrays.intersections
+					socketClass = Moonpanel.Canvas.Sockets.IntersectionSocket
 				-- HBar
 				else
 					isHorizontalPath = true
-					dest = @__entArrays.hpaths
-					if not handler or handler.HandlerType ~= Moonpanel.Canvas.HandlerType.Path
-						handler = Moonpanel.Canvas.Entities.BasePath
+
+					dest = @__socketArrays.hpaths
+					socketClass = Moonpanel.Canvas.Sockets.PathSocket
 			else
 				-- VBar
 				if column % 2 == 1
 					isHorizontalPath = false
-					dest = @__entArrays.vpaths
-					if not handler or handler.HandlerType ~= Moonpanel.Canvas.HandlerType.Path
-						handler = Moonpanel.Canvas.Entities.BasePath
+
+					dest = @__socketArrays.vpaths
+					socketClass = Moonpanel.Canvas.Sockets.PathSocket
 				-- Cell
 				else
-					dest = @__entArrays.cells
-					if not handler or handler.HandlerType ~= Moonpanel.Canvas.HandlerType.Cell
-						handler = Moonpanel.Canvas.Entities.BaseCell
+					dest = @__socketArrays.cells
+					socketClass = Moonpanel.Canvas.Sockets.CellSocket
 
-			instance = handler @, #dest + 1
+			entityClass = ents[i] and Moonpanel.Canvas.Entities[ents[i].Type] or {}
+			entityClass = entityClass.SocketType == socketClass.SocketType and
+				entityClass or socketClass.BaseEntity
+
+			socket = socketClass @, #dest + 1
 			if isHorizontalPath ~= nil
-				instance\SetHorizontal isHorizontalPath
+				socket\SetHorizontal isHorizontalPath
 
-			table.insert dest, instance
+			entityClasses[socket] = entityClass
+
+			table.insert dest, socket
 
 		@RebuildNodes!
-		for entity in @GetEntityIterator!
-			entity\PopulatePathMap @__nodes
+
+		for socket, entity in pairs entityClasses
+			socket\SetEntity entity!
 
 		@RecalculateClient!
 		@InitPathFinder!
+
+	RebuildPathFinderCache: =>
+		return unless @__pathFinder
+		@__pathFinder\rebuildCache!
+
+		if CLIENT
+			@RecalculateClient!
+			@__rtDirty = true
 
 	GetBarWidth: => Moonpanel.Canvas.Resolution *
 		(@__data.Dim.BarWidth / 100)
@@ -324,32 +354,32 @@ class Canvas
 		(@__data.Dim.BarLength / 100)
 
 	noop = ->
-	GetEntityIterator: =>
-		return noop if not @__entities
+	GetSocketIterator: =>
+		return noop if not @__sockets
 
 		curTable = 1
-		curLength = #@__entities[1]
+		curLength = #@__sockets[1]
 		curIndex = 1
 
 		->
-			if @__entities[curTable]
+			if @__sockets[curTable]
 				while curIndex > curLength
 					curTable += 1
-					return if not @__entities[curTable]
+					return if not @__sockets[curTable]
 
-					curLength = #@__entities[curTable]
+					curLength = #@__sockets[curTable]
 					curIndex = 1
 
 				curIndex += 1
-				return @__entities[curTable][curIndex - 1]
+				return @__sockets[curTable][curIndex - 1]
 
-	translateXY = (table, x, y, width, height, entity) ->
+	translateXY = (table, x, y, width, height, socket) ->
 		return if x > width or y > height or x <= 0 or y <= 0
 
 		index = 1 + (x - 1) + (y - 1) * width
 
-		if entity
-			table[index] = entity
+		if socket
+			table[index] = socket
 		else
 			return table[index]
 
@@ -357,75 +387,47 @@ class Canvas
 	-- Returns the first entity at given SCREEN position. --
 	--------------------------------------------------------
 	GetEntityAtScreen: (scrX, scrY) =>
-		return if not @__entArrays
+		return if not @__socketArrays
 		return if not @__data
 
-		for entity in @GetEntityIterator!
+		for entity in @GetSocketIterator!
 			return entity if entity\CanClick scrX, scrY
 
 	------------------------------------------
 	-- Gets intersection at given position. --
 	------------------------------------------
-	GetIntersectionAt: (x, y) =>
+	GetIntersectionSocketAt: (x, y) =>
 		return if not @__data
-		translateXY @__entArrays.intersections, x, y,
+		translateXY @__socketArrays.intersections, x, y,
 			@__data.Meta.Width + 1,
 			@__data.Meta.Height + 1
-
-	SetIntersectionAt: (x, y, entity) =>
-		return if not @__data
-		translateXY @__entArrays.intersections, x, y,
-			@__data.Meta.Width + 1,
-			@__data.Meta.Height + 1,
-			entity
 
 	----------------------------------
 	-- Gets hpath at given position. --
 	----------------------------------
-	GetHPathAt: (x, y) =>
+	GetHPathSocketAt: (x, y) =>
 		return if not @__data
-		translateXY @__entArrays.hpaths, x, y,
+		translateXY @__socketArrays.hpaths, x, y,
 			@__data.Meta.Width,
 			@__data.Meta.Height + 1
-
-	SetHPathAt: (x, y, entity) =>
-		return if not @__data
-		translateXY @__entArrays.hpaths, x, y,
-			@__data.Meta.Width,
-			@__data.Meta.Height + 1,
-			entity
 
 	----------------------------------
 	-- Gets vpath at given position. --
 	----------------------------------
-	GetVPathAt: (x, y) =>
+	GetVPathSocketAt: (x, y) =>
 		return if not @__data
-		translateXY @__entArrays.vpaths, x, y,
+		translateXY @__socketArrays.vpaths, x, y,
 			@__data.Meta.Width + 1,
 			@__data.Meta.Height
-
-	SetVPathAt: (x, y, entity) =>
-		return if not @__data
-		translateXY @__entArrays.vpaths, x, y,
-			@__data.Meta.Width + 1,
-			@__data.Meta.Height,
-			entity
 
 	---------------------------------------
 	-- Gets/sets cell at given position. --
 	---------------------------------------
-	GetCellAt: (x, y) =>
+	GetCellSocketAt: (x, y) =>
 		return if not @__data
-		translateXY @__entArrays.cells, x, y,
+		translateXY @__socketArrays.cells, x, y,
 			@__data.Meta.Width,
 			@__data.Meta.Height
-
-	SetCellAt: (x, y, entity) =>
-		return if not @__data
-		translateXY @__entArrays.cells, x, y,
-			@__data.Meta.Width,
-			@__data.Meta.Height,
-			entity
 
 	--------------------------------------------------
 	-- Fetches the internal panel data table.       --
@@ -518,15 +520,17 @@ class Canvas
 	RecalculateClient: =>
 		return if not @__data
 
-		@__clientData = {}
+		@__clientData = {
+			renderables: {}
+		}
 
         barLength = @GetBarLength!
 		@__rtDirty = true
 
-		@__clientData.__paths = {}
-		@__clientData.__distances = {}
+		@__clientData.paths = {}
+		@__clientData.distances = {}
 		for node in *@__nodes
-			@__clientData.__distances[node] = {}
+			@__clientData.distances[node] = {}
 
 		seen = {}
 
@@ -545,10 +549,10 @@ class Canvas
 					dist = math.ceil math.sqrt (nodeA.screenX - nodeB.screenX)^2 +
 						(nodeA.screenY - nodeB.screenY)^2
 
-					@__clientData.__distances[nodeA][nodeB] = dist
-					@__clientData.__distances[nodeB][nodeA] = dist
+					@__clientData.distances[nodeA][nodeB] = dist
+					@__clientData.distances[nodeB][nodeA] = dist
 
-					table.insert @__clientData.__paths, {
+					table.insert @__clientData.paths, {
 						angle: math.Round math.deg angle
 						distance: dist
 
@@ -557,11 +561,11 @@ class Canvas
 					}
 
 		-- Test occlusion.
-		@__clientData.__visibleNodes = {}
+		@__clientData.visibleNodes = {}
 
 		for node in *@__nodes
 			if node.clickable
-				table.insert @__clientData.__visibleNodes, node
+				table.insert @__clientData.visibleNodes, node
 				continue
 
 			continue if node.invisible
@@ -614,13 +618,7 @@ class Canvas
 					upperBound = math.max upper, upperBound
 
 			if upperBound - lowerBound < 360
-				table.insert @__clientData.__visibleNodes, node
-
-		-- Collect renderables.
-		@__clientData.__renderables = for entity in @GetEntityIterator!
-			continue unless entity.Render
-
-			entity
+				table.insert @__clientData.visibleNodes, node
 
 	---------------------
 	-- Rebuilds nodes. --
@@ -645,7 +643,7 @@ class Canvas
 				intX = math.floor column / 2
 				intY = math.floor row / 2
 
-				entity = @GetIntersectionAt intX + 1, intY + 1
+				entity = @GetIntersectionSocketAt intX + 1, intY + 1
 
 				x = intX - @__data.Meta.Width  / 2
 				y = intY - @__data.Meta.Height / 2
@@ -853,16 +851,19 @@ class Canvas
 	Start: (ply, node) =>
 		return if not @__nodes
 
-		@StopSound "PathCompleteLoop"
+		if "number" == type node
+			node = @__nodes[node]
+			return unless node
 
 		local symmNode
 		if @__data.Meta.Symmetry > 0
-			symmNode = @__pathFinder\getSymmetricalClickableNode nodeA
+			symmNode = @__pathFinder\getSymmetricalClickableNode node
+			return unless symmNode
 
-		return if not @__pathFinder\restart node, symmNode
+		return unless @__pathFinder\restart node, symmNode
 
 		if CLIENT
-			@InitBranchAnimators @__nodes[node], symmNode and @__nodes[symmNode], ply
+			@InitBranchAnimators node, symmNode, ply
 			@__rtDirty = true
 
 		@__playData = {
@@ -872,6 +873,7 @@ class Canvas
 		}
 
 		@OnStart! if result and @OnStart ~= nil
+		@StopSound "PathCompleteLoop"
 		@PlaySound "Start"
 
 		@__animator = nil
@@ -1186,8 +1188,8 @@ class Canvas
 			-- Draw black square if no data.
 			if not @__data or
 				not @__clientData or
-				not @__clientData.__visibleNodes or
-				not @__clientData.__paths
+				not @__clientData.visibleNodes or
+				not @__clientData.paths
 					clearRT @__rtAlloc.rt.texture
 					return
 
@@ -1220,13 +1222,13 @@ class Canvas
 
 				-- Draw visible paths.
 				draw.NoTexture!
-				for path in *@__clientData.__paths
+				for path in *@__clientData.paths
 					surface.DrawTexturedRectRotated path.screenX, path.screenY,
 						path.distance, barWidth, path.angle
 
 				-- Draw all visible nodes.
 				-- Clickable nodes are nearly twice as big.
-				for node in *@__clientData.__visibleNodes
+				for node in *@__clientData.visibleNodes
 					size = node.clickable and barWidth * 2.5 or barWidth
 					circleAt node.screenX, node.screenY, size / 2
 
@@ -1244,11 +1246,17 @@ class Canvas
 						surface.SetDrawColor 255, 255, 255, fade and fade * 255 or 255
 						surface.DrawTexturedRect 0, 0, w, h
 
-				renderable\Render! for renderable in *@__clientData.__renderables
+				renderable\Render! for renderable in pairs @__clientData.renderables
 
 				cam.End2D!
 
 			render.PopRenderTarget!
+
+	AddRenderable: CLIENT and (entity) =>
+		@__clientData.renderables[entity] = true
+
+	RemoveRenderable: CLIENT and (entity) =>
+		@__clientData.renderables[entity] = nil
 
 Moonpanel.Canvas.Canvas = Canvas
 

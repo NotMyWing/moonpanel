@@ -64,12 +64,20 @@ ENT.InitializeSided = () =>
 
     canvas = @GetCanvas!
     Moonpanel.Net.PanelRequestData @, (panel, data) ->
-        canvas\SetData data.panelData
-
-        canvas\RebuildNodes!
-        canvas\InitPathFinder!
-
+        canvas\ImportData data.panelData
         canvas\ImportPlayData data.playData
+        canvas\SetPowerState panel\GetPowered!
+
+ENT.RequestDataDebug = =>
+    Moonpanel.Net.PanelRequestData @, (panel, data) ->
+        PrintTable data
+        canvas = panel\GetCanvas!
+        canvas\ImportData data.panelData
+        canvas\ImportPlayData data.playData
+        canvas\SetPowerState panel\GetPowered!
+
+ENT.PlayEndingAnimation = (data) =>
+    @__canvas\PlayEndingAnimation data
 
 surface.CreateFont "TheMP",
 	font: "Roboto"

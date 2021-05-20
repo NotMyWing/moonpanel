@@ -7,7 +7,7 @@ Moonpanel.Canvas.SanitizeData = (data) ->
 	--
 	-- META
 	--
-	meta = istable(data.Meta) and data.Meta or {}
+	meta = istable(input.Meta) and input.Meta or {}
 
 	output.Meta = {}
 	output.Meta.Width = math.Clamp (tonumber(meta.Width)  or 3),
@@ -22,7 +22,7 @@ Moonpanel.Canvas.SanitizeData = (data) ->
 	--
 	-- DIM
 	--
-	dim = istable(data.Dim) and data.Dim or {}
+	dim = istable(input.Dim) and input.Dim or {}
 
 	output.Dim = {}
 	output.Dim.BarLength = math.Clamp (tonumber(dim.BarLength) or 25),
@@ -34,14 +34,19 @@ Moonpanel.Canvas.SanitizeData = (data) ->
 	--
 	-- ENTITIES
 	--
-	entities = istable(data.Entities) and data.Entities or {}
+	entities = istable(input.Entities) and input.Entities or {}
 
 	output.Entities = {}
-	for i = 1, (output.Meta.Width * 2 - 1) * (output.Meta.Height * 2 - 1)
+	for i = 1, (output.Meta.Width * 2 + 1) * (output.Meta.Height * 2 + 1)
 		entity = {}
 
 		if reference = entities[i]
-			entity.Type = isnumber(reference.Type) and reference.Type
+			if reference.Type and isstring reference.Type
+				entity.Type = reference.Type
+
+				-- handler = Moonpanel.Canvas.EntityHandlers[entity.Type]
+				-- if handler and handler.ReadData and reference.Data and istable reference.Data
+				--	handler\ReadData reference.Data
 
 		table.insert output.Entities, entity
 

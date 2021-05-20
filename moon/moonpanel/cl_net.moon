@@ -45,7 +45,7 @@ receive flowTypes.PanelRequestDataFromPlayer, ->
 
 	startFlow flowTypes.PanelRequestDataFromPlayer
 	net.WriteEntity entity
-	net.WriteTable Moonpanel.Canvas.SampleData
+	net.WriteTable Moonpanel.Canvas.SanitizeData Moonpanel.Canvas.SampleData
 	net.SendToServer!
 
 ------------------------------------------------
@@ -82,6 +82,16 @@ receive flowTypes.PanelSolveStop, ->
 		not panel\IsSynchonized!
 
 	panel\SolveStop ply
+
+---------------------------------
+-- Receive panel ending anims. --
+---------------------------------
+receive flowTypes.PanelEndingAnimation, ->
+	panel = net.ReadEntity!
+	return if not (IsValid panel) or not panel.IsSynchonized or
+		not panel\IsSynchonized!
+
+	panel\PlayEndingAnimation net.ReadTable!
 
 --------------------------------------
 -- Receive BA cursor value updates. --
@@ -150,4 +160,4 @@ receive flowTypes.TraceTouchingExit, ->
 
 	state = net.ReadBool!
 
-	panel\GetCanvas!\UpdateTouchingExit state
+	panel\GetCanvas!\TraceUpdateTouchingExit state

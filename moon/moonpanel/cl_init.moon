@@ -10,11 +10,7 @@ Moonpanel.Initialize = =>
 		canvas = entity\GetCanvas!
 		if not canvas\GetData!
 			Moonpanel.Net.PanelRequestData entity, (panel, data) ->
-				canvas\SetData data.panelData
-
-				canvas\RebuildNodes!
-				canvas\InitPathFinder!
-
+				canvas\ImportData data.panelData
 				canvas\ImportPlayData data.playData
 
 hook.Add "InitPostEntity", "TheMP Initialize", ->

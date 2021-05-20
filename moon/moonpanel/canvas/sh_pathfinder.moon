@@ -52,14 +52,15 @@ class Moonpanel.Canvas.PathFinder
     -- Checks if two nodes are symmetrical.
     ----------------------------------------
     checkSymmetry: (a, b) =>
-        if not @symmetry or not a or not b
-            return false
+        return false if not @symmetry or not a or not b
 
-        rotational = (@symmetry == Moonpanel.Canvas.Symmetry.Rotational) and (a.x == -b.x) and (a.y == -b.y)
-        vertical = (@symmetry == Moonpanel.Canvas.Symmetry.Vertical) and (a.x == b.x) and (a.y == -b.y)
-        horizontal = (@symmetry == Moonpanel.Canvas.Symmetry.Horizontal) and (a.x == -b.x) and (a.y == b.y)
-
-        return rotational or vertical or horizontal
+        switch @symmetry
+            when Moonpanel.Canvas.Symmetry.Rotational
+                (a.x == -b.x) and (a.y == -b.y)
+            when Moonpanel.Canvas.Symmetry.Vertical
+                (a.x == b.x) and (a.y == -b.y)
+            when Moonpanel.Canvas.Symmetry.Horizontal
+                (a.x == -b.x) and (a.y == b.y)
 
     --------------------------------------------------
     -- ...gets the closest CLICKABLE node to given
@@ -84,6 +85,15 @@ class Moonpanel.Canvas.PathFinder
     --------------------------------------------------
     getSymmetricalNode: (firstNode) =>
         return @symmetricalNodes[firstNode]
+
+    -----------------------------
+    -- Pushes potential nodes. --
+    -----------------------------
+    pushPotentialNodes: =>
+        for nodeStackId, nodeStack in ipairs @nodeStacks
+            table.insert nodeStack, @potentialNodes[nodeStackId]
+
+        @potentialNodes = {}
 
     ----------------------------------------------
     -- Creates a hashmap of symmetrical nodes for
@@ -320,7 +330,7 @@ class Moonpanel.Canvas.PathFinder
             maxVecLength = nil
 
             -- Iterate through all neighboring nodes to find the best match
-            for _, neighbor in ipairs last.neighbors
+            for neighbor in *last.neighbors
                 vec = Vector neighbor.screenX - last.screenX, neighbor.screenY - last.screenY, 0
 
                 vecLength = vec\Length!
@@ -377,7 +387,7 @@ class Moonpanel.Canvas.PathFinder
 
                 -- Find the max dotProduct of p to neighbouring lines
                 maxSnapDot = 0
-                for _, snapNode in ipairs snapOrigin.neighbors
+                for snapNode in *snapOrigin.neighbors
                     if snapNode == last or snapNode == maxNode
                         continue
 

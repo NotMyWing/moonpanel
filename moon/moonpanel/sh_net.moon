@@ -18,6 +18,7 @@ Moonpanel.Net.FlowTypes = {
 	"PanelRequestControl"
 	"PanelSolveStart"
 	"PanelSolveStop"
+	"PanelEndingAnimation"
 }
 
 -- Determine the smallest packet required to fit the flowtypes enum.

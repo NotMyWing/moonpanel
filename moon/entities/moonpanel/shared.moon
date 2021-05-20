@@ -18,20 +18,21 @@ ENT.Initialize = =>
 
 	@__canvas = Moonpanel.Canvas.Canvas!
 	if SERVER
-		@__canvas\RebuildNodes!
 		@__canvas\InitPathFinder!
 	else
 		@__canvas\SetPowerState false
 
 	@__canvas\SetWorldEntity @
+	@__canvas\SetupSounds!
 
 	@InitializeSided!
 
 	@SetNW2VarProxy "Powered", (_, _, old, new) ->
 		if old ~= new
+			canvas = @GetCanvas!
+
 			if SERVER
-				@PlaySound new and @Sounds.PowerOn or
-					@Sounds.PowerOff
+				canvas\PlaySound new and "PowerOn" or "PowerOff"
 			else
 				@__canvas\SetPowerState new
 
@@ -52,21 +53,18 @@ ENT.ApplyDeltas = (ply, dX, dY) =>
 
 ENT.SolveStart = (ply, nodeId) =>
 	return if not @GetPowered!
-	return if not @__canvas\Start nodeId, ply
+	return if not @__canvas\Start ply, nodeId
 
 	@SetController ply
 
 	if SERVER
-		@PlaySound @Sounds.Start
-		@PlaySound @Sounds.SolvingLoop
-
 		Moonpanel.Net.SendSolveStart @, ply, nodeId
 
 	true
 
 ENT.SolveStop = (forceAbort) =>
 	return if not @GetPowered!
-	return if not @__canvas\End!
+	return if not @__canvas\End forceAbort
 
 	if SERVER
 		Moonpanel.Net.SendSolveStop @
@@ -85,3 +83,9 @@ ENT.SetPowered = (value) =>
 	@SetNW2Bool "Powered", value
 
 ENT.GetPowered = => @GetNW2Bool "Powered"
+
+ENT.OnRemove = =>
+	if SERVER
+    	Moonpanel\StopControl @GetController! if IsValid @GetController!
+
+    @GetCanvas!\StopSounds!

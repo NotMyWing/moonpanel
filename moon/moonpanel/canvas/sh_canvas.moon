@@ -1,32 +1,16 @@
 Moonpanel.Canvas or= {}
 
-Moonpanel.Canvas.EntityTypes = {
-    None:       0
-    Start:      1
-    End:        2
-    Hexagon:    3
-    Triangle:   4
-    Polyomino:  5
-    Sun:        6
-    Eraser:     7
-    Color:      8
-    Disjoint:   9
-    Invisible: 10
-}
-
-Moonpanel.Canvas.ObjectTypes = {
-    None:         0
-    Cell:         1
-    VPath:        2
-    HPath:        3
-    Intersection: 4
-}
-
 Moonpanel.Canvas.Symmetry = {
     None:       0
     Rotational: 1
     Vertical:   2
     Horizontal: 3
+}
+
+Moonpanel.Canvas.HandlerType = {
+	Intersection: 1
+	Path: 2
+	Cell: 3
 }
 
 Moonpanel.Canvas.Resolution = 512
@@ -39,6 +23,7 @@ AddCSLuaFile "cl_rtpool.lua"
 
 include "sh_paneldata.lua"
 include "sh_pathfinder.lua"
+include "sh_entities.lua"
 if CLIENT
 	include "cl_dcanvas.lua"
 	include "cl_branchanimator.lua"
@@ -46,32 +31,29 @@ if CLIENT
 else
 	resource.AddFile "moonpanel/circle.png"
 
+ST = { Type: "Start" }
+EN = { Type: "End" }
 Moonpanel.Canvas.SampleData = {
 	Meta: {
-		Width: 5
-		Height: 5
-		Symmetry: Moonpanel.Canvas.Symmetry.Rotational
+		Width: 3
+		Height: 3
+		Symmetry: 0 --Moonpanel.Canvas.Symmetry.Rotational
 	}
 
 	Dim: {
-		BarLength: 17
-		BarWidth: 1.8
+		BarLength: 25
+		BarWidth: 4
 	}
 
 	Entities: {
-		{},          {}, {}, {}, { Type: 2 },
-		{},          {}, {}, {},          {},
-		{},          {}, {}, {},          {},
-		{},          {}, {}, {},          {},
-		{ Type: 1 }, {}, {}, {},          {},
+		{}, {}, {}, {}, {}, {}, EN,
+		{}, {}, {}, {}, {}, {}, {},
+		{}, {}, {}, {}, {}, {}, {},
+		{}, {}, {}, {}, {}, {}, {},
+		{}, {}, {}, {}, {}, {}, {},
+		{}, {}, {}, {}, {}, {}, {},
+		ST, {}, {}, {}, {}, {}, {}
 	}
-}
-
-cardinals = {
-	{ x:  0, y: -1 }
-	{ x:  0, y:  1 }
-	{ x: -1, y:  0 }
-	{ x:  1, y:  0 }
 }
 
 timePct = (startTime, duration) ->
@@ -84,7 +66,8 @@ if CLIENT
 
 	circleAt = (x, y, r) ->
 		surface.SetMaterial MAT_CIRCLE
-		surface.DrawTexturedRect x - r, y - r, r * 2, r * 2
+		surface.DrawTexturedRect math.Round(x - r), math.Round(y - r),
+			math.Round(r * 2), math.Round(r * 2)
 
 	clearRT = (rt) ->
 		with render.PushRenderTarget rt
@@ -113,9 +96,60 @@ if CLIENT
 		surface.DrawTexturedRectRotated (math.Round posX), (math.Round posY),
 			length, width, math.deg angle
 
+PANEL_SOUNDS_LEVEL = 65
+PANEL_SOUNDS = {
+	Scint: {
+		Path: "moonpanel/panel_scint.ogg"
+	}
+	Start: {
+		Path: "moonpanel/panel_start_tracing.ogg"
+	}
+	PowerOn: {
+		Path: "moonpanel/powered_on.ogg"
+	}
+	PowerOff: {
+		Path: "moonpanel/powered_on.ogg"
+	}
+	PathCompleteLoop: {
+		Path: "moonpanel/panel_path_complete_loop.wav"
+	}
+	SolvingLoop: {
+		Path: "moonpanel/panel_solving_loop.wav"
+		SoundLevel: 45
+	}
+	PresenceLoop: {
+		Path: "moonpanel/panel_presence_loop.wav"
+		SoundLevel: 30
+	}
+	FinishTracing: {
+		Path: "moonpanel/panel_finish_tracing.ogg"
+	}
+	AbortFinishTracing: {
+		Path: "moonpanel/panel_abort_finish_tracing.ogg"
+	}
+}
+
+PANEL_CSOUNDS = {
+	Failure: {
+		Path: "moonpanel/panel_failure.ogg"
+	}
+	PotentialFailure: {
+		Path: "moonpanel/panel_potential_failure.ogg"
+	}
+	Success: {
+		Path: "moonpanel/panel_success.ogg"
+	}
+	Eraser: {
+		Path: "moonpanel/eraser_apply.ogg"
+	}
+	Abort: {
+		Path: "moonpanel/panel_abort_tracing.ogg"
+	}
+}
+
 class Canvas
 	new: (data) =>
-		@SetData data if data
+		@ImportData data if data
 
 		@__playData = {}
 
@@ -123,8 +157,7 @@ class Canvas
 		@__worldEntity = ent
 
 	AllocateRT: =>
-		if @__rtAlloc
-			return if Moonpanel.Canvas\IsRTAllocated @__rtAlloc
+		return if @__rtAlloc and Moonpanel.Canvas\IsRTAllocated @__rtAlloc
 
 		@__rtAlloc = Moonpanel.Canvas\AllocateRT!
 
@@ -144,17 +177,82 @@ class Canvas
 
 	CanRender: => @__rtAlloc and Moonpanel.Canvas\IsRTAllocated @__rtAlloc
 
-	--------------------------------------------------------------------
-	-- Exports data for various purposes, from saving boards to files --
-	-- to sending them to clients.                                    --
-	--------------------------------------------------------------------
-	SetData: (@__data) =>
-		@OnSetData @__data if @OnSetData ~= nil
+	SetupSounds: =>
+		@__sounds = {}
+
+		target = if SERVER and IsValid @__worldEntity
+			@__worldEntity
+		elseif CLIENT and @__worldEntity
+			@__worldEntity
+		elseif CLIENT and not IsValid @__worldEntity
+			LocalPlayer!
+
+		return if not target
+		for soundName, soundData in pairs PANEL_SOUNDS
+			sound = CreateSound target, soundData.Path
+			sound\SetSoundLevel soundData.SoundLevel or PANEL_SOUNDS_LEVEL
+
+			@__sounds[soundName] = sound
+
+		if CLIENT
+			for soundName, soundData in pairs PANEL_CSOUNDS
+				print "Initializing CSound: #{soundName}"
+				sound = CreateSound target, soundData.Path
+				sound\SetSoundLevel soundData.SoundLevel or PANEL_SOUNDS_LEVEL
+
+				@__sounds[soundName] = sound
+
+	StopSound: (sound) =>
+		return if not @__sounds
+
+		sound = @__sounds[sound] if "string" == type sound
+		return if not sound
+
+		if sound\IsPlaying!
+			sound\Stop!
+
+	StopSounds: =>
+		return if not @__sounds
+
+		for _, sound in pairs @__sounds
+		    sound\Stop!
+
+	PlaySound: (sound, volume = 1, pitch = 100) =>
+		return if not @__sounds
+
+		sound = @__sounds[sound] if "string" == type sound
+		return if not sound
+
+		if sound\IsPlaying!
+			sound\Stop!
+
+		sound\PlayEx volume, pitch
+
+	IsLocalController: (ply = LocalPlayer!) =>
+		if SERVER
+			return false
+		else
+			return true if @__worldEntity == nil
+			if IsValid @__worldEntity
+				return LocalPlayer! == ply
+
+			return false
+
+	------------------------------------
+	-- Imports data from given table. --
+	------------------------------------
+	ImportData: (data) =>
+		@__data = table.Copy data
+
+		@OnImportData @__data if @OnImportData ~= nil
+
+		@__animator = nil
 
 		if not @__data
 			@__data = nil
 			@__pathFinder = nil
 			@__clientData = nil
+			@__entArrays = nil
 
 			return
 
@@ -163,29 +261,171 @@ class Canvas
 		numCols = @__data.Meta.Width  * 2 + 1
 		numRows = @__data.Meta.Height * 2 + 1
 
-		return if true
+		@__entities = {}
+		with @__entArrays = {}
+			.cells = {}
+			.vpaths = {}
+			.hpaths = {}
+			.intersections = {}
+
+		for _, t in pairs @__entArrays
+			table.insert @__entities, t
 
 		-- Initialize the node map.
 		for i = 1, numCols * numRows
 			row = math.ceil i / numCols
 			column = 1 + (i - 1) % numCols
 
+			local handler, dest, isHorizontalPath
+			handler = ents[i] and Moonpanel.Canvas.Entities[ents[i].Type]
+
 			if row % 2 == 1
-				-- Intersection.
+				-- Intersection
 				if column % 2 == 1
-					print "Intersection"
-
-				-- Horizontal line.
+					dest = @__entArrays.intersections
+					if not handler or handler.HandlerType ~= Moonpanel.Canvas.HandlerType.Intersection
+						handler = Moonpanel.Canvas.Entities.BaseIntersection
+				-- HBar
 				else
-					print "HBar"
+					isHorizontalPath = true
+					dest = @__entArrays.hpaths
+					if not handler or handler.HandlerType ~= Moonpanel.Canvas.HandlerType.Path
+						handler = Moonpanel.Canvas.Entities.BasePath
 			else
-				-- Vertical line.
+				-- VBar
 				if column % 2 == 1
-					print "VBar"
-
+					isHorizontalPath = false
+					dest = @__entArrays.vpaths
+					if not handler or handler.HandlerType ~= Moonpanel.Canvas.HandlerType.Path
+						handler = Moonpanel.Canvas.Entities.BasePath
 				-- Cell
 				else
-					print "Cell"
+					dest = @__entArrays.cells
+					if not handler or handler.HandlerType ~= Moonpanel.Canvas.HandlerType.Cell
+						handler = Moonpanel.Canvas.Entities.BaseCell
+
+			instance = handler @, #dest + 1
+			if isHorizontalPath ~= nil
+				instance\SetHorizontal isHorizontalPath
+
+			table.insert dest, instance
+
+		@RebuildNodes!
+		for entity in @GetEntityIterator!
+			entity\PopulatePathMap @__nodes
+
+		@RecalculateClient!
+		@InitPathFinder!
+
+	GetBarWidth: => Moonpanel.Canvas.Resolution *
+		(@__data.Dim.BarWidth / 100)
+
+	GetBarLength: => Moonpanel.Canvas.Resolution *
+		(@__data.Dim.BarLength / 100)
+
+	noop = ->
+	GetEntityIterator: =>
+		return noop if not @__entities
+
+		curTable = 1
+		curLength = #@__entities[1]
+		curIndex = 1
+
+		->
+			if @__entities[curTable]
+				while curIndex > curLength
+					curTable += 1
+					return if not @__entities[curTable]
+
+					curLength = #@__entities[curTable]
+					curIndex = 1
+
+				curIndex += 1
+				return @__entities[curTable][curIndex - 1]
+
+	translateXY = (table, x, y, width, height, entity) ->
+		return if x > width or y > height or x <= 0 or y <= 0
+
+		index = 1 + (x - 1) + (y - 1) * width
+
+		if entity
+			table[index] = entity
+		else
+			return table[index]
+
+	--------------------------------------------------------
+	-- Returns the first entity at given SCREEN position. --
+	--------------------------------------------------------
+	GetEntityAtScreen: (scrX, scrY) =>
+		return if not @__entArrays
+		return if not @__data
+
+		for entity in @GetEntityIterator!
+			return entity if entity\CanClick scrX, scrY
+
+	------------------------------------------
+	-- Gets intersection at given position. --
+	------------------------------------------
+	GetIntersectionAt: (x, y) =>
+		return if not @__data
+		translateXY @__entArrays.intersections, x, y,
+			@__data.Meta.Width + 1,
+			@__data.Meta.Height + 1
+
+	SetIntersectionAt: (x, y, entity) =>
+		return if not @__data
+		translateXY @__entArrays.intersections, x, y,
+			@__data.Meta.Width + 1,
+			@__data.Meta.Height + 1,
+			entity
+
+	----------------------------------
+	-- Gets hpath at given position. --
+	----------------------------------
+	GetHPathAt: (x, y) =>
+		return if not @__data
+		translateXY @__entArrays.hpaths, x, y,
+			@__data.Meta.Width,
+			@__data.Meta.Height + 1
+
+	SetHPathAt: (x, y, entity) =>
+		return if not @__data
+		translateXY @__entArrays.hpaths, x, y,
+			@__data.Meta.Width,
+			@__data.Meta.Height + 1,
+			entity
+
+	----------------------------------
+	-- Gets vpath at given position. --
+	----------------------------------
+	GetVPathAt: (x, y) =>
+		return if not @__data
+		translateXY @__entArrays.vpaths, x, y,
+			@__data.Meta.Width + 1,
+			@__data.Meta.Height
+
+	SetVPathAt: (x, y, entity) =>
+		return if not @__data
+		translateXY @__entArrays.vpaths, x, y,
+			@__data.Meta.Width + 1,
+			@__data.Meta.Height,
+			entity
+
+	---------------------------------------
+	-- Gets/sets cell at given position. --
+	---------------------------------------
+	GetCellAt: (x, y) =>
+		return if not @__data
+		translateXY @__entArrays.cells, x, y,
+			@__data.Meta.Width,
+			@__data.Meta.Height
+
+	SetCellAt: (x, y, entity) =>
+		return if not @__data
+		translateXY @__entArrays.cells, x, y,
+			@__data.Meta.Width,
+			@__data.Meta.Height,
+			entity
 
 	--------------------------------------------------
 	-- Fetches the internal panel data table.       --
@@ -200,16 +440,7 @@ class Canvas
 	ExportData: =>
 		return if not @__data
 
-		-- Copy the data table without entities.
-		ents = @__data.Entities
-		@__data.Entities = nil
-
-		copy = table.Copy @__data
-		@__data.Entities = ents
-
-		-- Serialize entities by type.
-
-		copy
+		Moonpanel.Canvas.SanitizeData @__data
 
 	--------------------------------------------------------------
 	-- Exports play data. Intended to be called when the server --
@@ -221,7 +452,7 @@ class Canvas
 
 		copy = table.Copy @__playData
 
-		if @__pathFinder and @__data and @__playData.startTime and not @__playData.endTime
+		if @__pathFinder and @__data and @__playData.startTime and not @__playData.wasAborted
 			-- Serialize branch animator stuff.
 			for i = 1, #@__pathFinder.nodeStacks
 				copy.traces or= {}
@@ -250,6 +481,7 @@ class Canvas
 	--------------------------------------------------------------
 	ImportPlayData: (playData = {}) =>
 		@__playData = table.Copy playData
+		@__animator = nil
 
 		if @__pathFinder and @__data and @__playData.traces
 			startingNodes = {}
@@ -274,32 +506,21 @@ class Canvas
 					@TracePotentialNode stackId, potential.screenX,
 						potential.screenY
 
+		else
+			@__branchAnimators = nil
+
 		@__playData.traces = nil
 		@__rtDirty = true
 
-	--------------------------------------------------------
-	-- Recalculates things such as node screen positions, --
-	-- path lengths and intersection occlusion.           --
-	--------------------------------------------------------
-	Recalculate: =>
+	------------------------------
+	-- Rendering optimizations. --
+	------------------------------
+	RecalculateClient: =>
 		return if not @__data
 
 		@__clientData = {}
 
-		barWidth = Moonpanel.Canvas.Resolution *
-			(@__data.Dim.BarWidth / 100)
-
-		barLength  = Moonpanel.Canvas.Resolution *
-			(@__data.Dim.BarLength  / 100)
-
-		-- Calculate positions.
-		for node in *@__nodes
-			node.screenX = Moonpanel.Canvas.Resolution * 0.5 - node.x * barLength
-			node.screenY = Moonpanel.Canvas.Resolution * 0.5 - node.y * barLength
-
-		-- Rendering optimizations.
-		return if SERVER
-
+        barLength = @GetBarLength!
 		@__rtDirty = true
 
 		@__clientData.__paths = {}
@@ -395,19 +616,25 @@ class Canvas
 			if upperBound - lowerBound < 360
 				table.insert @__clientData.__visibleNodes, node
 
+		-- Collect renderables.
+		@__clientData.__renderables = for entity in @GetEntityIterator!
+			continue unless entity.Render
+
+			entity
+
 	---------------------
 	-- Rebuilds nodes. --
 	---------------------
 	RebuildNodes: =>
 		return if not @__data
 
-		@pathMap = {}
-
 		numCols = @__data.Meta.Width  * 2 + 1
 		numRows = @__data.Meta.Height * 2 + 1
 
 		@__nodeMap = {}
 		@__nodes = {}
+
+		barLength = @GetBarLength!
 
 		-- Initialize the node map.
 		for i = 1, numCols * numRows
@@ -418,34 +645,30 @@ class Canvas
 				intX = math.floor column / 2
 				intY = math.floor row / 2
 
+				entity = @GetIntersectionAt intX + 1, intY + 1
+
+				x = intX - @__data.Meta.Width  / 2
+				y = intY - @__data.Meta.Height / 2
 				node = {
 					neighbors: {}
+					entity: entity
 
 					id: #@__nodes + 1
-					x: intX - @__data.Meta.Width  / 2
-					y: intY - @__data.Meta.Height / 2
+					:x
+					:y
+
+					screenX: math.floor Moonpanel.Canvas.Resolution * 0.5 + x * barLength
+					screenY: math.floor Moonpanel.Canvas.Resolution * 0.5 + y * barLength
 				}
+
+				entity\SetPathNode node
 
 				@__nodeMap[intY + 1] or= {}
 				@__nodeMap[intY + 1][intX + 1] = node
 
 				table.insert @__nodes, node
 
-		@__nodeMap[3][3].clickable = true
-		@__nodeMap[4][4].clickable = true
-
-		-- Wire stuff together.
-		for j = 1, @__data.Meta.Width + 1
-			for i = 1, @__data.Meta.Height + 1
-				node = @__nodeMap[j][i]
-
-				for cardinal in *cardinals
-					if row = @__nodeMap[j + cardinal.y]
-						if otherNode = row[i + cardinal.x]
-							table.insert node.neighbors, otherNode
-							table.insert otherNode.neighbors, node
-
-		@Recalculate!
+				barLength = @GetBarLength!
 
 	------------------------------------------------------------
 	-- Initializes the path finder. The thing responsible for --
@@ -459,11 +682,8 @@ class Canvas
 		@__pathFinder = Moonpanel.Canvas.PathFinder {
 			nodes: @__nodes
 
-			barWidth: Moonpanel.Canvas.Resolution *
-				(@__data.Dim.BarWidth / 100)
-
-			barLength: Moonpanel.Canvas.Resolution *
-				(@__data.Dim.BarLength / 100)
+			barWidth: @GetBarWidth!
+			barLength: @GetBarLength!
 
 			screenWidth: Moonpanel.Canvas.Resolution
 			screenHeight: Moonpanel.Canvas.Resolution
@@ -489,6 +709,8 @@ class Canvas
 
 		if result = @__pathFinder\applyDeltas x * 0.25, y * 0.25
 			@__rtDirty = true if CLIENT
+
+			return if SERVER and not IsValid @__worldEntity
 
 			-- Compare snapshots
             local diff
@@ -546,7 +768,7 @@ class Canvas
 
             if lowestDelta
                 if lowestDelta ~= @__oldLowestDelta
-                    if SERVER and IsValid @__worldEntity
+                    if SERVER
 						user = @__worldEntity\GetController!
                     	compressedDelta = math.floor lowestDelta * (2 ^ Moonpanel.Canvas.TraceCursorPrecision)
 
@@ -577,7 +799,7 @@ class Canvas
                             else
                                 @TracePushNode stackId, stack[i].screenX, stack[i].screenY
 
-                    if SERVER and IsValid @__worldEntity
+                    if SERVER
 						user = @__worldEntity\GetController!
 
                         Moonpanel.Net.BroadcastTracePushNodes user, @__worldEntity, newPoints
@@ -591,13 +813,13 @@ class Canvas
                         else
                             @TracePopNode stackId
 
-					if SERVER and IsValid @__worldEntity
+					if SERVER
 						user = @__worldEntity\GetController!
 
                     	Moonpanel.Net.BroadcastTracePopNodes user, @__worldEntity, pops
 
             if newPotentialNodes
-                if SERVER and IsValid @__worldEntity
+                if SERVER
 					user = @__worldEntity\GetController!
 
                     Moonpanel.Net.BroadcastTraceUpdatePotential user,
@@ -607,50 +829,91 @@ class Canvas
                     for stackId, potentialNode in pairs newPotentialNodes
                         @TracePotentialNode stackId, potentialNode.screenX, potentialNode.screenY
 
+			touchingExit = touchingExit == true
+			if touchingExit ~= @__playData.touchingExit
+				@PlaySound touchingExit and "FinishTracing" or "AbortFinishTracing"
+
+				(touchingExit and @PlaySound or @StopSound) @,
+					"PathCompleteLoop"
+
+				if SERVER
+					@__playData.touchingExit = touchingExit
+					user = @__worldEntity\GetController!
+
+                    Moonpanel.Net.BroadcastTraceTouchingExit user,
+						@__worldEntity, touchingExit
+                else
+                    @TraceUpdateTouchingExit touchingExit
+
 			return result
 
 	-------------------------------------------------
 	-- Starts a new game using the provided point. --
 	-------------------------------------------------
-	Start: (nodeId, ply) =>
-		return if not @__pathFinder
-		return if @__playData.startTime and not @__playData.endTime
+	Start: (ply, node) =>
+		return if not @__nodes
 
-		result = @__pathFinder\restart nodeId
+		@StopSound "PathCompleteLoop"
 
-		if result and CLIENT
-			nodeA = @__nodes[nodeId]
+		local symmNode
+		if @__data.Meta.Symmetry > 0
+			symmNode = @__pathFinder\getSymmetricalClickableNode nodeA
 
-			local nodeB
-			if @__data.Meta.Symmetry > 0
-				nodeB = @__pathFinder\getSymmetricalClickableNode nodeA
+		return if not @__pathFinder\restart node, symmNode
 
-			@InitBranchAnimators nodeA, nodeB, ply
-
+		if CLIENT
+			@InitBranchAnimators @__nodes[node], symmNode and @__nodes[symmNode], ply
 			@__rtDirty = true
 
-		if result
-			@__playData = {
-				startTime: CurTime!
-				controller: ply
-			}
+		@__playData = {
+			startTime: CurTime!
+			controller: ply
+			touchingExit: false
+		}
 
 		@OnStart! if result and @OnStart ~= nil
+		@PlaySound "Start"
 
-		result
+		@__animator = nil
+
+		true
 
 	---------------------------------------------------
-	-- Ends the current "game" if there's one going. --
+	-- Ends the current game if there's one going. --
 	---------------------------------------------------
-	End: =>
-		return if not @__pathFinder
+	End: (forceAbort) =>
+		@StopSound "PathCompleteLoop"
+
 		return if @__playData.endTime
+		return if SERVER and not IsValid @__worldEntity
+		return if CLIENT and @__worldEntity
 
-		@OnEnd! if @OnEnd ~= nil
-
-		@__rtDirty = true
 		@__playData.endTime = CurTime!
-		@__playData.wasAborted = true
+
+		if forceAbort
+			@__playData.wasAborted = true
+		else
+			@__playData.wasAborted = false
+			lastInts = {}
+			for i, nodeStack in pairs @__pathFinder.nodeStacks
+				potentialNode = @__pathFinder.potentialNodes[i]
+				if not nodeStack[#nodeStack].exit and potentialNode and potentialNode.exit
+					table.insert nodeStack, potentialNode
+
+				elseif not nodeStack[#nodeStack].exit
+					@__playData.wasAborted = true
+					break
+
+		animation = {
+			aborted: @__playData.wasAborted
+		}
+
+		-- if SERVER and IsValid @__worldEntity
+		--	Moonpanel.Net.SendSolveStop @
+		if CLIENT
+			@PlayEndingAnimation animation
+		else
+			Moonpanel.Net.BroadcastEndingAnimation @__worldEntity, animation
 
 		true
 
@@ -664,9 +927,12 @@ class Canvas
 			@__powerStateBuffer += FrameTime! * (@__powerState and 1 or -1)
 			@__powerStateBuffer = math.Clamp @__powerStateBuffer, 0, 1
 
-		if @__branchAnimators and not @__playData.wasAborted
+		if @__branchAnimators and not @__playData.abortTime
 			for animator in *@__branchAnimators
 				@__rtDirty = true if animator\think!
+
+		if @__animator
+			@__animator\Think!
 
 	----------------------
 	-- CLIENTSIDE AREA. --
@@ -675,6 +941,17 @@ class Canvas
 	-- CLIENTSIDE AREA. --
 	-- CLIENTSIDE AREA. --
 	----------------------
+
+	PlayEndingAnimation: CLIENT and (animationData) =>
+		@__rtDirty = true
+
+		if animationData.aborted
+			@PlaySound "Abort"
+			@__playData.abortTime = CurTime!
+		else
+			@TraceSetSpeedModifier 1
+			@UpdateTraceCursor 1
+			@PlaySound "Success"
 
 	SetPowerState: CLIENT and (state) =>
 		@__powerState = state
@@ -687,10 +964,25 @@ class Canvas
 	UpdateTraceCursor: CLIENT and (cursor) =>
 		return unless @__branchAnimators
 
-		for _, animator in ipairs @__branchAnimators
+		for animator in *@__branchAnimators
 			animator\setCursor cursor
 
 		@__rtDirty = true
+
+	--------------------------------------------------------------------------
+	-- Tells the panel that whether the traces are touching an exit or not. --
+	--------------------------------------------------------------------------
+	TraceUpdateTouchingExit: (state) =>
+		@__playData.touchingExit = state
+
+	------------------------------------------------------------------
+	-- Tells a branch animator about the length of the last segment --
+	------------------------------------------------------------------
+	TraceSetSpeedModifier: CLIENT and (speed) =>
+		return unless @__branchAnimators
+
+		for animator in *@__branchAnimators
+			animator\setSpeedModifier speed
 
 	----------------------------------------------------------
 	-- Tells a branch animator about the new potential node --
@@ -766,7 +1058,6 @@ class Canvas
 
 				@__branchAnimators[stackId]\setSpeedModifier ply == LocalPlayer! and 14 or 3
 
-
 	----------------------------
 	-- Paints the trace. Duh. --
 	----------------------------
@@ -777,7 +1068,7 @@ class Canvas
 			0.25, 0.25
 
 		regularRadius = widthModifier * w * (@__data.Dim.BarWidth / 100)
-		firstNodeRadius = math.Round 0.5 * regularRadius * 3.25
+		firstNodeRadius = math.Round 0.5 * regularRadius * 2.5
 		regularRadius = math.Round 0.5 * regularRadius
 
 		if widthModifier < 1
@@ -900,17 +1191,16 @@ class Canvas
 					clearRT @__rtAlloc.rt.texture
 					return
 
-			oldw, oldh = ScrW!, ScrH!
-
-			-- Draw traces in a temporary render target,
-			-- so that we can adjust their alpha values without
-			-- making them look ugly as satan's face.
-			auxrt = Moonpanel.Canvas\GetAuxiliaryRT!
-			with render.PushRenderTarget auxrt.texture
-				cam.Start2D!
-				render.Clear 0, 0, 0, 0, true, false
-				@PaintTrace w, h if @__playData
-				cam.End2D!
+			if @__playData
+				-- Draw traces in a temporary render target,
+				-- so that we can adjust their alpha values without
+				-- making them look ugly as satan's face.
+				auxrt = Moonpanel.Canvas\GetAuxiliaryRT!
+				with render.PushRenderTarget auxrt.texture
+					cam.Start2D!
+					render.Clear 0, 0, 0, 0, true, false
+					@PaintTrace w, h
+					cam.End2D!
 
 			render.PopRenderTarget!
 
@@ -924,7 +1214,7 @@ class Canvas
 				surface.SetDrawColor 80, 80, 255
 				surface.DrawRect 0, 0, w, h
 
-				barWidth = w * (@__data.Dim.BarWidth / 100)
+				barWidth = @GetBarWidth!
 
 				surface.SetDrawColor 32, 24, 180
 
@@ -937,21 +1227,24 @@ class Canvas
 				-- Draw all visible nodes.
 				-- Clickable nodes are nearly twice as big.
 				for node in *@__clientData.__visibleNodes
-					size = node.clickable and barWidth * 3.25 or barWidth
+					size = node.clickable and barWidth * 2.5 or barWidth
 					circleAt node.screenX, node.screenY, size / 2
 
-				-- Determine whether traces should be
-				local fade
-				if @__playData.endTime
-					fade = 1 - (math.EaseInOut (timePct @__playData.endTime, 0.5),
-						0.25, 0.25)
+				if @__playData
+					local fade
+					if @__playData.abortTime
+						fade = 1 - (math.EaseInOut (timePct @__playData.abortTime, 0.5),
+							0.25, 0.25)
 
-					@__rtDirty = true if fade > 0
+						@__rtDirty = true if fade > 0
 
-				if not @__playData.endTime or (fade and fade > 0)
-					surface.SetMaterial auxrt.material
-					surface.SetDrawColor 255, 255, 255, fade and fade * 255 or 255
-					surface.DrawTexturedRect 0, 0, w, h
+					if not @__playData.abortTime or (fade and fade > 0)
+						auxrt = Moonpanel.Canvas\GetAuxiliaryRT!
+						surface.SetMaterial auxrt.material
+						surface.SetDrawColor 255, 255, 255, fade and fade * 255 or 255
+						surface.DrawTexturedRect 0, 0, w, h
+
+				renderable\Render! for renderable in *@__clientData.__renderables
 
 				cam.End2D!
 

@@ -6,12 +6,17 @@ startFlow = Moonpanel.Net.StartFlow
 -- Tells everyone that the panel is now being --
 -- controlled by the player in question.      --
 ------------------------------------------------
-Moonpanel.Net.SendSolveStart = (panel, ply, nodeId) ->
+Moonpanel.Net.SendSolveStart = (panel, ply, nodeA, nodeB) ->
 	startFlow flowTypes.PanelSolveStart
 
 	net.WriteEntity panel
 	net.WriteEntity ply
-	net.WriteUInt nodeId, 16
+	net.WriteUInt nodeA, 16
+
+    net.WriteBool not not nodeB
+    if nodeB
+        net.WriteUInt nodeB, 16
+
 	net.Broadcast!
 
 ------------------------------------------------------
@@ -33,7 +38,11 @@ Moonpanel.Net.BroadcastTraceUpdateCursor = (ply, panel, cursor) ->
 
     net.WriteEntity panel
     net.WriteUInt cursor, Moonpanel.Canvas.TraceCursorPrecision
-    net.SendOmit ply
+
+    if IsValid ply
+        net.SendOmit ply
+    else
+        net.Broadcast!
 
 ----------------------------------------------------
 -- Updates everyone except the chosen player with --
@@ -48,7 +57,10 @@ Moonpanel.Net.BroadcastTraceUpdatePotential = (ply, panel, potentialNodes) ->
         net.WriteFloat node.screenX
         net.WriteFloat node.screenY
 
-    net.SendOmit ply
+    if IsValid ply
+        net.SendOmit ply
+    else
+        net.Broadcast!
 
 ----------------------------------------------------
 -- Updates everyone except the chosen player with --
@@ -65,7 +77,10 @@ Moonpanel.Net.BroadcastTracePushNodes = (ply, panel, nodeStacks) ->
             net.WriteFloat node.screenX
             net.WriteFloat node.screenY
 
-    net.SendOmit ply
+    if IsValid ply
+        net.SendOmit ply
+    else
+        net.Broadcast!
 
 ----------------------------------------------------
 -- Updates everyone except the chosen player with --
@@ -80,7 +95,10 @@ Moonpanel.Net.BroadcastTracePopNodes = (ply, panel, pops) ->
     for _, pop in ipairs pops
         net.WriteUInt pop, 4
 
-    net.SendOmit ply
+    if IsValid ply
+        net.SendOmit ply
+    else
+        net.Broadcast!
 
 ----------------------------------------------------
 -- Updates everyone except the chosen player with --
@@ -88,18 +106,34 @@ Moonpanel.Net.BroadcastTracePopNodes = (ply, panel, pops) ->
 ----------------------------------------------------
 Moonpanel.Net.BroadcastTraceTouchingExit = (ply, panel, state) ->
     startFlow flowTypes.TraceTouchingExit
+
     net.WriteEntity panel
     net.WriteBool state == true
-    net.SendOmit ply
+
+    if IsValid ply
+        net.SendOmit ply
+    else
+        net.Broadcast!
 
 ------------------------------------
 -- Dispatches panel data packets. --
 ------------------------------------
 Moonpanel.Net.SendPanelData = (ply, panel, data) ->
     startFlow flowTypes.PanelRequestData
+
     net.WriteEntity panel
     net.WriteTable data
     net.Send ply
+
+-----------------------------------
+-- Broadcasts ending animations. --
+-----------------------------------
+Moonpanel.Net.BroadcastEndingAnimation = (panel, data) ->
+    startFlow flowTypes.PanelEndingAnimation
+
+    net.WriteEntity panel
+    net.WriteTable data
+    net.Broadcast!
 
 -------------------------------------------------------
 -- Creates a client->server panel data request.      --

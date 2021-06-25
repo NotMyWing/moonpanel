@@ -1,0 +1,9 @@
+{
+	"title": "The Moonpanel",
+	"type": "",
+	"tags": [],
+	"ignore": [
+		"*.zip",
+		"changelog.md"
+	]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "the-moonpanel",
+  "version": "1.0.0",
+  "description": "The Moonpanel",
+  "homepage": "https://github.com/NotMyWing/moonpanel#readme",
+  "bugs": {
+    "url": "https://github.com/NotMyWing/moonpanel/issues"
+  },
+  "license": "MIT",
+  "author": "NotMyWing (https://github.com/NotMyWing)",
+  "contributors": [
+    "Tyler Schrock <tschrock123@gmail.com> (https://github.com/Tschrock)",
+    "Bytewave (https://github.com/BytewaveMLP)"
+  ],
+  "repository": "github:NotMyWing/moonpanel",
+  "scripts": {
+    "build": "gulp build",
+    "watch": "gulp watch",
+    "clean": "gulp clean",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "del": "^6.0.0",
+    "gulp": "^4.0.2",
+    "gulp-zip": "^5.0.2",
+    "luamin": "^1.0.4",
+    "through2": "^4.0.2"
+  }
+}

@@ -1,4 +1,9 @@
 node_modules/
-moon/itc/
+dest/
 downloaded/
 lua/
+
+doc
+
+desktop.ini
+*.gma

@@ -31,9 +31,8 @@ ENT.Initialize = =>
 		if old ~= new
 			canvas = @GetCanvas!
 
-			if SERVER
+			if CLIENT
 				canvas\PlaySound new and "PowerOn" or "PowerOff"
-			else
 				@__canvas\SetPowerState new
 
 			if not new
@@ -89,3 +88,13 @@ ENT.OnRemove = =>
     	Moonpanel\StopControl @GetController! if IsValid @GetController!
 
     @GetCanvas!\StopSounds!
+
+ENT.Think = =>
+    @__canvas\Think! if @__canvas
+
+	if CLIENT
+		if @__rendering and FrameNumber! - @__lastFrameNumber > 10
+			@__rendering = false
+			@__canvas\DeallocateRT!
+
+		powerStateBuffer = @__canvas\GetPowerStateBuffer!

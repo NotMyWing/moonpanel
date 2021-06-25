@@ -6,6 +6,7 @@ class Moonpanel.Canvas.Animator
 		index = 1
 		while @__animations[index]
 			if SysTime! >= @__animations[index].endTime
+				@__animations[index].callback!
 				table.remove @__animations, index
 			else
 				index += 1

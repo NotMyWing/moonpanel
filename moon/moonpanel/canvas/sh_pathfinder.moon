@@ -487,29 +487,34 @@ class Moonpanel.Canvas.PathFinder
                     (vec_1.x == -vec_2.x) and (vec_1.y ==  vec_2.y)
 
         if allNodesValid
-            -- Check for overlaps
-            seen = {}
-            isOverlapping = false
-            for nodeStackId, nodeStack in ipairs @nodeStacks
-                vector = @dotVectors[nodeStackId]
-                if not @isFirst(vector.maxNode) and seen[vector.maxNode]
-                    isOverlapping = true
-                    break
+            if @symmetry > 0
+                -- Check for potential node type overlap
+                overlapType = @potentialNodes[1] == @potentialNodes[2] and 1
 
-                seen[vector.maxNode] = true
+                -- Check if traces aren't pointed towards the common point
+                if not overlapType
+                    lastNodes = [@nodeStacks[i][#@nodeStacks[i]] for i = 1, 2]
 
-            -- If there are overlaps, clamp cursors
-            if isOverlapping
-                for nodeStackId, nodeStack in ipairs @nodeStacks
-                    vector = @dotVectors[nodeStackId]
+                    overlapType = @potentialNodes[1] == lastNodes[2] and
+                        @potentialNodes[2] == lastNodes[1] and 2
 
-                    newLength = (vector.maxVecLength - @barWidth / 2)
-                    if vector.maxMDot > newLength
-                        vector.maxDotVector.x = trunc newLength * (vector.maxDotVector.x / vector.maxMDot), 3
-                        vector.maxDotVector.y = trunc newLength * (vector.maxDotVector.y / vector.maxMDot), 3
-                        vector.maxMDot = newLength
+                -- If there are overlaps, clamp cursors
+                if overlapType
+                    for nodeStackId, nodeStack in ipairs @nodeStacks
+                        vector = @dotVectors[nodeStackId]
 
-                        updated = true
+                        local newLength
+                        if overlapType == 1
+                            newLength = (vector.maxVecLength - @barWidth / 2)
+                        else
+                            newLength = vector.maxVecLength / 2
+
+                        if vector.maxMDot > newLength
+                            vector.maxDotVector.x = trunc newLength * (vector.maxDotVector.x / vector.maxMDot), 3
+                            vector.maxDotVector.y = trunc newLength * (vector.maxDotVector.y / vector.maxMDot), 3
+                            vector.maxMDot = newLength
+
+                            updated = true
 
             toInsert = {}
             toInsertCount = 0

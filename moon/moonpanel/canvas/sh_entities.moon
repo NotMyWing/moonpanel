@@ -8,6 +8,7 @@ class Moonpanel.Canvas.Entities.BaseEntity
 
     GetCanvas: => @__socket\GetCanvas!
 
+    PostPopulatePathNodes: =>
     PopulatePathNodes: =>
     CleanUpPathNodes: =>
 
@@ -17,6 +18,7 @@ class Moonpanel.Canvas.Entities.BaseEntity
     CanClick: =>
 
     GetSocketType: => @__class.SocketType
+    IsBase: => @__class.__name == "BaseEntity"
 
 class Moonpanel.Canvas.Entities.BaseIntersection extends Moonpanel.Canvas.Entities.BaseEntity
     @SocketType = Moonpanel.Canvas.SocketType.Intersection
@@ -29,6 +31,8 @@ class Moonpanel.Canvas.Entities.BaseIntersection extends Moonpanel.Canvas.Entiti
         if className ~= "BaseIntersection"
             { Type: className }
 
+    IsBase: => @__class.__name == "BaseIntersection"
+
 class Moonpanel.Canvas.Entities.BaseCell extends Moonpanel.Canvas.Entities.BaseEntity
     @SocketType = Moonpanel.Canvas.SocketType.Cell
 
@@ -36,6 +40,8 @@ class Moonpanel.Canvas.Entities.BaseCell extends Moonpanel.Canvas.Entities.BaseE
         className = @__class.__name
         if className ~= "BaseCell"
             { Type: className }
+
+    IsBase: => @__class.__name == "BaseCell"
 
 class Moonpanel.Canvas.Entities.BasePath extends Moonpanel.Canvas.Entities.BaseEntity
     @SocketType = Moonpanel.Canvas.SocketType.Path
@@ -76,5 +82,7 @@ class Moonpanel.Canvas.Entities.BasePath extends Moonpanel.Canvas.Entities.BaseE
                     if node == neighbor
                         table.remove node.neighbors, i
                         break
+
+    IsBase: => @__class.__name == "BasePath"
 
 include "entities/sh_intersections.lua"

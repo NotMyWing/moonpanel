@@ -20,6 +20,7 @@ AddCSLuaFile!
 AddCSLuaFile "cl_dcanvas.lua"
 AddCSLuaFile "cl_branchanimator.lua"
 AddCSLuaFile "cl_rtpool.lua"
+AddCSLuaFile "cl_animator.lua"
 
 include "sh_paneldata.lua"
 include "sh_pathfinder.lua"
@@ -29,11 +30,13 @@ if CLIENT
 	include "cl_dcanvas.lua"
 	include "cl_branchanimator.lua"
 	include "cl_rtpool.lua"
+	include "cl_animator.lua"
 else
 	resource.AddFile "moonpanel/circle.png"
 
 ST = { Type: "Start" }
 EN = { Type: "End" }
+
 Moonpanel.Canvas.SampleData = {
 	Meta: {
 		Width: 3
@@ -105,12 +108,6 @@ PANEL_SOUNDS = {
 	Start: {
 		Path: "moonpanel/panel_start_tracing.ogg"
 	}
-	PowerOn: {
-		Path: "moonpanel/powered_on.ogg"
-	}
-	PowerOff: {
-		Path: "moonpanel/powered_on.ogg"
-	}
 	PathCompleteLoop: {
 		Path: "moonpanel/panel_path_complete_loop.wav"
 	}
@@ -131,6 +128,12 @@ PANEL_SOUNDS = {
 }
 
 PANEL_CSOUNDS = {
+	PowerOn: {
+		Path: "moonpanel/powered_on.ogg"
+	}
+	PowerOff: {
+		Path: "moonpanel/powered_off.ogg"
+	}
 	Failure: {
 		Path: "moonpanel/panel_failure.ogg"
 	}
@@ -147,6 +150,43 @@ PANEL_CSOUNDS = {
 		Path: "moonpanel/panel_abort_tracing.ogg"
 	}
 }
+
+lerpColor = (value, cA, cB) ->
+	invValue = 1 - value
+
+	-- :-(
+	r = math.Round cA.r * invValue + cB.r * value
+	g = math.Round cA.g * invValue + cB.g * value
+	b = math.Round cA.b * invValue + cB.b * value
+	a = math.Round (cA.a or 255) * invValue +
+		(cB.a or 255) * value
+
+	r, g, b, a
+
+lerpColorN = (value, ...) ->
+	n = select "#", ...
+
+	step = 1 / (n - 1)
+	color = 1 + math.floor value / step
+
+	if color > n - 1
+		color = n - 1
+		value = step
+	else
+		value = value % step
+
+	value /= step
+
+	c1 = select color, ...
+	c2 = select color + 1, ...
+
+	lerpColor value, c1, c2
+
+makeBlinkColor = (color, pct = 0.15) ->
+	h, s, v = ColorToHSV color
+	v = v > (1 - pct / 2) and v - pct or math.min 1, v + pct
+
+	HSVToColor h, s, v
 
 class Canvas
 	new: (data) =>
@@ -190,6 +230,7 @@ class Canvas
 
 		return if not target
 		for soundName, soundData in pairs PANEL_SOUNDS
+			print "Initializing Sound: #{soundName} (#{target})"
 			sound = CreateSound target, soundData.Path
 			sound\SetSoundLevel soundData.SoundLevel or PANEL_SOUNDS_LEVEL
 
@@ -209,8 +250,8 @@ class Canvas
 		sound = @__sounds[sound] if "string" == type sound
 		return if not sound
 
-		if sound\IsPlaying!
-			sound\Stop!
+		sound\Stop! if sound\IsPlaying!
+		sound\Stop!
 
 	StopSounds: =>
 		return if not @__sounds
@@ -224,9 +265,7 @@ class Canvas
 		sound = @__sounds[sound] if "string" == type sound
 		return if not sound
 
-		if sound\IsPlaying!
-			sound\Stop!
-
+		sound\Stop! if sound\IsPlaying!
 		sound\PlayEx volume, pitch
 
 	IsLocalController: (ply = LocalPlayer!) =>
@@ -253,6 +292,46 @@ class Canvas
 		@__data.Meta.Symmetry
 
 	GetPathNodes: => @__nodes
+
+	GetColors: => {
+		Background: {
+			r: 80
+			g: 80
+			b: 255
+		}
+		Grid: {
+			r: 32
+			g: 34
+			b: 180
+		}
+		Error: {
+			r: 0
+			g: 0
+			b: 0
+		}
+		Trace: {
+			{
+				r: 255
+				g: 0
+				b: 0
+			}, {
+				r: 255
+				g: 255
+				b: 116
+			}
+		}
+		EndTrace: {
+			{
+				r: 32
+				g: 255
+				b: 220
+			}, {
+				r: 0
+				g: 255
+				b: 0
+			}
+		}
+	}
 
 	------------------------------------
 	-- Imports data from given table. --
@@ -333,10 +412,32 @@ class Canvas
 
 		@RebuildNodes!
 
-		for socket, entity in pairs entityClasses
-			socket\SetEntity entity!
+		if CLIENT
+			@__clientData = {
+				renderables: {}
+			}
 
-		@RecalculateClient!
+			with @__clientData
+				colors = @GetColors!
+
+				.extraColors = {}
+				.extraColors.blink = [makeBlinkColor color for color in *colors.Trace]
+
+				.extraColors.preEndBlink = for i in ipairs colors.Trace
+					makeBlinkColor colors.Trace, 0.35
+
+				.extraColors.endBlink = for i in ipairs colors.Trace
+					Color lerpColor 0.5, .extraColors.blink[i], colors.EndTrace[i]
+
+				.touchingExitBlinkPower = 0
+
+		for socket, entity in pairs entityClasses
+			socket\SetEntity entity!, false
+
+		for socket in pairs entityClasses
+			socket\GetEntity!\PostPopulatePathNodes @GetPathNodes!
+
+		@RecalculateClient! if CLIENT
 		@InitPathFinder!
 
 	RebuildPathFinderCache: =>
@@ -520,10 +621,6 @@ class Canvas
 	RecalculateClient: =>
 		return if not @__data
 
-		@__clientData = {
-			renderables: {}
-		}
-
         barLength = @GetBarLength!
 		@__rtDirty = true
 
@@ -543,8 +640,8 @@ class Canvas
 					isSeen = true
 
 				if not seen[nodeB]
-					angle = math.atan2 nodeA.screenY - nodeB.screenY,
-						nodeA.screenX - nodeB.screenX
+					angle = math.atan2 nodeB.screenY - nodeA.screenY,
+						nodeB.screenX - nodeA.screenX
 
 					dist = math.ceil math.sqrt (nodeA.screenX - nodeB.screenX)^2 +
 						(nodeA.screenY - nodeB.screenY)^2
@@ -643,13 +740,13 @@ class Canvas
 				intX = math.floor column / 2
 				intY = math.floor row / 2
 
-				entity = @GetIntersectionSocketAt intX + 1, intY + 1
+				socket = @GetIntersectionSocketAt intX + 1, intY + 1
 
 				x = intX - @__data.Meta.Width  / 2
 				y = intY - @__data.Meta.Height / 2
 				node = {
 					neighbors: {}
-					entity: entity
+					socket: socket
 
 					id: #@__nodes + 1
 					:x
@@ -659,7 +756,7 @@ class Canvas
 					screenY: math.floor Moonpanel.Canvas.Resolution * 0.5 + y * barLength
 				}
 
-				entity\SetPathNode node
+				socket\SetPathNode node
 
 				@__nodeMap[intY + 1] or= {}
 				@__nodeMap[intY + 1][intX + 1] = node
@@ -866,6 +963,7 @@ class Canvas
 			@InitBranchAnimators node, symmNode, ply
 			@__rtDirty = true
 
+		@__solutionData = nil
 		@__playData = {
 			startTime: CurTime!
 			controller: ply
@@ -899,25 +997,22 @@ class Canvas
 			lastInts = {}
 			for i, nodeStack in pairs @__pathFinder.nodeStacks
 				potentialNode = @__pathFinder.potentialNodes[i]
+
 				if not nodeStack[#nodeStack].exit and potentialNode and potentialNode.exit
+					print "Inserting potential"
 					table.insert nodeStack, potentialNode
 
 				elseif not nodeStack[#nodeStack].exit
 					@__playData.wasAborted = true
 					break
 
-		animation = {
-			aborted: @__playData.wasAborted
-		}
+		if @__playData.wasAborted
+			return @FinishSolution!
 
-		-- if SERVER and IsValid @__worldEntity
-		--	Moonpanel.Net.SendSolveStop @
-		if CLIENT
-			@PlayEndingAnimation animation
-		else
-			Moonpanel.Net.BroadcastEndingAnimation @__worldEntity, animation
+		if crt = @CreateSolutionCoroutine!
+			@__solutionCoroutine = crt
 
-		true
+			@SolutionCoroutineThink!
 
 	-------------
 	-- Thonks. --
@@ -925,16 +1020,32 @@ class Canvas
 	Think: =>
 		return if not @__playData
 
-		if @__powerState ~= nil
-			@__powerStateBuffer += FrameTime! * (@__powerState and 1 or -1)
-			@__powerStateBuffer = math.Clamp @__powerStateBuffer, 0, 1
+		if CLIENT and @__clientData
+			if @__powerState ~= nil
+				@__powerStateBuffer += FrameTime! * (@__powerState and 1 or -1)
+				@__powerStateBuffer = math.Clamp @__powerStateBuffer, 0, 1
 
-		if @__branchAnimators and not @__playData.abortTime
-			for animator in *@__branchAnimators
-				@__rtDirty = true if animator\think!
+			if @__branchAnimators and not @__playData.abortTime
+				for animator in *@__branchAnimators
+					@__rtDirty = true if animator\think!
 
-		if @__animator
-			@__animator\Think!
+			if @__animator
+				@__animator\Think!
+
+			speed = FrameTime! * 8
+			bp = @__clientData.touchingExitBlinkPower
+			shouldBlinkExit = @__playData.touchingExit and not @__playData.endTime
+
+			if shouldBlinkExit and bp < 1
+				@__clientData.touchingExitBlinkPower = math.min 1, bp + speed
+
+			elseif not shouldBlinkExit and bp > 0
+				@__clientData.touchingExitBlinkPower = math.max 0, bp - speed
+
+		if @__solutionCoroutine
+			@SolutionCoroutineThink!
+
+	GetPowerStateBuffer: => @__powerStateBuffer or 1
 
 	----------------------
 	-- CLIENTSIDE AREA. --
@@ -943,17 +1054,6 @@ class Canvas
 	-- CLIENTSIDE AREA. --
 	-- CLIENTSIDE AREA. --
 	----------------------
-
-	PlayEndingAnimation: CLIENT and (animationData) =>
-		@__rtDirty = true
-
-		if animationData.aborted
-			@PlaySound "Abort"
-			@__playData.abortTime = CurTime!
-		else
-			@TraceSetSpeedModifier 1
-			@UpdateTraceCursor 1
-			@PlaySound "Success"
 
 	SetPowerState: CLIENT and (state) =>
 		@__powerState = state
@@ -1076,8 +1176,32 @@ class Canvas
 		if widthModifier < 1
 			@__rtDirty = true
 
-		surface.SetDrawColor 255, 255, 255
+		colors = @GetColors!
 		for stackId, animator in ipairs @__branchAnimators
+			surface.SetDrawColor if @__playData.traceEraserTime
+				colors.Error
+			else
+				local newColor
+
+				if @__clientData.touchingExitBlinkPower > 0
+					value = @__clientData.touchingExitBlinkPower *
+						((1 + math.sin CurTime! * 18) / 2)
+
+					newColor = Color lerpColor math.min(1, value), colors.Trace[stackId],
+						@__clientData.extraColors.blink[stackId]
+
+				if @__playData.endBlinkTime
+					duration = 0.5
+					value = math.min 1, (CurTime! - @__playData.endBlinkTime) / duration
+
+					newColor = Color lerpColorN value, (newColor or colors.Trace[stackId]),
+						@__clientData.extraColors.preEndBlink[stackId],
+						@__clientData.extraColors.endBlink[stackId],
+						colors.EndTrace[stackId]
+
+				@__rtDirty = true if newColor
+				newColor or colors.Trace[stackId]
+
 		    buffer = animator\getPosition!
 
 			--
@@ -1213,18 +1337,19 @@ class Canvas
 				cam.Start2D!
 				render.Clear 0, 0, 0, 0, true, false
 
-				surface.SetDrawColor 80, 80, 255
+				surface.SetDrawColor @GetColors!.Background
 				surface.DrawRect 0, 0, w, h
 
 				barWidth = @GetBarWidth!
 
-				surface.SetDrawColor 32, 24, 180
+				surface.SetDrawColor @GetColors!.Grid
 
 				-- Draw visible paths.
 				draw.NoTexture!
 				for path in *@__clientData.paths
-					surface.DrawTexturedRectRotated path.screenX, path.screenY,
-						path.distance, barWidth, path.angle
+					-- they see me rounding, they hating
+					surface.DrawTexturedRectRotated math.Round(path.screenX), math.Round(path.screenY),
+						math.Round(path.distance), math.Round(barWidth), math.Round(path.angle)
 
 				-- Draw all visible nodes.
 				-- Clickable nodes are nearly twice as big.
@@ -1234,11 +1359,16 @@ class Canvas
 
 				if @__playData
 					local fade
-					if @__playData.abortTime
+					if @__playData.traceEraserTime
+						fade = 1 - (math.EaseInOut (timePct @__playData.traceEraserTime, 2),
+							0.25, 0.25)
+
+					elseif @__playData.abortTime
 						fade = 1 - (math.EaseInOut (timePct @__playData.abortTime, 0.5),
 							0.25, 0.25)
 
-						@__rtDirty = true if fade > 0
+					if fade and fade > 0
+						@__rtDirty = true
 
 					if not @__playData.abortTime or (fade and fade > 0)
 						auxrt = Moonpanel.Canvas\GetAuxiliaryRT!
@@ -1257,6 +1387,156 @@ class Canvas
 
 	RemoveRenderable: CLIENT and (entity) =>
 		@__clientData.renderables[entity] = nil
+
+	------------------------
+	-- SOLUTION CHECKING. --
+	-- SOLUTION CHECKING. --
+	-- SOLUTION CHECKING. --
+	-- SOLUTION CHECKING. --
+	-- SOLUTION CHECKING. --
+	-- SOLUTION CHECKING. --
+	------------------------
+	SolutionCoroutineThink: =>
+		status, result = coroutine.resume @__solutionCoroutine
+
+		if not status
+			print status, result
+			@__solutionCoroutine = nil
+
+	GetPathBetweenSockets: (sockA, sockB) =>
+		-- Left cardinal direction.
+		if sockA\GetX! > sockB\GetX! and sockA\GetY! == sockB\GetY!
+			path = sockA\GetLeft!
+			return path if path and path\GetLeft! == sockB
+
+		-- Right cardinal direction.
+		if sockA\GetX! < sockB\GetX! and sockA\GetY! == sockB\GetY!
+			path = sockA\GetRight!
+			return path if path and path\GetRight! == sockB
+
+		-- Up cardinal direction.
+		if sockA\GetY! > sockB\GetY! and sockA\GetX! == sockB\GetX!
+			path = sockA\GetAbove!
+			return path if path and path\GetAbove! == sockB
+
+		-- Down cardinal direction.
+		if sockA\GetY! < sockB\GetY! and sockA\GetX! == sockB\GetX!
+			path = sockA\GetBelow!
+			return path if path and path\GetBelow! == sockB
+
+	CreateSolutionCoroutine: =>
+		return if not @__playData
+		return if not @__playData.endTime
+
+		return coroutine.create ->
+			seen = {}
+
+			@__solutionData = {}
+			@__solutionData.traced = {}
+			@__solutionData.areas = {}
+			areaNum = 1
+
+			for stack in *@__pathFinder.nodeStacks
+				for i, node in ipairs stack
+					continue unless node.socket
+
+					@__solutionData.traced[node.socket] = true
+					@__solutionData.areas[node.socket] = areaNum
+					seen[node.socket] = true
+
+					nextNode = next stack, i
+					continue unless nextNode
+					continue unless stack[nextNode].socket
+
+					if path = @GetPathBetweenSockets node.socket, stack[nextNode].socket
+						@__solutionData.traced[path] = true
+						@__solutionData.areas[path] = areaNum
+						seen[path] = true
+
+				areaNum += 1
+
+			traverse = (socket) ->
+				return if seen[socket]
+				seen[socket] = true
+
+				@__solutionData.areas[socket] = areaNum
+
+				neighbors = {
+					socket\GetLeft!
+					socket\GetRight!
+					socket\GetAbove!
+					socket\GetBelow!
+				}
+
+				for neighbor in *neighbors
+					continue unless neighbor
+					continue if seen[neighbor]
+
+					traverse neighbor
+
+				true
+
+			for socket in @GetSocketIterator!
+				if traverse socket
+					areaNum += 1
+
+			@FinishSolution {}
+
+	IsTraced: (socket) =>
+		return unless @__solutionData
+
+		@__solutionData.traced[socket]
+
+	GetAreaNum: (socket) =>
+		return unless @__solutionData
+
+		@__solutionData.areas[socket]
+
+	FinishSolution: (solutionData) =>
+		local animation
+		if not solutionData
+			animation = {
+				aborted: true
+			}
+		else
+			animation = {
+				eraser: true
+			}
+
+		if animation
+			if CLIENT
+				@PlayEndingAnimation animation
+			else
+				Moonpanel.Net.BroadcastEndingAnimation @__worldEntity, animation
+
+			true
+
+	PlayEndingAnimation: CLIENT and (animationData) =>
+		@__animator = Moonpanel.Canvas.Animator!
+		@__rtDirty = true
+
+		@__playData.endTime = CurTime!
+
+		if animationData.aborted
+			@PlaySound "Abort"
+			@__playData.abortTime = CurTime!
+		else
+			@TraceSetSpeedModifier 1
+			@UpdateTraceCursor 1
+
+			if animationData.eraser
+				@PlaySound "PotentialFailure"
+
+				@__playData.traceEraserTime = CurTime!
+				@__animator\NewAnimation 1, 0, nil, ->
+					@__playData.traceEraserTime = nil
+					@__playData.endBlinkTime = CurTime!
+
+					@PlaySound "Eraser"
+					@PlaySound "Success"
+			else
+				@__playData.endBlinkTime = CurTime!
+				@PlaySound "Success"
 
 Moonpanel.Canvas.Canvas = Canvas
 

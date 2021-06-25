@@ -11,7 +11,7 @@ class Moonpanel.Canvas.Sockets.BaseSocket
         @__x = ((@__id - 1) % width) + 1
         @__y = math.floor((@__id - 1) / width) + 1
 
-	SetEntity: (entity) =>
+	SetEntity: (entity, postPopulate = true) =>
         pathNodes = @__canvas\GetPathNodes!
 
         if @__entity
@@ -23,6 +23,7 @@ class Moonpanel.Canvas.Sockets.BaseSocket
         with @__entity = entity or @__class.BaseEntity
             \SetSocket @
             \PopulatePathNodes pathNodes
+            \PostPopulatePathNodes pathNodes if postPopulate
             if CLIENT and .Render
                 @__canvas\AddRenderable @__entity
 
@@ -39,6 +40,8 @@ class Moonpanel.Canvas.Sockets.BaseSocket
     GetX: => @__x
 
     GetSocketType: => @__class.SocketType
+
+    IsTraced: => @__canvas\IsTraced @
 
 class Moonpanel.Canvas.Sockets.IntersectionSocket extends Moonpanel.Canvas.Sockets.BaseSocket
     @SocketType = Moonpanel.Canvas.SocketType.Intersection
@@ -164,13 +167,13 @@ class Moonpanel.Canvas.Sockets.PathSocket extends Moonpanel.Canvas.Sockets.BaseS
         if @__horizontal
             @__canvas\GetIntersectionSocketAt @__x, @__y
         else
-            @__canvas\GetCellSocketAt @__x, @__y
+            @__canvas\GetCellSocketAt @__x - 1, @__y
 
     GetRight: =>
         if @__horizontal
             @__canvas\GetIntersectionSocketAt @__x + 1, @__y
         else
-            @__canvas\GetCellSocketAt @__x + 1, @__y
+            @__canvas\GetCellSocketAt @__x, @__y
 
     GetHitBox: =>
         return @__cachedHitBox if @__cachedHitBox

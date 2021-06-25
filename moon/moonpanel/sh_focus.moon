@@ -128,7 +128,10 @@ if CLIENT
 	---------------------------------------------
 	-- Handle the drawing of the focus border. --
 	---------------------------------------------
-	hook.Add "HUDPaint", "TheMP Focus Draw", () ->
+	hook.Add "DrawOverlay", "TheMP Focus Draw", () ->
+		-- Surprised the player can be invalid here.
+		return unless IsValid LocalPlayer!
+
 		time = math.min 1, math.max 0,
 			(CurTime! - LocalPlayer!\GetNW2Float "TheMP FocusTime") / Moonpanel.FocusDuration
 

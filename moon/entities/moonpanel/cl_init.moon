@@ -95,12 +95,30 @@ errorFunc = (err) ->
 
 ENT.Draw = () =>
 
-ENT.Think = =>
+ENT.G = =>
     @__canvas\Think! if @__canvas
 
     if @__rendering and FrameNumber! - @__lastFrameNumber > 10
         @__rendering = false
         @__canvas\DeallocateRT!
+
+    powerStateBuffer = @__canvas\GetPowerStateBuffer!
+
+    do return
+    dLight = DynamicLight @EntIndex!
+    if dLight
+        with dLight
+            .Pos = @GetPos!
+
+            c = @__canvas\GetColors!.Background
+            .r = c.r
+            .g = c.g
+            .b = c.b
+            .Brightness = 3
+            .Decay = 1
+            .Size = 128 * powerStateBuffer
+            .DieTime = CurTime! + 0.01
+
 
 ENT.OnRemove = =>
     @__canvas\DeallocateRT!

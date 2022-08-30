@@ -1,0 +1,1 @@
+{"SchemaVersion":7,"Meta":{"Width":2,"Height":2,"Symmetry":0},"Entities":[{"Type":"End","Data":{}},{},{},{},{},{},{"Type":"Polyomino","Data":{"RuleColor":5,"Shape":[[1,1]],"Rotational":false,"Negative":false}},{},{},{},{},{},{},{},{},{},{},{},{"Type":"Polyomino","Data":{"RuleColor":5,"Shape":[[1,1]],"Rotational":false,"Negative":true}},{},{"Type":"Start","Data":{}}]}

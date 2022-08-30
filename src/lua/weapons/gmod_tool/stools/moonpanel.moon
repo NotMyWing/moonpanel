@@ -15,7 +15,8 @@ cleanup.Register("moonpanels")
 if SERVER
     CreateConVar "sbox_maxmoonpanels", 3, { FCVAR_REPLICATED, FCVAR_NOTIFY, FCVAR_ARCHIVE }
 
-    createMoonpanel = (pl, pos, ang, model, tileData) ->
+    createMoonpanel = (pl, pos, ang, model, tileData, solved = false,
+		visualResult = nil) ->
         if not (pl\CheckLimit "moonpanels")
             return false
 
@@ -29,15 +30,22 @@ if SERVER
             \SetModel model
             \Spawn!
 
+		sf\SetCreator pl
+		if sf.CPPISetOwner
+			sf\CPPISetOwner pl
+
         if tileData
-            sf\SetupData tileData
+            sf\SetData tileData, solved, visualResult
+		else
+			sf\SetSolvedState false
 
         pl\AddCount "moonpanels", sf
         pl\AddCleanup "moonpanels", sf
 
         return sf
 
-    duplicator.RegisterEntityClass("moonpanel", createMoonpanel, "Pos", "Ang", "Model", "TheMoonpanelTileData")
+    duplicator.RegisterEntityClass("moonpanel", createMoonpanel, "Pos", "Ang", "Model",
+		"TheMoonpanelTileData", "TheMoonpanelSolved", "TheMoonpanelVisualResult")
 
     TOOL.LeftClick = (trace) =>
         if not trace.HitPos
@@ -49,10 +57,8 @@ if SERVER
 
         panel = (() ->
             if trace.Entity\IsValid! and trace.Entity.Moonpanel
-                if not trace.Entity\Desync!
-                    return Moonpanel\sendNotify ply, "Please wait before sending an update again!", "buttons/button10.wav", NOTIFY_ERROR
-                else
-                    return trace.Entity
+                trace.Entity\RequestDataFromPlayer ply
+                return trace.Entity
 
             else
                 Ang = trace.HitNormal\Angle!
@@ -79,8 +85,6 @@ if SERVER
                     if phys\IsValid()
                         phys\EnableMotion(false)
 
-                sf\RequestDataFromPlayer ply
-
                 undo.Create("moonpanel")
                 undo.AddEntity(sf)
                 if const
@@ -94,15 +98,13 @@ if SERVER
         if not IsValid panel
             return false
 
-        success = (data) ->
-            if IsValid panel
-                panel\SetupData data
+        panel\RequestDataFromPlayer ply
 
         return true
 
     TOOL.RightClick = (trace) =>
-        net.Start "TheMP Editor"
-        net.Send @GetOwner!
+        Moonpanel.Net.SendEditorOpen @GetOwner!
+        return true
 
 else
     language.Add "Tool.moonpanel.name", "The Moonpanel"
@@ -124,8 +126,10 @@ else
         modelPanel = vgui.Create("DPanelSelect", panel)
         modelPanel\EnableVerticalScrollbar()
         modelPanel\SetTall(66 * 5 + 2)
-        t = (scripted_ents.GetStored("moonpanel").t.Monitor_Offsets) or {}
-        for model, v in pairs(t)
+        stored = scripted_ents.GetStored "moonpanel"
+        t = Moonpanel.Canvas.Monitor_Offsets or
+            (stored and stored.t and stored.t.Monitor_Offsets) or {}
+        for model in pairs t
             icon = vgui.Create("SpawnIcon")
             icon\SetModel(model)
             icon.Model = model

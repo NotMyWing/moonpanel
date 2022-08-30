@@ -7,10 +7,18 @@ class Moonpanel.Canvas.Entities.Start extends Moonpanel.Canvas.Entities.BaseInte
         0.5 * 2.5 * Moonpanel.Canvas.Resolution * (data.Dim.BarWidth / 100)
 
 	PopulatePathNodes: =>
-		@GetSocket!\GetPathNode!.clickable = true
+        socket = @GetSocket!
+        socketType = socket\GetSocketType!
+
+        if socketType == Moonpanel.Canvas.SocketType.Intersection
+		    @GetSocket!\GetPathNode!.clickable = true
 
     CleanUpPathNodes: =>
-        @GetSocket!\GetPathNode!.clickable = nil
+        socket = @GetSocket!
+        socketType = socket\GetSocketType!
+
+        if socketType == Moonpanel.Canvas.SocketType.Intersection
+		    @GetSocket!\GetPathNode!.clickable = nil
 
 trunc = (num, n) ->
 	mult = 10^(n or 0)
@@ -32,6 +40,13 @@ class Moonpanel.Canvas.Entities.End extends Moonpanel.Canvas.Entities.BaseInters
                 --invis = Moonpanel.EntityTypes.Invisible
 
                 socket = @GetSocket!
+				canvas = socket\GetCanvas!
+				if Moonpanel.Canvas.UsesVerticalBoundaryExits(canvas\GetSurfaceSpec!)
+					height = canvas\GetData!.Meta.Height
+					return { x: 0, y: -1 } if socket\GetY! == 1
+					return { x: 0, y: 1 } if socket\GetY! == height + 1
+					return false
+
                 left = socket\GetLeft!
                 right = socket\GetRight!
                 top = socket\GetAbove!
@@ -131,6 +146,7 @@ class Moonpanel.Canvas.Entities.End extends Moonpanel.Canvas.Entities.BaseInters
             }
 
             table.insert parentNode.neighbors, exitNode
+            exitNode.id = #pathNodes + 1
             table.insert pathNodes, exitNode
 
             @__exitNode = exitNode
@@ -149,3 +165,44 @@ class Moonpanel.Canvas.Entities.End extends Moonpanel.Canvas.Entities.BaseInters
                 if node == @__exitNode
                     table.remove pathNodes, i
                     break
+
+class Moonpanel.Canvas.Entities.IntersectionHexagon extends Moonpanel.Canvas.Entities.BaseIntersection
+    @CanonicalType = "Hexagon"
+
+    RenderHexagon: (overlay = false) =>
+        canvas = @GetCanvas!
+        Moonpanel.Canvas.RenderHexagonEntity @,
+            Moonpanel.Canvas.GetHexagonSize(canvas), overlay
+
+    RenderBelowTrace: => @RenderHexagon false
+    RenderOverlay: => @RenderHexagon true
+
+class Moonpanel.Canvas.Entities.IntersectionInvisible extends Moonpanel.Canvas.Entities.BaseIntersection
+    @CanonicalType = "Invisible"
+
+    Render: =>
+        return unless CLIENT
+        return unless @GetCanvas!\GetEditorGeometryVisible!
+
+        socket = @GetSocket!
+        origin = socket\GetRenderOrigin!
+        size = math.max socket\GetRadius! * 2, 6
+        surface.SetDrawColor 0, 0, 0, 80
+        surface.DrawRect origin.x - size / 2, origin.y - size / 2, size, size
+
+    PostPopulatePathNodes: =>
+        node = @GetSocket!\GetPathNode!
+        return unless node
+
+        node.invisible = true
+        for neighbor in *table.Copy node.neighbors
+            for i, other in ipairs neighbor.neighbors
+                if other == node
+                    table.remove neighbor.neighbors, i
+                    break
+
+        node.neighbors = {}
+
+    CleanUpPathNodes: =>
+        node = @GetSocket!\GetPathNode!
+        node.invisible = nil if node

@@ -17,17 +17,17 @@ class Moonpanel.Canvas.Sockets.BaseSocket
         if @__entity
             dirty = true
             @__entity\CleanUpPathNodes pathNodes
-            if CLIENT and @__entity.Render
+			if CLIENT and (@__entity.Render or @__entity.RenderBelowTrace or @__entity.RenderOverlay)
                 @__canvas\RemoveRenderable @__entity
 
         with @__entity = entity or @__class.BaseEntity
             \SetSocket @
             \PopulatePathNodes pathNodes
             \PostPopulatePathNodes pathNodes if postPopulate
-            if CLIENT and .Render
+			if CLIENT and (.Render or .RenderBelowTrace or .RenderOverlay)
                 @__canvas\AddRenderable @__entity
 
-        @__canvas\RebuildPathFinderCache!
+        @__canvas\RebuildPathFinderCache! unless @__canvas.__bulkImporting
 
 	GetEntity: => @__entity
 
@@ -117,12 +117,14 @@ class Moonpanel.Canvas.Sockets.CellSocket extends Moonpanel.Canvas.Sockets.BaseS
         ro = @GetRenderOrigin!
         data = @__canvas\GetData!
 
-        barLength = @GetCanvas!\GetBarLength!
+        horizontalLength = @GetCanvas!\GetBarLength!
+        verticalLength = @GetCanvas!\GetVerticalBarLength!
         barWidth = @GetCanvas!\GetBarWidth!
 
-        size = barLength - barWidth
-        @__cachedHitBox = Moonpanel.Rect ro.x - size/2, ro.y - size/2,
-            size, size
+        width = math.max 1, horizontalLength - barWidth
+        height = math.max 1, verticalLength - barWidth
+        @__cachedHitBox = Moonpanel.Rect ro.x - width/2, ro.y - height/2,
+            width, height
 
         @__cachedHitBox
 
@@ -150,6 +152,16 @@ class Moonpanel.Canvas.Sockets.PathSocket extends Moonpanel.Canvas.Sockets.BaseS
 
         @__cachedRenderOrigin = (nodeA\GetRenderOrigin! + nodeB\GetRenderOrigin!) / 2
         @__cachedRenderOrigin
+
+    GetIntersectionPair: =>
+        if @__horizontal
+            left = @__canvas\GetIntersectionSocketAt @__x, @__y
+            right = @__canvas\GetIntersectionSocketAt @__x + 1, @__y
+            return left, right
+        else
+            top = @__canvas\GetIntersectionSocketAt @__x, @__y
+            bottom = @__canvas\GetIntersectionSocketAt @__x, @__y + 1
+            return top, bottom
 
     GetAbove: =>
         if @__horizontal
@@ -181,7 +193,10 @@ class Moonpanel.Canvas.Sockets.PathSocket extends Moonpanel.Canvas.Sockets.BaseS
         ro = @GetRenderOrigin!
         data = @__canvas\GetData!
 
-        barLength = @GetCanvas!\GetBarLength!
+        barLength = if @__horizontal
+            @GetCanvas!\GetBarLength!
+        else
+            @GetCanvas!\GetVerticalBarLength!
         barWidth = @GetCanvas!\GetBarWidth!
 
         @__cachedHitBox = Moonpanel.Rect if @__horizontal

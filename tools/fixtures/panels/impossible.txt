@@ -1,0 +1,48 @@
+{
+	"Tile": {
+		"Width": 3.0,
+		"Height": 1.0
+	},
+	"Intersections": [
+		{
+			"4": {
+				"Type": 2.0,
+				"Attributes": []
+			}
+		},
+		[
+			{
+				"Type": 1.0,
+				"Attributes": []
+			}
+		]
+	],
+	"HPaths": [],
+	"Dimensions": {
+		"BarWidth": 0.0591
+	},
+	"Colors": [],
+	"VPaths": [],
+	"Cells": [
+		[
+			{
+				"Type": 7.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			{
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			{
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			}
+		]
+	]
+}

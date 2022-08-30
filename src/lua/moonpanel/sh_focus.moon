@@ -8,28 +8,34 @@ Moonpanel.__focusHolding or= {}
 -- Gets whether the player is focused or not. --
 ------------------------------------------------
 Moonpanel.IsFocused = (ply = CLIENT and LocalPlayer!) =>
-    ply\GetNW2Bool "TheMP Focused"
+	return false unless IsValid ply
+	ply\GetNW2Bool "TheMP Focused"
 
 ----------------------------------------------------------------------
 -- Gets the focus angle of the player, which gets set automatically --
 -- by Moonpanel:SetFocused(ply, state).                             --
 ----------------------------------------------------------------------
 Moonpanel.GetFocusAngles = (ply = CLIENT and LocalPlayer!) =>
+	return Angle! unless IsValid ply
+	if Moonpanel.PillarFocusAngles and Moonpanel.PillarFocusAngles[ply]
+		return Moonpanel.PillarFocusAngles[ply]
     ply\GetNW2Angle "TheMP FocusAngle"
 
 -------------------------------------------------------
 -- Sets whether the player should be focused or not. --
 -------------------------------------------------------
 Moonpanel.SetFocused = (ply = CLIENT and LocalPlayer!, state) =>
+	return if CLIENT
 	return unless IsValid ply
 
     oldState = @IsFocused ply
     if oldState ~= state
         lastFocus = ply\GetNW2Float "TheMP FocusTime", 0
 
-        return if lastFocus + 0.5 > CurTime!
+		return if state and lastFocus + 0.5 > CurTime!
 
-        if state
+		if state
+			Moonpanel.PillarFocusAngles[ply] = nil if Moonpanel.PillarFocusAngles
             ply\SetNW2Angle "TheMP FocusAngle", ply\EyeAngles!
 
         ply\SetNW2Bool "TheMP Focused", state
@@ -39,14 +45,38 @@ Moonpanel.SetFocused = (ply = CLIENT and LocalPlayer!, state) =>
 				ply\CrosshairDisable!
 			else
 				Moonpanel\StopControl ply
+				Moonpanel.PillarFocusAngles[ply] = nil if Moonpanel.PillarFocusAngles
 				ply\CrosshairEnable!
+
+if SERVER
+	Moonpanel.ResetPlayerInteraction = (ply) =>
+		return unless IsValid(ply) and ply\IsPlayer!
+		controlled = ply\GetNW2Entity "TheMP Control"
+		if IsValid(controlled) and controlled.Moonpanel and controlled.EndTraceSession
+			controlled\EndTraceSession true
+		ply\SetNW2Bool "TheMP Focused", false
+		ply\SetNW2Angle "TheMP FocusAngle", ply\EyeAngles!
+		ply\SetNW2Float "TheMP FocusTime", CurTime! - 1
+		ply\SetNW2Entity "TheMP Control", game.GetWorld!
+		Moonpanel.PillarFocusAngles[ply] = nil if Moonpanel.PillarFocusAngles
+		ply\CrosshairEnable!
+
+	hook.Add "PlayerInitialSpawn", "TheMP Reset Interaction", (ply) ->
+		timer.Simple 0, ->
+			Moonpanel\ResetPlayerInteraction ply if IsValid ply
+
+	-- Lua autoreload preserves NW2 values. Active traces intentionally do not
+	-- survive addon reloads, so clear existing players on the next tick too.
+	timer.Simple 0, ->
+		for ply in *player.GetAll()
+			Moonpanel\ResetPlayerInteraction ply
 
 ------------------------------------
 -- Handle focus/unfocus requests. --
 ------------------------------------
 hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
+	return if CLIENT
     if key == IN_USE
-        return if CLIENT and not IsFirstTimePredicted!
 		return if IsValid Moonpanel.__focusHolding[ply]
 
         if Moonpanel\IsFocused ply
@@ -63,31 +93,58 @@ hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
 -- Handle locking the player camera in place while focused. --
 --------------------------------------------------------------
 lastClick = 0
+actionHeld = false
+cancelHeld = false
 
 hook.Add "StartCommand", "TheMP Move", (ply, cmd) ->
-	return if CLIENT and IsFirstTimePredicted!
+	if Moonpanel\IsFocused ply
+		originalButtons = cmd\GetButtons!
+		actionDown = cmd\KeyDown(IN_ATTACK) or cmd\KeyDown(IN_JUMP)
+		cancelDown = cmd\KeyDown(IN_ATTACK2)
+		local cmdActionPressed, cmdCancelPressed
+		if CLIENT
+			Moonpanel\ApplyControllerTrace ply, cmd if Moonpanel.ApplyControllerTrace
+			cmdActionPressed = actionDown and not actionHeld
+			cmdCancelPressed = cancelDown and not cancelHeld
+			actionHeld = actionDown
+			cancelHeld = cancelDown
+		elseif cancelDown
+			Moonpanel\SetFocused ply, false
+		use = (cmd\KeyDown IN_USE) and IN_USE or 0
 
-    if Moonpanel\IsFocused ply
-        use = (cmd\KeyDown IN_USE) and IN_USE or 0
-
-        cmd\ClearButtons!
-        cmd\SetViewAngles Moonpanel\GetFocusAngles ply
-        cmd\SetButtons use
+		cmd\ClearButtons!
+		unless Moonpanel.PillarController and
+				Moonpanel.PillarController.ProcessCommand and
+				Moonpanel.PillarController.ProcessCommand(
+					ply, cmd, use, originalButtons)
+			cmd\ClearMovement!
+			cmd\SetViewAngles Moonpanel\GetFocusAngles ply
+			cmd\SetButtons use
 
 		-- Clientside stuff.
-		if CLIENT and input.WasMousePressed MOUSE_LEFT
+		if CLIENT and (input.WasMousePressed(MOUSE_RIGHT) or cmdCancelPressed)
+			controlled = if Moonpanel.GetPredictedControl
+				Moonpanel\GetPredictedControl ply
+			else
+				ply\GetNW2Entity "TheMP Control"
+			Moonpanel.Net.SendTraceAction controlled, 0 if IsValid controlled
+			Moonpanel.Net.SendFocusExit!
+			return
+
+		actionPressed = CLIENT and (input.WasMousePressed(MOUSE_LEFT) or
+			input.WasKeyPressed(KEY_SPACE) or cmdActionPressed)
+		if actionPressed
 			return if lastClick + 0.05 > CurTime!
 			lastClick = CurTime!
 
-			-- If we're controlling something, tell the server
-			-- to stop controlling.
-			controlled = ply\GetNW2Entity "TheMP Control"
+			controlled = if Moonpanel.GetPredictedControl
+				Moonpanel\GetPredictedControl ply
+			else
+				ply\GetNW2Entity "TheMP Control"
 			if (IsEntity controlled) and IsValid controlled
-				Moonpanel\RequestControl controlled
+				Moonpanel\TraceAction controlled
 
 			else
-				-- Fire a trace and check whether we're aiming
-				-- at a Moonpanel or not.
 				x, y = input.GetCursorPos!
 				aimVec = gui.ScreenToVector x, y
 
@@ -98,8 +155,12 @@ hook.Add "StartCommand", "TheMP Move", (ply, cmd) ->
 
 				if (IsValid trace.Entity) and trace.Entity.Moonpanel
 					Moonpanel\RequestControl trace.Entity
+	else
+		actionHeld = false if CLIENT
+		cancelHeld = false if CLIENT
 
 hook.Add "CalcMainActivity", "TheMP FocusAnim", (ply) ->
+	return if Moonpanel.IsPillarControlling and Moonpanel\IsPillarControlling ply
     ACT_HL2MP_IDLE, -1 if Moonpanel\IsFocused ply
 
 hook.Add "PhysgunDrop", "TheMP Focus Pickup", (ply) ->
@@ -116,14 +177,23 @@ if CLIENT
 
 	-- Initialize stuff.
 	Moonpanel.InitFocus = =>
+		ply = LocalPlayer!
+		return false unless IsValid ply
+		gui.EnableScreenClicker false
 
 		-- Watch the "TheMP Focused" NW2 variable for changes.
-		LocalPlayer!\SetNW2VarProxy "TheMP Focused", (_, _, old, new) ->
+		ply\SetNW2VarProxy "TheMP Focused", (owner, _, old, new) ->
 			--return if not game.SinglePlayer! and not IsFirstTimePredicted!
 
 			if old ~= new
+				return unless IsValid owner
+				if Moonpanel.PillarFocusAngles
+					Moonpanel.PillarFocusAngles[owner] = nil
 				surface.PlaySound new and SOUND_FOCUS_ON or SOUND_FOCUS_OFF
-				gui.EnableScreenClicker new
+				controlled = Moonpanel.GetPredictedControl and
+					Moonpanel\GetPredictedControl owner
+				gui.EnableScreenClicker new and not IsValid controlled
+		true
 
 	---------------------------------------------
 	-- Handle the drawing of the focus border. --
@@ -162,10 +232,12 @@ if CLIENT
 	-- Handle the view model angle. --
 	----------------------------------
 	hook.Add "CalcViewModelView", "TheMP ViewModel Angles", (_, _, _, _, pos, ang) ->
+		ply = LocalPlayer!
+		return unless IsValid ply
 		time = math.min 1, math.max 0,
-			(CurTime! - LocalPlayer!\GetNW2Float "TheMP FocusTime") / Moonpanel.FocusDuration
+			(CurTime! - ply\GetNW2Float "TheMP FocusTime") / Moonpanel.FocusDuration
 
-		focused = Moonpanel\IsFocused!
+		focused = Moonpanel\IsFocused ply
 		return if time == 1 and not focused
 
 		-- Flip time if unfocusing.

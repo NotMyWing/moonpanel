@@ -1,0 +1,132 @@
+{
+	"Tile": {
+		"Width": 4.0,
+		"Height": 4.0
+	},
+	"Intersections": {
+		"1": {
+			"5": {
+				"Type": 2.0,
+				"Attributes": []
+			}
+		},
+		"5": [
+			{
+				"Type": 1.0,
+				"Attributes": []
+			}
+		]
+	},
+	"HPaths": [],
+	"Dimensions": [],
+	"Colors": [],
+	"VPaths": [],
+	"Cells": [
+		[
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			},
+			{
+				"Type": 4.0,
+				"Attributes": {
+					"Color": 9.0,
+					"Count": 3.0
+				}
+			},
+			{
+				"Type": 7.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			}
+		],
+		[
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			},
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			{
+				"Type": 7.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			{
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			}
+		],
+		[
+			{
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			{
+				"Type": 7.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			}
+		],
+		[
+			{
+				"Type": 7.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			{
+				"Type": 4.0,
+				"Attributes": {
+					"Color": 9.0,
+					"Count": 3.0
+				}
+			},
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			},
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			}
+		]
+	]
+}

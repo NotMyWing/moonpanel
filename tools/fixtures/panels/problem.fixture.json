@@ -1,0 +1,38 @@
+{
+  "name": "problem",
+  "panel": "problem.txt",
+  "legacy": true,
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "up up right right",
+      "traces": [[[0, 2], [0, 1], [0, 0], [1, 0], [2, 0]]],
+      "expected": {"success": true, "status": "complete"}
+    },
+    {
+      "name": "up right up right",
+      "traces": [[[0, 2], [0, 1], [1, 1], [1, 0], [2, 0]]],
+      "expected": {"success": true, "status": "complete"}
+    },
+    {
+      "name": "right right up up",
+      "traces": [[[0, 2], [1, 2], [2, 2], [2, 1], [2, 0]]],
+      "expected": {"success": true, "status": "complete"}
+    },
+    {
+      "name": "up right right up",
+      "traces": [[[0, 2], [0, 1], [1, 1], [2, 1], [2, 0]]],
+      "expected": {"success": false, "status": "complete"}
+    },
+    {
+      "name": "right up right up",
+      "traces": [[[0, 2], [1, 2], [1, 1], [2, 1], [2, 0]]],
+      "expected": {"success": false, "status": "complete"}
+    },
+    {
+      "name": "right up up right",
+      "traces": [[[0, 2], [1, 2], [1, 1], [1, 0], [2, 0]]],
+      "expected": {"success": false, "status": "complete"}
+    }
+  ]
+}

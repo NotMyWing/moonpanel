@@ -1,0 +1,180 @@
+{
+	"Tile": {
+		"Symmetry": 3.0,
+		"Width": 7.0,
+		"Height": 3.0
+	},
+	"Intersections": {
+		"1": {
+			"5": {
+				"Type": 2.0,
+				"Attributes": []
+			},
+			"4": {
+				"Type": 2.0,
+				"Attributes": []
+			}
+		},
+		"4": {
+			"1": {
+				"Type": 1.0,
+				"Attributes": []
+			},
+			"8": {
+				"Type": 1.0,
+				"Attributes": []
+			}
+		}
+	},
+	"HPaths": [
+		{
+			"4": {
+				"Type": 10.0,
+				"Attributes": []
+			},
+			"3": {
+				"Type": 3.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			}
+		},
+		{
+			"4": {
+				"Type": 10.0,
+				"Attributes": []
+			}
+		},
+		{
+			"4": {
+				"Type": 10.0,
+				"Attributes": []
+			}
+		},
+		{
+			"4": {
+				"Type": 10.0,
+				"Attributes": []
+			}
+		}
+	],
+	"Dimensions": [],
+	"Colors": {
+		"Untraced": {
+			"r": 40.0,
+			"b": 186.0,
+			"a": 255.0,
+			"g": 22.0
+		},
+		"Background": {
+			"r": 80.0,
+			"b": 255.0,
+			"a": 255.0,
+			"g": 77.0
+		},
+		"Finished": {
+			"r": 255.0,
+			"b": 255.0,
+			"a": 255.0,
+			"g": 255.0
+		},
+		"Vignette": {
+			"r": 255.0,
+			"b": 255.0,
+			"a": 200.0,
+			"g": 255.0
+		},
+		"Traced": {
+			"r": 255.0,
+			"b": 255.0,
+			"a": 255.0,
+			"g": 255.0
+		},
+		"Cell": {
+			"r": 0.0,
+			"b": 0.0,
+			"a": 79.0,
+			"g": 0.0
+		},
+		"Errored": {
+			"r": 0.0,
+			"b": 0.0,
+			"a": 255.0,
+			"g": 0.0
+		}
+	},
+	"VPaths": {
+		"2": {
+			"6": {
+				"Type": 9.0,
+				"Attributes": []
+			},
+			"3": {
+				"Type": 9.0,
+				"Attributes": []
+			}
+		}
+	},
+	"Cells": [
+		{
+			"1": {
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			"4": {
+				"Type": 10.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			},
+			"5": {
+				"Type": 7.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			"7": {
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			}
+		},
+		{
+			"6": {
+				"Type": 7.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			"4": {
+				"Type": 10.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			}
+		},
+		{
+			"3": {
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			"4": {
+				"Type": 10.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			},
+			"5": {
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			}
+		}
+	]
+}

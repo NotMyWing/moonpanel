@@ -1,22 +1,14 @@
 const gulp = require('gulp');
 const del = require('del');
+const fs = require('fs');
+const path = require('path');
+const through = require('through2');
+const gulpZip = require('gulp-zip');
 
 const minifyLua = require('./tools/luamin');
 const compileMoonscript = require('./tools/moonscript');
 const optimizeLua = require ('./tools/optimizations');
 const discourageLuaMod = require ('./tools/discourageLuaModification');
-
-const lastRunCache = new Map();
-function lastRunIgnoreErrors(task) {
-	const lastRun = gulp.lastRun(task);
-	if(lastRun) {
-		lastRunCache.set(task, lastRun);
-		return lastRun;
-	}
-	else {
-		return lastRunCache.get(task);
-	}
-}
 
 const MATERIAL_GLOBS = [
 	'src/materials/**/*',
@@ -35,6 +27,48 @@ const METADATA_GLOBS = [
 	'src/addon.json',
 ];
 
+let atomicWriteId = 0;
+
+/**
+ * Write each Vinyl file through a same-directory temporary file and rename it
+ * into place. The rename is atomic on the target filesystem, so live-reload
+ * consumers never observe a truncated output file.
+ */
+function atomicDest(directory) {
+	const root = path.resolve(directory);
+
+	return through.obj(function(file, encoding, callback) {
+		if(file.isNull()) {
+			callback(null, file);
+			return;
+		}
+
+		if(!file.isBuffer()) {
+			callback(new Error('Cannot atomically write streamed file: ' + file.path));
+			return;
+		}
+
+		const target = path.join(root, file.relative);
+		const temporary = target + '.tmp-' + process.pid + '-' + atomicWriteId++;
+
+		try {
+			fs.mkdirSync(path.dirname(target), { recursive: true });
+			fs.writeFileSync(temporary, file.contents, {
+				mode: file.stat && file.stat.mode,
+			});
+			fs.renameSync(temporary, target);
+			callback(null, file);
+		} catch(error) {
+			try {
+				fs.unlinkSync(temporary);
+			} catch(_) {
+				// Preserve the original write error.
+			}
+			callback(error);
+		}
+	});
+}
+
 /**
  * Cleans the build.
  */
@@ -48,10 +82,10 @@ clean.description = "Cleans the build.";
  * Minifies lua files.
  */
 function lua() {
-	return gulp.src('src/**/*.lua', { since: lastRunIgnoreErrors(lua) })
+	return gulp.src('src/**/*.lua', { since: gulp.lastRun(lua) })
 		.pipe(optimizeLua())
 		.pipe(minifyLua())
-		.pipe(gulp.dest('dest', { mode: 0777 }));
+		.pipe(atomicDest('dest'));
 }
 lua.description = "Copies and minifies lua files.";
 
@@ -60,12 +94,12 @@ lua.description = "Copies and minifies lua files.";
  * Compiles moonscript files.
  */
 function moon() {
-	return gulp.src('src/**/*.moon', { since: lastRunIgnoreErrors(moon) })
+	return gulp.src('src/**/*.moon', { since: gulp.lastRun(moon) })
 		.pipe(compileMoonscript())
 		.pipe(optimizeLua())
 		.pipe(discourageLuaMod())
 		// .pipe(minifyLua())
-		.pipe(gulp.dest('dest', { mode: 0777 }));
+		.pipe(atomicDest('dest'));
 }
 moon.description = "Compiles moonscript files.";
 
@@ -94,8 +128,8 @@ watchScripts.description = "Watches lua and moon files and compiles changes.";
  * Copies materials.
  */
 function materials() {
-	return gulp.src(MATERIAL_GLOBS, { since: lastRunIgnoreErrors(materials) })
-		.pipe(gulp.dest('dest/materials/', { mode: 0777 }));
+	return gulp.src(MATERIAL_GLOBS, { since: gulp.lastRun(materials) })
+		.pipe(atomicDest('dest/materials'));
 }
 materials.description = "Copies materials.";
 
@@ -103,28 +137,44 @@ materials.description = "Copies materials.";
  * Copies sound files.
  */
 function sound() {
-	return gulp.src(SOUND_GLOBS, { since: lastRunIgnoreErrors(materials) })
-		.pipe(gulp.dest('dest/sound/', { mode: 0777 }));
+	return gulp.src(SOUND_GLOBS, { since: gulp.lastRun(sound) })
+		.pipe(atomicDest('dest/sound'));
 }
-materials.description = "Copies sound files.";
+sound.description = "Copies sound files.";
 
 /**
  * Copies model files.
  */
 function model() {
-	return gulp.src(MODEL_GLOBS, { since: lastRunIgnoreErrors(materials) })
-		.pipe(gulp.dest('dest/models/', { mode: 0777 }));
+	return gulp.src(MODEL_GLOBS, { since: gulp.lastRun(model) })
+		.pipe(atomicDest('dest/models'));
 }
-materials.description = "Copies model files.";
+model.description = "Copies model files.";
 
 /**
  * Copies metadata files.
  */
 function metadata() {
-	return gulp.src(METADATA_GLOBS, { since: lastRunIgnoreErrors(materials) })
-		.pipe(gulp.dest('dest', { mode: 0777 }));
+	return gulp.src(METADATA_GLOBS, { since: gulp.lastRun(metadata) })
+		.pipe(atomicDest('dest'));
 }
-materials.description = "Copies metadata files.";
+metadata.description = "Copies metadata files.";
+
+/**
+ * Packages the compiled addon as a loose-file zip. The archive contains the
+ * addon root rather than a `dest/` wrapper and excludes generated tests and
+ * stale archives retained by the live-refresh build.
+ */
+function packageZip() {
+	return gulp.src([
+		'dest/**/*',
+		'!dest/test/**',
+		'!dest/**/*.zip',
+	], { base: 'dest', allowEmpty: false })
+		.pipe(gulpZip('moonpanel.zip'))
+		.pipe(atomicDest('artifacts'));
+}
+packageZip.description = "Packages the compiled addon as a zip.";
 
 /**
  * Generates and moves assets.
@@ -156,20 +206,29 @@ const build = gulp.parallel(scripts, assets);
 build.description = "Builds everything.";
 
 /**
- * Cleans and builds the project, and then watches files for changes.
+ * Builds the project without deleting the live output tree, and then watches
+ * files for changes. This is intentionally safe for Garry's Mod live refresh.
  */
-const watch = gulp.series(clean, build, gulp.parallel(watchAssets, watchScripts));
-watch.description = "Cleans and builds the project, and then watches files for changes.";
+const watch = gulp.series(build, gulp.parallel(watchAssets, watchScripts));
+watch.description = "Builds in place and watches files for changes.";
+
+/**
+ * Explicit destructive reset for recovering from stale or orphaned output.
+ */
+const rebuild = gulp.series(clean, build);
+rebuild.description = "Deletes the output tree, then performs a clean build.";
 
 
 exports.clean = clean;
 exports.materials = materials;
 exports.assets = assets;
 exports.watchAssets = watchAssets;
+exports.packageZip = packageZip;
 exports.lua = lua;
 exports.moon = moon;
 exports.scripts = scripts;
 exports.watchScripts = watchScripts;
 exports.build = build;
+exports.rebuild = rebuild;
 exports.watch = watch;
 exports.default = watch;

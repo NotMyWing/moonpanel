@@ -1,0 +1,84 @@
+{
+  "name": "testcase",
+  "panel": "testcase.txt",
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "accepts exact signed-polyomino cancellation",
+      "traces": [
+        [
+          [0, 4],
+          [0, 3],
+          [1, 3],
+          [1, 4],
+          [2, 4],
+          [2, 3],
+          [3, 3],
+          [3, 2],
+          [4, 2],
+          [4, 1],
+          [3, 1],
+          [3, 0],
+          [2, 0],
+          [2, 1],
+          [1, 1],
+          [1, 0],
+          [0, 0]
+        ]
+      ],
+      "expected": {
+        "success": true,
+        "status": "complete",
+        "violations": [],
+        "erasures": [],
+        "remaining": [],
+        "constraintKinds": [],
+        "polyominoBackends": ["signed"]
+      }
+    },
+    {
+      "name": "rejects the unpartitioned sixteen-cell board",
+      "traces": [
+        [
+          [0, 4],
+          [0, 3],
+          [0, 2],
+          [0, 1],
+          [0, 0]
+        ]
+      ],
+      "expected": {
+        "success": false,
+        "status": "complete",
+        "violations": [11, 15, 35, 47],
+        "erasures": [],
+        "remaining": [11, 15, 35, 47],
+        "constraintKinds": ["polyomino"],
+        "polyominoBackends": []
+      }
+    },
+    {
+      "name": "rejects independently impossible clue regions",
+      "traces": [
+        [
+          [0, 4],
+          [1, 4],
+          [1, 3],
+          [1, 2],
+          [1, 1],
+          [1, 0],
+          [0, 0]
+        ]
+      ],
+      "expected": {
+        "success": false,
+        "status": "complete",
+        "violations": [11, 15, 35, 47],
+        "erasures": [],
+        "remaining": [11, 15, 35, 47],
+        "constraintKinds": ["polyomino", "polyomino"],
+        "polyominoBackends": []
+      }
+    }
+  ]
+}

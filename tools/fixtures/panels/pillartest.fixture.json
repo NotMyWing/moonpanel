@@ -1,0 +1,27 @@
+{
+  "name": "pillartest",
+  "panel": "pillartest.txt",
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "accepts its same-color square pair",
+      "traces": [
+        [
+          [0, 3],
+          [0, 2],
+          [0, 1],
+          [0, 0]
+        ]
+      ],
+      "expected": {
+        "success": true,
+        "status": "complete",
+        "violations": [],
+        "erasures": [],
+        "remaining": [],
+        "constraintKinds": [],
+        "polyominoBackends": []
+      }
+    }
+  ]
+}

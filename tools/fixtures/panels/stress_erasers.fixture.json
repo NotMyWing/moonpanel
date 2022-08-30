@@ -1,0 +1,23 @@
+{
+  "name": "stress erasers",
+  "panel": "stress_erasers.txt",
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "three erasers reconcile four incompatible colors",
+      "traces": [[[0, 2], [0, 1], [0, 0]]],
+      "expected": {
+        "success": true,
+        "status": "complete"
+      }
+    },
+    {
+      "name": "a stranded eraser makes the partition unsatisfiable",
+      "traces": [[[0, 2], [1, 2], [1, 1], [0, 1], [0, 0]]],
+      "expected": {
+        "success": false,
+        "status": "complete"
+      }
+    }
+  ]
+}

@@ -6,7 +6,7 @@
   "bugs": {
     "url": "https://github.com/NotMyWing/moonpanel/issues"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "NotMyWing (https://github.com/NotMyWing)",
   "contributors": [
     "Tyler Schrock <tschrock123@gmail.com> (https://github.com/Tschrock)",
@@ -15,9 +15,13 @@
   "repository": "github:NotMyWing/moonpanel",
   "scripts": {
     "build": "gulp build",
+    "rebuild": "gulp rebuild",
     "watch": "gulp watch",
     "clean": "gulp clean",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "package:gma": "npm run build && node tools/gma.js create --input dest --output artifacts/moonpanel.gma --manifest artifacts/moonpanel.manifest.json",
+    "package:zip": "npm run build && gulp packageZip",
+    "verify:package": "node tools/package_smoke.js --require-gma --gma artifacts/moonpanel.gma --manifest artifacts/moonpanel.manifest.json",
+    "test": "npm run build && node tools/sanity.js && node tools/package_smoke.js --temporary"
   },
   "devDependencies": {
     "del": "^6.0.0",

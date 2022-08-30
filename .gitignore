@@ -1,7 +1,9 @@
 node_modules/
 dest/
+artifacts/
+# Legacy output location retained only to ignore stale local builds.
+dist/
 downloaded/
-lua/
 
 doc
 

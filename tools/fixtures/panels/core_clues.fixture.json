@@ -1,0 +1,15 @@
+{
+  "name": "core clue family coverage",
+  "panel": "core_clues.txt",
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "trace reaches the exit while all core clue families are present",
+      "traces": [[[0,0],[1,0],[2,0],[3,0]]],
+      "expected": {
+        "success": false,
+        "status": "complete"
+      }
+    }
+  ]
+}

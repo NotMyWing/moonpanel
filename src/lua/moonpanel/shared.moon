@@ -3,6 +3,18 @@ export Moonpanel = _moonpanel
 
 Moonpanel.Data or= {}
 
+Moonpanel.Color = {
+    Black:   1
+    White:   2
+    Cyan:    3
+    Magenta: 4
+    Yellow:  5
+    Red:     6
+    Green:   7
+    Blue:    8
+    Orange:  9
+}
+
 class Rect
     new: (@x, @y, @width, @height) =>
     Contains: (x, y) =>
@@ -17,3 +29,4 @@ include "sh_net.lua"
 include "sh_focus.lua"
 include "sh_control.lua"
 include "canvas/sh_canvas.lua"
+include "sh_pillar_controller.lua"

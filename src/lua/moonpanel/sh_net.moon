@@ -6,19 +6,20 @@ if SERVER
 Moonpanel.Net or= {}
 
 Moonpanel.Net.FlowTypes = {
-	"TraceDeltas"
-	"TracePushNodes"
-    "TracePopNodes"
-    "TraceUpdateCursor"
-    "TraceUpdatePotential"
-    "TraceTouchingExit"
+	"TraceControlGrant"
+	"TraceInputBatch"
+	"TraceObserverAdvance"
+	"TraceAck"
+	"TraceResyncSnapshot"
+	"TraceAction"
+	"TraceResult"
+	"FocusExit"
 
 	"PanelRequestData"
 	"PanelRequestDataFromPlayer"
 	"PanelRequestControl"
-	"PanelSolveStart"
-	"PanelSolveStop"
-	"PanelEndingAnimation"
+	"TraceVisualResult"
+	"EditorOpen"
 }
 
 -- Determine the smallest packet required to fit the flowtypes enum.
@@ -26,7 +27,7 @@ Moonpanel.Net.FlowSize = math.ceil(math.log(#Moonpanel.Net.FlowTypes, 2))
 
 -- Turn the flowtypes array into a map/enum.
 flowTypes = Moonpanel.Net.FlowTypes
-Moonpanel.Net.FlowTypes = {v, k - 1 for k, v in pairs flowTypes}
+Moonpanel.Net.FlowTypes = {v, k - 1 for k, v in ipairs flowTypes}
 Moonpanel.Net.Receivers = {}
 
 net.Receive "TheMP Flow", (len, ply) ->

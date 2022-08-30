@@ -1,0 +1,48 @@
+name: Build Moonpanel
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Set up LuaJIT
+        uses: leafo/gh-actions-lua@v13
+        with:
+          luaVersion: luajit-2.1
+      - name: Set up LuaRocks
+        uses: leafo/gh-actions-luarocks@v6
+      - name: Install MoonScript
+        run: |
+          luarocks install moonscript 0.5.0-1
+          moonc --version
+      - name: Install dependencies
+        run: npm ci --include=dev
+      - name: Build, test, and package
+        run: npm test
+      - name: Create distributable GMA
+        run: node tools/gma.js create --input dest --output artifacts/moonpanel.gma --manifest artifacts/moonpanel.manifest.json
+      - name: Create loose addon zip
+        run: npm run package:zip
+      - name: Verify distributable GMA
+        run: npm run verify:package
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonpanel-packages
+          path: |
+            artifacts/moonpanel.gma
+            artifacts/moonpanel.zip
+            artifacts/moonpanel.manifest.json

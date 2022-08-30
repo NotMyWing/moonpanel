@@ -1,0 +1,24 @@
+{
+  "name": "poly positive",
+  "panel": "poly_positive.txt",
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "fixed horizontal dominoes tile the intact region",
+      "traces": [[[0, 2], [0, 1], [0, 0], [1, 0], [2, 0]]],
+      "expected": {
+        "success": true,
+        "status": "complete",
+        "polyominoBackends": ["dlx"]
+      }
+    },
+    {
+      "name": "the central partition rejects fixed orientations",
+      "traces": [[[0, 2], [1, 2], [1, 1], [1, 0], [2, 0]]],
+      "expected": {
+        "success": false,
+        "status": "complete"
+      }
+    }
+  ]
+}

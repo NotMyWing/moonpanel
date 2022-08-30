@@ -1,0 +1,20 @@
+{
+  "name": "impossible",
+  "panel": "impossible.txt",
+  "legacy": true,
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "every simple start to exit route is unsatisfiable",
+      "traces": [],
+      "allSimpleTraces": {
+        "from": [3, 0],
+        "to": [0, 1]
+      },
+      "expected": {
+        "success": false,
+        "status": "complete"
+      }
+    }
+  ]
+}

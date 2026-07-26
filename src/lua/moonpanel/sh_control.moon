@@ -107,7 +107,7 @@ else
 		gamepadSensitivity = 1, gamepadDeadzone = 0.16) =>
 		controlled = ply\GetNW2Entity "TheMP Control"
 		if IsEntity(controlled) and IsValid(controlled) and controlled.Moonpanel
-			session = controlled.__traceSession
+			session = controlled\GetTraceSession! if controlled.GetTraceSession
 			if session and session.controller == ply
 				Moonpanel\StopControl ply
 				return

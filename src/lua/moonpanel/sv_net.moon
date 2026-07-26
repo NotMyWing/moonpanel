@@ -78,7 +78,7 @@ Moonpanel.Net.ValidateEditorPayload = (value) ->
 	visit value, 0
 
 Moonpanel.Net.SendControlGrant = (recipients, panel, omitController = false) ->
-	session = panel.__traceSession or panel.__endingTraceSession
+	session = panel\GetTraceSession! or panel\GetEndingTraceSession!
 	return unless session
 	startFlow flowTypes.TraceControlGrant
 	net.WriteEntity panel
@@ -184,12 +184,11 @@ Moonpanel.Net.ClearPanelSyncState = (panel) ->
 
 Moonpanel.Net.BroadcastVisualResult = (panel, data) ->
 	return unless IsValid panel
-	session = panel.__traceSession or panel.__endingTraceSession
+	session = panel\GetTraceSession! or panel\GetEndingTraceSession!
 	return unless session
 	pathfinder = panel\GetCanvas!\GetPathFinder!
 	return unless pathfinder
-	panel.__visualEventSerial = ((panel.__visualEventSerial or 0) + 1) % 4294967295
-	panel.__visualEventSerial = 1 if panel.__visualEventSerial == 0
+	visualEventSerial = panel\NextVisualEventSerial!
 	envelope = {
 		sessionId: session.id
 		revision: session.revision
@@ -214,13 +213,12 @@ Moonpanel.Net.BroadcastVisualResult = (panel, data) ->
 		}
 		evaluationStatus: data.evaluationError or "complete"
 		solved: data.success == true
-		eventSerial: panel.__visualEventSerial
+		eventSerial: visualEventSerial
 	}
 	if panel.ApplyTerminalResult
 		panel\ApplyTerminalResult envelope
 	else
-		panel.__lastVisualResult = table.Copy envelope
-		panel.__lastVisualResultAt = CurTime!
+		panel\SetVisualResult envelope if panel.SetVisualResult
 		panel\SetSolvedState envelope.solved == true, envelope if panel.SetSolvedState
 	Moonpanel.Wire.HandleResult panel, envelope if Moonpanel.Wire and
 		Moonpanel.Wire.HandleResult
@@ -228,7 +226,7 @@ Moonpanel.Net.BroadcastVisualResult = (panel, data) ->
 	net.WriteEntity panel
 	net.WriteTable envelope
 	net.Broadcast!
-	panel.__endingTraceSession = nil if panel.__endingTraceSession == session
+	panel\ClearEndingTraceSession session if panel.ClearEndingTraceSession
 
 Moonpanel.Net.SendEditorOpen = (ply, surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) ->
 	startFlow flowTypes.EditorOpen
@@ -416,7 +414,7 @@ receive flowTypes.TraceInputBatch, (len, ply) ->
 	predictedHash = net.ReadUInt 32
 
 	return unless IsValid(panel) and panel.Moonpanel and panel.GetCanvas
-	session = panel.__traceSession
+	session = panel\GetTraceSession! if panel.GetTraceSession
 	return unless session and session.controller == ply and session.id == sessionId
 	return unless revision == session.revision
 	return unless ruleRevision == session.ruleRevision
@@ -464,8 +462,8 @@ receive flowTypes.TraceAction, (len, ply) ->
 	ruleRevision = net.ReadUInt 32
 	finalSequence = net.ReadUInt 32
 	action = net.ReadUInt 2
-	return unless IsValid(panel) and panel.__traceSession
-	session = panel.__traceSession
+	return unless IsValid(panel) and panel.GetTraceSession and panel\GetTraceSession!
+	session = panel\GetTraceSession!
 	return unless session.id == sessionId and session.controller == ply
 	return unless revision == session.revision and ruleRevision == session.ruleRevision
 	return unless ply\Alive! and Moonpanel\IsFocused(ply) and panel\GetPowered!

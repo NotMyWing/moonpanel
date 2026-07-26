@@ -84,6 +84,23 @@ ENT.GetWireState = => {
 	path: @__wirePath or ""
 }
 
+ENT.GetPanelRevision = => @__dataRevision or 0
+ENT.GetTraceSession = => @__traceSession
+ENT.GetEndingTraceSession = => @__endingTraceSession
+ENT.SetVisualResult = (result, at = CurTime!) =>
+	@__lastVisualResult = table.Copy result if istable result
+	@__lastVisualResultAt = at if istable result
+	true
+
+ENT.NextVisualEventSerial = =>
+	@__visualEventSerial = ((@__visualEventSerial or 0) + 1) % 4294967295
+	@__visualEventSerial = 1 if @__visualEventSerial == 0
+	@__visualEventSerial
+
+ENT.GetVisualEventSerial = => @__visualEventSerial or 0
+ENT.ClearEndingTraceSession = (session) =>
+	@__endingTraceSession = nil if not session or @__endingTraceSession == session
+
 ENT.BeginWireTrace = =>
 	@__wireSuccess = 0
 	@__wirePath = ""
@@ -127,8 +144,7 @@ ENT.SetData = (data, solved = false, visualResult = nil) =>
     @__pendingSolvedResult = nil
     @SetSolvedState false if @SetSolvedState
     if @__endingTraceSession
-        @GetCanvas!.__solutionCoroutine = nil
-        Moonpanel.Net.BroadcastVisualResult @, {
+		Moonpanel.Net.BroadcastVisualResult @, {
             aborted: true
             evaluationError: "panel_edit"
         }
@@ -244,7 +260,7 @@ ENT.RequestControl = (ply, x, y, inputSensitivity = 1,
 		if @MoonpanelPillar and not Moonpanel\BeginPillarOrbit(@, ply, @__traceSession.id)
 			@EndTraceSession true
 			return false
-		canvas.__playData.sessionId = @__traceSession.id
+		canvas\SetTraceSessionId @__traceSession.id if canvas.SetTraceSessionId
 		Moonpanel.Net.SendControlGrant nil, @
 
 	result
@@ -315,10 +331,10 @@ ENT.ResetPanel = (restorePower = true) =>
 	return false unless canvas and canvas\GetData!
 	@EndTraceSession true if @__traceSession
 	canvas\CancelSolution "panel_reset" if canvas\CancelSolution
-	pathfinder = canvas\GetPathFinder! if canvas\GetPathFinder
+	pathfinder = canvas\GetTraceSnapshot! if canvas.GetTraceSnapshot
 	@__resetSerial = ((@__resetSerial or 0) + 1) % 4294967295
 	@__resetSerial = 1 if @__resetSerial == 0
-	@__resetSnapshot = pathfinder\snapshot! if pathfinder
+	@__resetSnapshot = pathfinder if pathfinder
 	@__endingTraceSession = nil
 	@__lastVisualResult = nil
 	@__lastVisualResultAt = nil

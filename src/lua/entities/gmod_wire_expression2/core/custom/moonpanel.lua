@@ -37,12 +37,13 @@ end
 
 e2function string entity:moonpanelPath()
     local panel = panelEntity(this)
-    return panel and panel.__wirePath or ""
+    local state = panel and panel.GetWireState and panel:GetWireState()
+    return state and state.path or ""
 end
 
 e2function number entity:moonpanelRevision()
     local panel = panelEntity(this)
-    return panel and (panel.__dataRevision or 0) or 0
+    return panel and panel.GetPanelRevision and panel:GetPanelRevision() or 0
 end
 
 e2function number entity:moonpanelWidth()
@@ -85,4 +86,3 @@ e2function number entity:moonpanelReset()
     end
     return panel:ResetPanel() and 1 or 0
 end
-

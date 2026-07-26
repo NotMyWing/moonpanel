@@ -1242,6 +1242,39 @@ class Canvas
 		@BindWorldOcclusion!
 
 	GetPathFinder: => @__pathFinder
+
+	GetTraceSnapshot: =>
+		return unless @__pathFinder
+		@__pathFinder\snapshot!
+
+	SetTraceSessionId: (sessionId) =>
+		@__playData or= {}
+		@__playData.sessionId = sessionId
+		true
+
+	GetPlayDataSnapshot: =>
+		return {} unless @__playData
+		table.Copy @__playData
+	SetPlayData: (playData = {}) =>
+		@__playData = table.Copy playData
+		@__rtDirty = true if CLIENT
+		true
+
+	GetLastRuleReport: => @__lastRuleReport
+	GetPredictedVisual: => @__predictedVisual
+	SetVisualEventSerial: (serial) => @__lastVisualSerial = serial
+	GetVisualEventSerial: => @__lastVisualSerial
+	StoreVisualResult: (result) =>
+		@__playData or= {}
+		@__playData.visualResult = table.Copy result
+		@__rtDirty = true if CLIENT
+		true
+	MarkRenderDirty: =>
+		@__rtDirty = true
+		true
+
+	IsBulkImporting: => @__bulkImporting == true
+
 	GetRuleDefinition: => @__ruleDefinition
 
 	BeginPresentation: (attemptKey, silent = false, elapsed = 0) =>

@@ -108,7 +108,7 @@ Controller.Begin = (panel, ply, sessionId, seed = nil) ->
 	Moonpanel.PillarFocusAngles[ply] = Controller.GetFacingAngles panel, ply,
 		state.pitch
 	if SERVER
-		session = panel.__traceSession
+		session = panel\GetTraceSession! if panel.GetTraceSession
 		if session and session.id == sessionId
 			session.orbitSeed = table.Copy seed
 			session.pillarProofs = state.proofs
@@ -397,7 +397,8 @@ Controller.ProcessCommand = (ply, cmd, retainedButtons = 0,
 	panel = Controller.GetPanel ply
 	return false unless panel
 	state = Controller.States[ply]
-	session = if CLIENT then Moonpanel.Net.TraceSessions[panel] else panel.__traceSession
+	session = if CLIENT then Moonpanel.Net.TraceSessions[panel]
+	else panel\GetTraceSession! if panel.GetTraceSession
 	return false unless state and session and state.panel == panel and
 		state.sessionId == session.id
 	if ply\GetMoveType! ~= MOVETYPE_WALK

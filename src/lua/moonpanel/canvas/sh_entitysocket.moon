@@ -27,7 +27,7 @@ class Moonpanel.Canvas.Sockets.BaseSocket
 			if CLIENT and (.Render or .RenderBelowTrace or .RenderOverlay)
                 @__canvas\AddRenderable @__entity
 
-        @__canvas\RebuildPathFinderCache! unless @__canvas.__bulkImporting
+		@__canvas\RebuildPathFinderCache! unless @__canvas\IsBulkImporting!
 
 	GetEntity: => @__entity
 

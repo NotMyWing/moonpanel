@@ -218,10 +218,10 @@ receive flowTypes.TraceControlGrant, ->
 		Moonpanel\EndPillarOrbit LocalPlayer!
 	return unless pathfinder\restore snapshot
 	canvas = panel\GetCanvas!
-	importedPlay = canvas.__playData
+	importedPlay = canvas\GetPlayDataSnapshot!
 	lateJoin = lastSequence > 0 or importedPlay and
 		importedPlay.sessionId == sessionId
-	canvas.__playData = {
+	canvas\SetPlayData {
 		startTime: lateJoin and importedPlay and importedPlay.startTime or CurTime!
 		endTime: lateJoin and importedPlay and importedPlay.endTime or nil
 		:controller
@@ -262,8 +262,9 @@ receive flowTypes.TraceControlGrant, ->
 		Moonpanel.PillarFocusAngles[controller] = nil
 	panel\SetController controller
 	gui.EnableScreenClicker false if controller == LocalPlayer!
-	canvas.__playData.controller = controller
-	canvas.__rtDirty = true
+	playData = canvas\GetPlayDataSnapshot!
+	playData.controller = controller
+	canvas\SetPlayData playData
 
 receive flowTypes.TraceObserverAdvance, ->
 	panel = net.ReadEntity!
@@ -352,7 +353,7 @@ receive flowTypes.TraceResyncSnapshot, ->
 			session.controller, sample.constraints
 		sample.hash = pathfinder\hash!
 	session.pending = replay
-	panel\GetCanvas!.__rtDirty = true
+	panel\GetCanvas!\MarkRenderDirty! if panel\GetCanvas!\MarkRenderDirty
 	MsgC Color(255, 160, 40), "[Moonpanel] prediction recovery: session ",
 		tostring(sessionId), " sequence ", tostring(lastSequence), " client ",
 		tostring(clientHash), " server ", tostring(serverHash), " revision ",
@@ -419,13 +420,13 @@ receive flowTypes.TraceVisualResult, ->
 	canvas = panel\GetCanvas!
 	pathfinder = canvas\GetPathFinder!
 	return unless pathfinder and result.revision == pathfinder.topology.revision
-	return unless newerSerial result.eventSerial, canvas.__lastVisualSerial
+	return unless newerSerial result.eventSerial, canvas\GetVisualEventSerial!
 	canvas\SetSolvedState result.solved == true if canvas.SetSolvedState
 	session = Moonpanel.Net.TraceSessions[panel]
 	return unless session and session.id == result.sessionId and
 		session.revision == result.revision and
 		session.ruleRevision == result.ruleRevision
-	canvas.__lastVisualSerial = result.eventSerial
+	canvas\SetVisualEventSerial result.eventSerial
 	session.terminal = true
 	unless panel\GetPowered!
 		canvas\ResetPresentation "power-loss"
@@ -434,11 +435,11 @@ receive flowTypes.TraceVisualResult, ->
 	if session.controller == LocalPlayer!
 		pathfinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback
 		localHash = pathfinder\hash!
-		localReport = canvas.__lastRuleReport
+		localReport = canvas\GetLastRuleReport!
 		reportMatches = localReport and localReport.status == "complete" and
 			localReport.ruleRevision == result.ruleRevision and
 			localReport.reportHash == result.reportHash
-		predicted = canvas.__predictedVisual
+		predicted = canvas\GetPredictedVisual!
 		visualMatches = reportMatches or result.aborted and predicted and
 			predicted.aborted == true
 		local geometryMatches
@@ -454,8 +455,7 @@ receive flowTypes.TraceVisualResult, ->
 				" server ", tostring(result.finalHash), " revision ",
 				tostring(result.revision), "\n"
 		if visualMatches and geometryMatches
-			canvas.__playData or= {}
-			canvas.__playData.visualResult = table.Copy result
+			canvas\StoreVisualResult result
 		else
 			if localReport and not reportMatches
 				MsgC Color(255, 120, 40),
@@ -466,9 +466,9 @@ receive flowTypes.TraceVisualResult, ->
 					tostring(localReport.ruleRevision), " server revision ",
 					tostring(result.ruleRevision), " client status ",
 					tostring(localReport.status), "\n"
-			canvas.__solutionCoroutine = nil
+			canvas\CancelSolution "server-result" if canvas.CancelSolution
 			canvas\ApplyVisualResult result, 0, localReport ~= nil or
-				canvas.__predictedVisual ~= nil
+				canvas\GetPredictedVisual! ~= nil
 		session.visualApplied = true
 	else
 		session.visualResult = result

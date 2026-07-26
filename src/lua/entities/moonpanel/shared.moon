@@ -51,8 +51,15 @@ ENT.Initialize = =>
 	@__canvas\SetupSounds!
 
 	@InitializeSided!
+	Moonpanel.Wire.Initialize @ if SERVER and Moonpanel.Wire and
+		Moonpanel.Wire.Initialize
 
-	@SetNW2VarProxy "Powered", (owner, _, old, new) ->
+ENT.SetupDataTables = =>
+	@NetworkVar "Entity", 0, "Controller"
+	@NetworkVar "Bool", 0, "Errored"
+	@NetworkVar "Bool", 1, "PoweredNetworkState"
+	@NetworkVar "Bool", 2, "SolvedNetworkState"
+	@NetworkVarNotify "PoweredNetworkState", (owner, _, old, new) ->
 		if old ~= new
 			return unless IsValid owner
 			canvas = owner\GetCanvas!
@@ -63,11 +70,11 @@ ENT.Initialize = =>
 
 			if not new
 				owner\SolveStop true
-
-ENT.SetupDataTables = =>
-	@NetworkVar "Entity", 0, "Controller"
-    if SERVER
+			if SERVER and Moonpanel.Wire and Moonpanel.Wire.UpdateState
+				Moonpanel.Wire.UpdateState owner
+	if SERVER
         @SetController game.GetWorld!
+		@SetErrored false
 
 ENT.SolveStart = (ply, nodeId) =>
 	return if not @GetPowered!
@@ -96,35 +103,39 @@ ENT.SetSolvedState = (solved, visualResult = nil) =>
 	else
 		@__lastVisualResult = nil unless @TheMoonpanelSolved
 		@__lastVisualResultAt = nil unless @TheMoonpanelSolved
-	@SetNW2Bool "Solved", @TheMoonpanelSolved
+	@SetSolvedNetworkState @TheMoonpanelSolved
+	Moonpanel.Wire.UpdateState @ if SERVER and Moonpanel.Wire and
+		Moonpanel.Wire.UpdateState
 
 ENT.GetSolvedState = => @TheMoonpanelSolved == true or
-	@GetNW2Bool("Solved") == true
+	@GetSolvedNetworkState! == true
 
 ENT.SetPowered = (value) =>
-	return if SERVER and not @__canvas\GetData!
+	value = value == true
 
-	controller = @GetController!
-	if IsValid(controller) and controller\IsPlayer!
-		Moonpanel\StopControl controller
 	if SERVER and not value
-		if @__endingTraceSession
-			@__canvas.__solutionCoroutine = nil
-			Moonpanel.Net.BroadcastVisualResult @, {
-				aborted: true
-				evaluationError: "power_loss"
-			}
-			@__endingTraceSession = nil
-		unless @GetSolvedState!
-			@__lastVisualResult = nil
-			@__lastVisualResultAt = nil
+		if @ResetPanel and @__canvas and @__canvas\GetData!
+			@ResetPanel false
+		else
+			controller = @GetController!
+			Moonpanel\StopControl controller if IsValid(controller) and
+				controller\IsPlayer!
+	else
+		controller = @GetController!
+		Moonpanel\StopControl controller if IsValid(controller) and
+			controller\IsPlayer!
 
-	@SetNW2Bool "Powered", value
+	@SetPoweredNetworkState value
+	Moonpanel.Wire.UpdateState @ if SERVER and Moonpanel.Wire and
+		Moonpanel.Wire.UpdateState
+	@ExecutePendingSyncs! if SERVER and @ExecutePendingSyncs
 
-ENT.GetPowered = => @GetNW2Bool "Powered"
+ENT.GetPowered = => @GetPoweredNetworkState!
 
 ENT.OnRemove = =>
 	if SERVER
+		WireLib.Remove @ if WireLib and WireLib.Remove
+		Moonpanel.Wire.ClearTimer @ if Moonpanel.Wire and Moonpanel.Wire.ClearTimer
 		@GetCanvas!\CancelSolution("panel_removed") if @GetCanvas! and
 			@GetCanvas!\CancelSolution
 		panel = @

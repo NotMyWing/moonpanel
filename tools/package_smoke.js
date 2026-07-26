@@ -69,6 +69,8 @@ function run() {
 		'lua/autorun/moonpanel.lua',
 		'lua/moonpanel/shared.lua',
 		'lua/moonpanel/sv_resources.lua',
+		'lua/moonpanel/sv_wire.lua',
+		'lua/entities/gmod_wire_expression2/core/custom/moonpanel.lua',
 		'lua/entities/moonpanel/shared.lua',
 		'lua/entities/moonpanel/init.lua',
 		'lua/entities/moonpanel/cl_init.lua',
@@ -87,6 +89,15 @@ function run() {
 	const resources = read('lua/moonpanel/sv_resources.lua');
 	assert(/resource\.AddSingleFile/.test(resources), 'Server resource registration is missing');
 	assert(/materials\/moonpanel/.test(resources) && /sound\/moonpanel/.test(resources), 'Material or sound resources are not registered');
+	const wire = read('lua/moonpanel/sv_wire.lua');
+	assert(/CreateInputs/.test(wire) && /TurnOff/.test(wire) && /Reset/.test(wire), 'Wire inputs are missing');
+	assert(/SolvedPulse/.test(wire) && /FailedPulse/.test(wire) && /Path/.test(wire), 'Wire outputs are missing');
+	assert(/panel\.ResetPanel and panel(?::|\\)ResetPanel/.test(wire), 'Wire reset bypasses the panel lifecycle API');
+	const entity = read('lua/entities/moonpanel/init.lua');
+	assert(/WireDupeInfo/.test(entity) && /BuildDupeInfo/.test(entity) && /ApplyDupeInfo/.test(entity), 'Wire duplication metadata hooks are missing');
+	assert(/WireLib\.Restored/.test(entity), 'Wire map-restore hook is missing');
+	const e2 = read('lua/entities/gmod_wire_expression2/core/custom/moonpanel.lua');
+	assert(/RegisterExtension\("moonpanel"/.test(e2) && /moonpanelData/.test(e2), 'Moonpanel E2 extension is missing');
 
 	const configuredGma = args.temporary ? null : (args.gma || process.env.MOONPANEL_GMA);
 	const configuredManifest = args.temporary ? null : (args.manifest || process.env.MOONPANEL_MANIFEST);

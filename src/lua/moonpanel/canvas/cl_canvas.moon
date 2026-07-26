@@ -640,6 +640,9 @@ CANVAS.IsLocalFocusHintTarget = =>
 	getLocalFocusTarget! == @__worldEntity
 
 CANVAS.ImportNetworkState = (panel, data = {}) =>
+	resetSerial = math.max 0, math.floor tonumber(data.resetSerial) or 0
+	resetRequested = resetSerial > (@__resetPresentationSerial or 0)
+	resetSnapshot = data.resetSnapshot
 	dataRevision = math.max 0, math.floor tonumber(data.dataRevision) or 0
 	dataChanged = @__dataRevision ~= nil and @__dataRevision ~= dataRevision
 	@__dataRevision = dataRevision
@@ -678,7 +681,7 @@ CANVAS.ImportNetworkState = (panel, data = {}) =>
 			revision: visualResult.revision
 		}, true
 		@ApplyVisualResult visualResult, data.visualElapsed or 0, true
-	elseif data.solved ~= true
+	elseif data.solved ~= true and not resetRequested
 		@ResetPresentation "network-state"
 	powered = if data.powered ~= nil
 		data.powered == true
@@ -687,5 +690,7 @@ CANVAS.ImportNetworkState = (panel, data = {}) =>
 	else
 		false
 	@SetPowerState powered
+	@BeginResetPresentation resetSnapshot, resetSerial if resetRequested and
+		resetSnapshot and @BeginResetPresentation
 
 CANVAS.GetPowerStateBuffer = => @__powerStateBuffer or 1

@@ -27,6 +27,10 @@ const METADATA_GLOBS = [
 	'src/addon.json',
 ];
 
+const E2_EXTENSION_GLOBS = [
+	'src/lua/entities/gmod_wire_expression2/core/custom/**/*.lua',
+];
+
 let atomicWriteId = 0;
 
 /**
@@ -82,12 +86,24 @@ clean.description = "Cleans the build.";
  * Minifies lua files.
  */
 function lua() {
-	return gulp.src('src/**/*.lua', { since: gulp.lastRun(lua) })
+	return gulp.src([
+		'src/**/*.lua',
+		'!src/lua/entities/gmod_wire_expression2/core/custom/**/*.lua',
+	], { since: gulp.lastRun(lua) })
 		.pipe(optimizeLua())
 		.pipe(minifyLua())
 		.pipe(atomicDest('dest'));
 }
 lua.description = "Copies and minifies lua files.";
+
+/**
+ * Copies WireMod E2 extension sources without transforming them.
+ */
+function e2Extensions() {
+	return gulp.src(E2_EXTENSION_GLOBS, { base: 'src', since: gulp.lastRun(e2Extensions) })
+		.pipe(atomicDest('dest'));
+}
+e2Extensions.description = "Copies WireMod E2 extensions without transforming them.";
 
 
 /**
@@ -107,7 +123,7 @@ moon.description = "Compiles moonscript files.";
 /**
  * Builds the addon scripts.
  */
-const scripts = gulp.parallel(lua, moon);
+const scripts = gulp.parallel(lua, moon, e2Extensions);
 scripts.description = "Builds the addon scripts.";
 
 

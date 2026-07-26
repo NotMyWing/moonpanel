@@ -1,6 +1,64 @@
 AddCSLuaFile "cl_init.lua"
 AddCSLuaFile "shared.lua"
 include "shared.lua"
+include "moonpanel/sv_wire.lua"
+
+wireDirection = (fromNode, toNode, width) ->
+	return "?" unless fromNode and toNode
+	dx = (toNode.x or 0) - (fromNode.x or 0)
+	dy = (toNode.y or 0) - (fromNode.y or 0)
+	if width and width > 0
+		half = width * 0.5
+		while dx > half
+			dx -= width
+		while dx < -half
+			dx += width
+	return "R" if math.abs(dx) > math.abs(dy) and dx > 0.000001
+	return "L" if math.abs(dx) > math.abs(dy) and dx < -0.000001
+	return "D" if math.abs(dy) > 0.000001 and dy > 0
+	return "U" if math.abs(dy) > 0.000001 and dy < 0
+	"?"
+
+wirePath = (panel, result, maximum = 512) ->
+	return "" unless result and result.snapshot and
+		istable(result.snapshot.stacks)
+	canvas = panel\GetCanvas!
+	pathfinder = canvas and canvas\GetPathFinder!
+	topology = pathfinder and pathfinder.topology
+	return "" unless topology and topology.nodes
+	data = canvas\GetData! if canvas
+	width = data and data.Meta and tonumber(data.Meta.Width)
+	stack = result.snapshot.stacks[1]
+	return "" unless istable stack
+	characters = {}
+	for index = 2, #stack
+		fromNode = topology.nodes[tonumber stack[index - 1]]
+		toNode = topology.nodes[tonumber stack[index]]
+		table.insert characters, wireDirection fromNode, toNode, width
+		break if #characters >= maximum
+	table.concat characters
+
+wireErased = (panel, result) ->
+	values = {}
+	feedback = result and result.feedback
+	canvas = panel\GetCanvas! if panel and panel.GetCanvas
+	return values unless canvas and feedback and istable(feedback.erasures)
+	for pair in *feedback.erasures
+		index = tonumber(pair and pair.targetIndex)
+		socket = index and canvas\GetSocketAtDataIndex index
+		continue unless socket and socket.GetSocketType
+		typeId = socket\GetSocketType!
+		x, y = socket\GetX!, socket\GetY!
+		if typeId == Moonpanel.Canvas.SocketType.Path
+			typeId = socket\IsHorizontal! and 3 or 2
+		elseif typeId == Moonpanel.Canvas.SocketType.Intersection
+			typeId = 4
+		elseif typeId == Moonpanel.Canvas.SocketType.Cell
+			typeId = 1
+		else
+			continue
+		table.insert values, Vector x, y, typeId
+	values
 
 ENT.InitializeSided = =>
     @PhysicsInit            SOLID_VPHYSICS
@@ -11,12 +69,46 @@ ENT.InitializeSided = =>
 
     @__syncedPlayers = {}
     @__pendingSyncs = {}
-    @__dataRevision = 0
+	@__dataRevision = 0
 
     -- Server-side screen matrix for occlusion checks.
     info = Moonpanel.Canvas.ResolveScreenInfo @, @GetModel!
     @ScreenMatrix = Moonpanel.Canvas.BuildScreenMatrix info
     @ScreenInfo = info
+
+ENT.GetWireState = => {
+	powered: @GetPowered!
+	solved: @GetSolvedState!
+	errored: @GetErrored!
+	success: @__wireSuccess or 0
+	path: @__wirePath or ""
+}
+
+ENT.BeginWireTrace = =>
+	@__wireSuccess = 0
+	@__wirePath = ""
+
+ENT.ResetWireState = =>
+	@__wireSuccess = 0
+	@__wirePath = ""
+
+ENT.SetWireSuccess = (value) =>
+	@__wireSuccess = value == true and 1 or 0
+
+ENT.HandleWireTerminalResult = (result, maximum = 512) =>
+	return unless result
+	@__wirePath = wirePath @, result, maximum
+	@__wireSuccess = 0
+	@SetErrored result.aborted ~= true and
+		result.evaluationStatus ~= "complete"
+	{
+		path: @__wirePath
+		erased: wireErased @, result
+		aborted: result.aborted == true
+		solved: result.success == true
+		delayedSuccess: result.success == true and result.feedback and
+			result.feedback.erasures and #result.feedback.erasures > 0
+	}
 
 ENT.SetData = (data, solved = false, visualResult = nil) =>
     data = Moonpanel.Canvas.SanitizeData data
@@ -31,6 +123,8 @@ ENT.SetData = (data, solved = false, visualResult = nil) =>
         IsValid(@GetController!) and @GetController!\IsPlayer!
     @GetCanvas!\CancelSolution("panel_edit") if @GetCanvas! and
         @GetCanvas!\CancelSolution
+    timer.Remove "TheMP_SolvedState_#{@EntIndex!}" if timer and timer.Remove
+    @__pendingSolvedResult = nil
     @SetSolvedState false if @SetSolvedState
     if @__endingTraceSession
         @GetCanvas!.__solutionCoroutine = nil
@@ -50,7 +144,8 @@ ENT.SetData = (data, solved = false, visualResult = nil) =>
     @__dataRevision = 1 if @__dataRevision == 0
     @SetSolvedState solved, visualResult if @SetSolvedState
 
-    @SetPowered true
+	@SetPowered true
+	@SetErrored false if @SetErrored
 
     @ExecutePendingSyncs!
     true
@@ -91,6 +186,9 @@ ENT.BuildPanelSyncData = =>
 		solved: @GetSolvedState!
 		dataRevision: @__dataRevision or 0
 	}
+	if @__resetSnapshot
+		data.resetSerial = @__resetSerial or 0
+		data.resetSnapshot = table.Copy @__resetSnapshot
 	if @__lastVisualResult
 		data.visualResult = table.Copy @__lastVisualResult
 		data.visualElapsed = math.max 0, CurTime! - (@__lastVisualResultAt or CurTime!)
@@ -103,6 +201,9 @@ ENT.RequestDataFromPlayer = (ply) =>
 ENT.RequestControl = (ply, x, y, inputSensitivity = 1,
 	gamepadSensitivity = 1, gamepadDeadzone = 0.16) =>
 	return if @__endingTraceSession
+	timer.Remove "TheMP_SolvedState_#{@EntIndex!}" if timer and timer.Remove
+	@__pendingSolvedResult = nil
+	@ResetWireState! if @ResetWireState
 	controller = @GetController!
 	return if IsValid(controller) and controller\IsPlayer!
 	return unless IsValid(ply) and ply\Alive! and Moonpanel\IsFocused(ply)
@@ -119,6 +220,8 @@ ENT.RequestControl = (ply, x, y, inputSensitivity = 1,
 
 	result = @SolveStart ply, node.id
 	if result
+		@BeginWireTrace! if @BeginWireTrace
+		Moonpanel.Wire.UpdateState @ if Moonpanel.Wire and Moonpanel.Wire.UpdateState
 		@SetSolvedState false if @SetSolvedState
 		@__lastVisualResult = nil
 		@__lastVisualResultAt = nil
@@ -149,6 +252,43 @@ ENT.RequestControl = (ply, x, y, inputSensitivity = 1,
 ENT.StopControl = (ply) =>
 	@EndTraceSession true
 
+ENT.ApplyTerminalResult = (envelope) =>
+	return false unless SERVER and istable envelope
+
+	timerName = "TheMP_SolvedState_#{@EntIndex!}"
+	timer.Remove timerName if timer and timer.Remove
+	feedback = envelope.feedback or {}
+	erasures = feedback.erasures or {}
+	hasErasures = istable(erasures) and #erasures > 0
+	resultAt = CurTime!
+
+	-- A successful rule evaluation is not a solved panel until its eraser
+	-- feedback has completed. Keep the authoritative state and sync envelope
+	-- aligned throughout that interval.
+	envelope.solved = envelope.success == true and not hasErasures
+	@SetSolvedState envelope.solved
+	@__lastVisualResult = table.Copy envelope
+	@__lastVisualResultAt = resultAt
+
+	return true unless envelope.success == true and hasErasures
+
+	@__pendingSolvedResult = table.Copy envelope
+	@__pendingSolvedResultAt = resultAt
+	panel = @
+	delay = Moonpanel.Canvas.EraserRevealDelay or 0.75
+	return true unless timer and timer.Create
+	timer.Create timerName, delay, 1, ->
+		return unless IsValid panel
+		return unless panel.__pendingSolvedResult
+		result = panel.__pendingSolvedResult
+		panel.__pendingSolvedResult = nil
+		result.solved = true
+		panel\SetSolvedState true
+		panel.__lastVisualResult = table.Copy result
+		panel.__lastVisualResultAt = panel.__pendingSolvedResultAt or CurTime!
+		panel\ExecutePendingSyncs!
+	true
+
 ENT.EndTraceSession = (forceAbort = true) =>
 	session = @__traceSession
 	return false unless session
@@ -169,6 +309,66 @@ ENT.EndTraceSession = (forceAbort = true) =>
 		controller\SetNW2Entity "TheMP Control", game.GetWorld!
 	Moonpanel.Net.BroadcastTraceResult @, session.id, forceAbort
 	true
+
+ENT.ResetPanel = (restorePower = true) =>
+	canvas = @GetCanvas!
+	return false unless canvas and canvas\GetData!
+	@EndTraceSession true if @__traceSession
+	canvas\CancelSolution "panel_reset" if canvas\CancelSolution
+	pathfinder = canvas\GetPathFinder! if canvas\GetPathFinder
+	@__resetSerial = ((@__resetSerial or 0) + 1) % 4294967295
+	@__resetSerial = 1 if @__resetSerial == 0
+	@__resetSnapshot = pathfinder\snapshot! if pathfinder
+	@__endingTraceSession = nil
+	@__lastVisualResult = nil
+	@__lastVisualResultAt = nil
+	@__pendingSolvedResult = nil
+	@ResetWireState! if @ResetWireState
+	timer.Remove "TheMP_SolvedState_#{@EntIndex!}" if timer and timer.Remove
+	canvas\ResetRuntime "panel-reset" if canvas.ResetRuntime
+	@SetSolvedState false
+	@SetErrored false if @SetErrored
+	@SetPowered true if restorePower
+	@ExecutePendingSyncs!
+	@__resetSnapshot = nil
+	true
+
+ENT.TriggerInput = (input, value) =>
+	return unless SERVER and WireLib
+	if input == "TurnOff"
+		@SetPowered value ~= 1
+	elseif input == "Reset" and value == 1
+		@ResetPanel!
+
+-- WireLib stores links and port configuration separately from the panel
+-- document. Keep that metadata in the normal duplicator entity modifier so
+-- Sandbox dupes and map saves restore connected wires as well as the puzzle.
+ENT.BuildDupeInfo = =>
+	return unless SERVER and WireLib and WireLib.BuildDupeInfo
+	WireLib.BuildDupeInfo @
+
+ENT.ApplyDupeInfo = (ply, ent, info, getEntByID) =>
+	return unless SERVER and WireLib and WireLib.ApplyDupeInfo and info
+	WireLib.ApplyDupeInfo ply, ent, info, getEntByID
+
+ENT.PreEntityCopy = =>
+	return unless SERVER and WireLib
+	duplicator.ClearEntityModifier @, "WireDupeInfo"
+	info = @BuildDupeInfo!
+	duplicator.StoreEntityModifier @, "WireDupeInfo", info if info
+
+ENT.PostEntityPaste = (ply, ent, createdEntities) =>
+	return unless SERVER and WireLib
+	info = ent and ent.EntityMods and ent.EntityMods.WireDupeInfo
+	return unless info
+	getEntByID = (id, default) ->
+		return game.GetWorld! if id == 0
+		candidate = createdEntities and createdEntities[id]
+		IsValid(candidate) and candidate or default
+	@ApplyDupeInfo ply, @, info, getEntByID
+
+ENT.OnRestore = =>
+	WireLib.Restored @ if SERVER and WireLib and WireLib.Restored
 
 ENT.TraceSessionThink = =>
 	session = @__traceSession

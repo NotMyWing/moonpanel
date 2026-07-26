@@ -7,7 +7,7 @@ Moonpanel.Canvas.PresentationConstants = {
 	FailureHold: 0.15
 	FailureFade: 0.8
 	AbortFade: 0.5
-	EraserReveal: 0.75
+	EraserReveal: Moonpanel.Canvas.EraserRevealDelay or 0.75
 	EraserFade: 0.45
 	ErrorLifetime: 4.5
 	ErrorFadeOut: 1

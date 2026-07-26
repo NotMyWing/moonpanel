@@ -216,9 +216,14 @@ Moonpanel.Net.BroadcastVisualResult = (panel, data) ->
 		solved: data.success == true
 		eventSerial: panel.__visualEventSerial
 	}
-	panel.__lastVisualResult = table.Copy envelope
-	panel.__lastVisualResultAt = CurTime!
-	panel\SetSolvedState envelope.success, envelope if panel.SetSolvedState
+	if panel.ApplyTerminalResult
+		panel\ApplyTerminalResult envelope
+	else
+		panel.__lastVisualResult = table.Copy envelope
+		panel.__lastVisualResultAt = CurTime!
+		panel\SetSolvedState envelope.solved == true, envelope if panel.SetSolvedState
+	Moonpanel.Wire.HandleResult panel, envelope if Moonpanel.Wire and
+		Moonpanel.Wire.HandleResult
 	startFlow flowTypes.TraceVisualResult
 	net.WriteEntity panel
 	net.WriteTable envelope

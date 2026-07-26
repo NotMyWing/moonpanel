@@ -420,7 +420,7 @@ receive flowTypes.TraceVisualResult, ->
 	pathfinder = canvas\GetPathFinder!
 	return unless pathfinder and result.revision == pathfinder.topology.revision
 	return unless newerSerial result.eventSerial, canvas.__lastVisualSerial
-	canvas\SetSolvedState result.success == true if canvas.SetSolvedState
+	canvas\SetSolvedState result.solved == true if canvas.SetSolvedState
 	session = Moonpanel.Net.TraceSessions[panel]
 	return unless session and session.id == result.sessionId and
 		session.revision == result.revision and

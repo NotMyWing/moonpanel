@@ -1,5 +1,8 @@
 Moonpanel.Canvas or= {}
 
+-- Lifecycle timings shared by authoritative state and client presentation.
+Moonpanel.Canvas.EraserRevealDelay = 0.75
+
 Moonpanel.Canvas.Symmetry = {
     None:       0
     Vertical:   1
@@ -1086,6 +1089,11 @@ class Canvas
 		@SetSolvedState @__playData.solved == true
 		@__observerFollower = nil
 		@__terminalSnapshot = nil
+		if not @__playData.startTime and not @__playData.visualResult and @__pathFinder
+			@__pathFinder\reset!
+			@__solutionData = nil
+			@__lastRuleReport = nil
+			@__predictedVisual = nil
 
 		if @__pathFinder and @__data and @__playData.traceSnapshot
 			@__pathFinder\restore @__playData.traceSnapshot
@@ -1255,6 +1263,48 @@ class Canvas
 		@__terminalSnapshot = nil
 		@__terminalSnapshotRestored = false
 		@__rtDirty = true
+		true
+
+	BeginResetPresentation: (snapshot, serial = 0) =>
+		return false unless CLIENT and @__presentation and snapshot
+		return false if serial > 0 and serial <= (@__resetPresentationSerial or 0)
+		@__resetPresentationSerial = serial if serial > 0
+		@BeginPresentation {
+			id: -math.abs(serial)
+			revision: snapshot.revision or 0
+		}, true
+		@ApplyVisualResult {
+			aborted: true
+			snapshot: snapshot
+			feedback: {
+				violations: {}
+				erasures: {}
+				remaining: {}
+			}
+		}, 0, false
+		transitionSerial = serial
+		timer.Simple Moonpanel.Canvas.PresentationConstants.AbortFade, ->
+			return unless IsValid @__worldEntity
+			return if transitionSerial > 0 and
+				transitionSerial ~= @__resetPresentationSerial
+			@ResetPresentation "reset-complete"
+			@__playData = {}
+			@__pathFinder\reset! if @__pathFinder
+			@__rtDirty = true
+		true
+
+	ResetRuntime: (reason = "reset") =>
+		@__pathFinder\reset! if @__pathFinder
+		@__playData = {}
+		@__solutionData = nil
+		@__lastRuleReport = nil
+		@__predictedVisual = nil
+		@__observerFollower = nil
+		@__terminalSnapshot = nil
+		@__terminalSnapshotRestored = false
+		@__exitPath = false
+		@ResetPresentation reason if CLIENT and @__presentation
+		@__rtDirty = true if CLIENT
 		true
 
 	SetPresentationExit: (state, silent = false) =>

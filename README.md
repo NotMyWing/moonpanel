@@ -74,3 +74,8 @@ Thekla, Inc. and are not relicensed under the Apache License.
 * [Soojin Nam](https://github.com/sjnam/lua-dancing-links) - *Lua Dancing Links*
 * [thegrb93 and contributors](https://github.com/thegrb93/StarfallEx/) - *StarfallEX and the panel rendering codebase*
 * [BytewaveMLP](https://github.com/BytewaveMLP) - *Buildscript*
+
+## WireMod and Expression 2
+
+See the [WireMod and Expression 2 guide](docs/WIREMOD.md) for inputs, outputs,
+E2 helpers, and duplication behavior.

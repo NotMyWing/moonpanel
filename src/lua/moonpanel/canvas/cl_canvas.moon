@@ -640,6 +640,16 @@ CANVAS.IsLocalFocusHintTarget = =>
 	getLocalFocusTarget! == @__worldEntity
 
 CANVAS.ImportNetworkState = (panel, data = {}) =>
+	dataRevision = math.max 0, math.floor tonumber(data.dataRevision) or 0
+	dataChanged = @__dataRevision ~= nil and @__dataRevision ~= dataRevision
+	@__dataRevision = dataRevision
+	if dataChanged and Moonpanel.Net.TraceSessions
+		if session = Moonpanel.Net.TraceSessions[panel]
+			if session.controller == LocalPlayer! and Moonpanel.EndPillarOrbit
+				Moonpanel\EndPillarOrbit LocalPlayer!
+			Moonpanel.Net.TraceSessions[panel] = nil
+			panel\SetController game.GetWorld! if IsValid panel
+			gui.EnableScreenClicker true if Moonpanel\IsFocused!
 	@ImportData data.panelData
 	if session = Moonpanel.Net.TraceSessions and Moonpanel.Net.TraceSessions[panel]
 		definition = @GetRuleDefinition!

@@ -230,6 +230,14 @@ Moonpanel.Net.SendEditorOpen = (ply, surfaceKind = Moonpanel.Canvas.SurfaceKind.
 	net.WriteUInt surfaceKind, 1
 	net.Send ply
 
+Moonpanel.Net.SendPanelDataFromPlayerRequest = (ply, panel) ->
+	return false unless IsValid(ply) and ply\IsPlayer! and
+		IsValid(panel) and panel.Moonpanel
+	startFlow flowTypes.PanelRequestDataFromPlayer
+	net.WriteEntity panel
+	net.Send ply
+	true
+
 Moonpanel.Net.PanelRequestDataFromPlayer = (ply, panel, callback) ->
 	return false unless Moonpanel.Net.CanEditPanel ply, panel
 	for current, data in pairs Moonpanel.Net.PendingPlayerDataRequests
@@ -241,7 +249,7 @@ Moonpanel.Net.PanelRequestDataFromPlayer = (ply, panel, callback) ->
 		:callback
 		deadline: CurTime! + 10
 	}
-	true
+	Moonpanel.Net.SendPanelDataFromPlayerRequest ply, panel
 
 receive flowTypes.PanelRequestControl, (len, ply) ->
 	Moonpanel\RequestControl ply, net.ReadEntity!, net.ReadUInt(16), net.ReadUInt(16),
@@ -486,9 +494,7 @@ receive flowTypes.PanelRequestData, (len, ply) ->
 			Moonpanel.Net.HashPanelSyncData(currentData) == syncState.hash
 	request = Moonpanel.Net.PendingPlayerDataRequests[entity]
 	if request and request.ply == ply
-		startFlow flowTypes.PanelRequestDataFromPlayer
-		net.WriteEntity entity
-		net.Send ply
+		Moonpanel.Net.SendPanelDataFromPlayerRequest ply, entity
 	entity\SyncPlayer ply
 
 receive flowTypes.PanelRequestDataFromPlayer, (len, ply) ->

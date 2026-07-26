@@ -1660,6 +1660,27 @@ function RuleEngine.Evaluate(definition, traceSnapshot, options)
         if not solved.success then overallSuccess = false end
     end
 
+    if overallSuccess then
+        for clueId in pairs(facts.ignoredClues or {}) do
+            local clue = definition.clueById[clueId]
+            if clue and clue.kind == "dot" and
+                    not dotSatisfied(clue, facts.traced[clue.socketIndex]) then
+                violationSet[clueId] = true
+                remainingSet[clueId] = true
+                constraints[#constraints + 1] = {
+                    kind = "dot",
+                    regionId = facts.clueRegions[clueId] or 0,
+                    participants = { clueId },
+                    details = {
+                        traceRole = clue.traceRole,
+                        negative = clue.negative == true,
+                    },
+                }
+                overallSuccess = false
+            end
+        end
+    end
+
     local reportingStarted = profile and profileNow()
     table.sort(erasures, function(a, b)
         if a.eraserIndex ~= b.eraserIndex then return a.eraserIndex < b.eraserIndex end

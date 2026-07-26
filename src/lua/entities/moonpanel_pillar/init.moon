@@ -46,6 +46,7 @@ ENT.InitializeSided = =>
 	@AddEFlags EFL_FORCE_CHECK_TRANSMIT
 	@__syncedPlayers = {}
 	@__pendingSyncs = {}
+	@__dataRevision = 0
 	@GetCanvas!\SetSurfaceSpec @GetSurfaceSpec!
 	@RebuildPillarPhysics!
 
@@ -71,10 +72,11 @@ ENT.SetPillarDimensions = (radius, height, fitCells = false) =>
 	@RebuildPillarPhysics!
 
 ENT.SetData = (data) =>
-	@.BaseClass.SetData @, data
+	return false unless @.BaseClass.SetData @, data
 	@ApplyPillarCellFit!
 	@PillarHeight = @GetPillarHeight!
 	@RebuildPillarPhysics!
+	true
 
 -- Auto-refresh does not re-run ENTITY:Initialize on existing pillars.
 timer.Simple 0, ->

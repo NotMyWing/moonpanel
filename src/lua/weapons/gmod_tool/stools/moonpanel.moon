@@ -57,7 +57,6 @@ if SERVER
 
         panel = (() ->
             if trace.Entity\IsValid! and trace.Entity.Moonpanel
-                trace.Entity\RequestDataFromPlayer ply
                 return trace.Entity
 
             else

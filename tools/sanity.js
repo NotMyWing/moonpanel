@@ -59,6 +59,10 @@ const compiledChecks = {
 			/surface_SetDrawColor\(traceColor\.r, traceColor\.g, traceColor\.b, 255\)/,
 			/surface_SetDrawColor\(255, 255, 255, math_Round\(alpha \* 255\)\)/,
 		], message: 'trace alpha is not applied at the auxiliary render-target boundary' },
+		{ all: [
+			/local dataChanged = self\.__dataRevision ~= nil and self\.__dataRevision ~= dataRevision/,
+			/Moonpanel\.Net\.TraceSessions\[panel\] = nil/,
+		], message: 'panel edits do not invalidate stale client trace sessions by data generation' },
 	],
 	'dest/lua/moonpanel/cl_net.lua': [
 		{ pattern: /local geometryMatches\s+if localHash == result\.finalHash then\s+geometryMatches = true/, message: 'visual-result geometryMatches escaped its local scope' },
@@ -75,6 +79,9 @@ const compiledChecks = {
 	'dest/lua/moonpanel/cl_init.lua': [
 		{ pattern: /timer\.Create\("TheMP Panel State Synchronization", 1, 0/, message: 'late-join panel synchronization maintenance is not installed' },
 		{ pattern: /if not \(IsValid\(LocalPlayer\(\)\)\) then\s+self\.Initialized = false/, message: 'client initialization is unsafe before LocalPlayer exists' },
+	],
+	'dest/lua/moonpanel/sv_net.lua': [
+		{ pattern: /Moonpanel\.Net\.PanelRequestDataFromPlayer = function[\s\S]*?PendingPlayerDataRequests\[panel\] = \{[\s\S]*?return Moonpanel\.Net\.SendPanelDataFromPlayerRequest\(ply, panel\)/, message: 'editor payload requests still depend on an unrelated client panel-sync pull' },
 	],
 	'dest/lua/moonpanel/cl_debug.lua': [
 		{ all: [
@@ -102,9 +109,11 @@ const compiledChecks = {
 	'dest/lua/entities/moonpanel/init.lua': [
 		{ pattern: /powered = self:GetPowered\(\),\s+solved = self:GetSolvedState\(\)/, message: 'panel synchronization does not carry authoritative power and solved state together' },
 		{ pattern: /self:SetSolvedState\(solved, visualResult\)[\s\S]*?self:ExecutePendingSyncs\(\)/, message: 'restored solved state is not applied before pending clients synchronize' },
+		{ pattern: /self:EndTraceSession\(true\)[\s\S]*?canvas:ImportData\(data\)/, message: 'panel edits can import replacement data before evicting the active solver' },
 	],
 	'dest/lua/weapons/gmod_tool/stools/moonpanel.lua': [
 		{ pattern: /sf:SetData\(tileData, solved, visualResult\)/, message: 'duplicator restoration does not atomically import panel and solved state' },
+		{ not: /trace\.Entity:RequestDataFromPlayer\(ply\)/, message: 'existing-panel tool clicks issue duplicate editor payload requests' },
 	],
 	'dest/lua/entities/moonpanel/shared.lua': [
 		{ pattern: /ENT\.Monitor_Offsets = Moonpanel\.Canvas\.Monitor_Offsets/, message: 'toolgun model-offset compatibility alias is missing' },
@@ -272,6 +281,7 @@ const luaTests = [
 	['tools/tests/debug.lua'],
 	['tools/tests/editor_document.lua'],
 	['tools/tests/editor_store.lua'],
+	['tools/tests/panel_sync.lua'],
 ];
 
 const luaJitTests = luaTests.filter((test) => !(

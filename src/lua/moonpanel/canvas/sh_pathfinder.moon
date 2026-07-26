@@ -881,8 +881,19 @@ class Moonpanel.Canvas.TraceEngine
 		@syncCompatibility!
 		changed
 
+	isExitPath: =>
+		@active and @active.primary and @active.primary.isExit and
+			(not @active.secondary or @active.secondary.isExit) or false
+
 	canSubmit: =>
-		@phase == @@Phase.Tracing and @touchingExit == true
+		return false unless @phase == @@Phase.Tracing
+		return true if @touchingExit == true
+
+		-- Submitting while the active trace is travelling along the exit is an
+		-- intentional accessibility affordance. beginEvaluation already commits
+		-- an exit edge, so accepting this state lets the submit action finish the
+		-- short remaining distance without requiring pixel-perfect tracing.
+		@isExitPath!
 
 	beginEvaluation: =>
 		return false unless @canSubmit!

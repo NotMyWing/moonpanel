@@ -74,11 +74,33 @@ test.test('exit contact is sticky and evaluation commits it', function()
   assert(engine:start(1), 'engine did not start')
   engine:applySample(4096, 0, false)
   assert(engine:canSubmit(), 'exit was not submittable')
+  assert(engine:isExitPath(), 'exact exit contact lost the exit path state')
   engine:applySample(0, 4096, false)
   assert(engine:canSubmit(), 'perpendicular noise lost exit contact')
+  assert(engine:isExitPath(), 'exit contact incorrectly retriggered a separate path state')
   assert(engine:beginEvaluation(), 'evaluation failed')
   assert(engine.active == nil and engine.stacks[1][2] == 2,
     'evaluation did not commit exit')
+end)
+
+test.test('submitting an in-progress exit trace nudges it to the exit', function()
+  local start = { x = 0, y = 0, screenX = 0, screenY = 0, clickable = true, neighbors = {} }
+  local exit = { x = 0.5, y = 0, screenX = 50, screenY = 0, exit = true, neighbors = {} }
+  start.neighbors = { exit }
+  exit.neighbors = { start }
+  local topology = Moonpanel.Canvas.TraceTopology({
+    nodes = { start, exit }, barWidth = 10, barLength = 100, symmetry = 0,
+  })
+  local engine = Moonpanel.Canvas.TraceEngine(topology)
+  assert(engine:start(1), 'engine did not start')
+  assert(engine:applySample(200, 0, false), 'partial exit trace failed')
+  assert(engine.active and engine.active.progressQ < engine.active.primary.lengthQ,
+    'test did not leave the exit partially traced')
+  assert(engine:isExitPath(), 'partial exit trace did not identify the exit path')
+  assert(engine:canSubmit(), 'partial exit trace was not submittable')
+  assert(engine:beginEvaluation(), 'partial exit evaluation failed')
+  assert(engine.active == nil and engine.stacks[1][2] == 2,
+    'submitting did not nudge the trace to the exit')
 end)
 
 test.test('exact diagonal ties prefer horizontal', function()

@@ -63,6 +63,34 @@ test.test('follower smooths authority without mutating it', function()
   assert(follower:hasReached(1), 'follower did not settle')
 end)
 
+test.test('follower smoothly completes an accessibility exit nudge', function()
+  local topology = lineTopology(0)
+  local partial = {
+    revision = topology.revision, stacks = { { 2 } },
+    active = {
+      primaryFrom = 2, primaryTo = 3,
+      secondaryFrom = 0, secondaryTo = 0,
+      progressQ = 2048, maxProgressQ = 4096, retracting = false,
+    },
+    touchingExit = false,
+  }
+  local completed = {
+    revision = topology.revision, stacks = { { 2, 3 } },
+    active = false, touchingExit = false,
+  }
+  local follower = Moonpanel.Canvas.ObserverTraceFollower(topology)
+  follower:reset(partial, true, 0)
+  follower:setTarget(completed, 1)
+  local frame = follower:update(1 / 60)
+  local length = routeLength(frame.routes[1])
+  assert(length > 50 and length < 100,
+    'exit nudge snapped instead of animating to the endpoint')
+  for _ = 1, 240 do follower:update(1 / 60) end
+  assert(follower:hasReached(1), 'exit nudge animation never settled')
+  test.near(routeLength(follower:getRenderState().routes[1]), 100, 0.000001,
+    'exit nudge settled at the wrong geometry')
+end)
+
 test.test('branch changes retract to common prefix first', function()
   local topology = lineTopology(0)
   local engine = Moonpanel.Canvas.TraceEngine(topology)
@@ -161,6 +189,9 @@ test.test('failure and eraser feedback style whole symbols on seekable timelines
   assert(failureFrame.traceError > 0 and failureFrame.traceAlpha < 1,
     'failure did not transition and fade the trace')
   assert(#failureCues > 0, 'failure transition emitted no cues')
+  local failureSoundQueued = false
+  for _, cue in ipairs(failureCues) do failureSoundQueued = cue == 'Failure' or failureSoundQueued end
+  assert(failureSoundQueued, 'failure sound cue was not queued')
   local _, repeatedCues = failure:sample(10.5)
   assert(#repeatedCues == 0, 'failure cues replayed on repeated sampling')
 
@@ -201,6 +232,12 @@ test.test('failure and eraser feedback style whole symbols on seekable timelines
       erasures = { { eraserIndex = 5, targetIndex = 11 } },
     },
   }, 30.2)
+  local reveal, revealCues = rejected:sample(
+    30.2 + Moonpanel.Canvas.PresentationConstants.EraserReveal)
+  local failureSoundQueued = false
+  for _, cue in ipairs(revealCues) do failureSoundQueued = cue == 'Failure' or failureSoundQueued end
+  assert(failureSoundQueued,
+    'eraser-backed hexagon failure did not emit the failure sound at reveal')
   local settled = rejected:sample(
     30.2 + Moonpanel.Canvas.PresentationConstants.EraserReveal +
     Moonpanel.Canvas.PresentationConstants.ErrorLifetime)

@@ -743,6 +743,17 @@ class Canvas
 	-- Imports data from given table. --
 	------------------------------------
 	ImportData: (data) =>
+		Moonpanel.Canvas.ReleaseVerifier @ if @__solutionCoroutine and
+			Moonpanel.Canvas.ReleaseVerifier
+		@__solutionCoroutine = nil
+		@__solutionData = nil
+		@__lastRuleReport = nil
+		@__predictedVisual = nil
+		@__playData = {}
+		@__observerFollower = nil
+		@__terminalSnapshot = nil
+		@__terminalSnapshotRestored = false
+
 		previousSoundPreset = @GetSoundPreset!
 		@__data = data and Moonpanel.Canvas.SanitizeData data
 		if @__data and previousSoundPreset ~= @GetSoundPreset! and @__sounds
@@ -1094,7 +1105,7 @@ class Canvas
 					sessionId: @__playData.sessionId or 0
 					revision: @__pathFinder and @__pathFinder.topology.revision or 0
 				}, true, math.max(0, CurTime! - @__playData.startTime)
-				@SetPresentationExit @__playData.touchingExit == true, true
+				@SetPresentationExit @__pathFinder\isExitPath!, true
 		@__rtDirty = true
 
 	---------------------
@@ -1232,9 +1243,11 @@ class Canvas
 		-- stopping every cue made a new attempt audibly cut the previous cue.
 		@StopPathCompleteLoop!
 		@StopSound "SolvingLoop"
+		@__exitPath = false
 		now = CurTime!
 		@__presentation\beginAttempt attemptKey, now - math.max(0, elapsed or 0)
 		@__visualFrame = nil
+		@__observerFollower = nil
 		if silent
 			@__presentation\drainCues!
 			@SetLoop "SolvingLoop"
@@ -1246,7 +1259,9 @@ class Canvas
 
 	SetPresentationExit: (state, silent = false) =>
 		return false unless CLIENT and @__presentation
-		changed = @__presentation\setExitContact state == true
+		state = state == true
+		@__exitPath = state
+		changed = @__presentation\setExitContact state
 		@__visualFrame = nil if changed
 		@__presentation\drainCues! if silent
 		@__rtDirty = true if changed
@@ -1264,6 +1279,11 @@ class Canvas
 		return unless CLIENT and @__pathFinder
 		return unless @__presentation and
 			(@__presentation\isActive! or @__presentation\isFocusHintActive!)
+		-- A completion result can arrive before the accessibility follower has
+		-- rendered its endpoint. Keep the in-flight follower ahead of the terminal
+		-- snapshot until it settles, otherwise the trace snaps to the exit.
+		if @__observerFollower and not @__observerFollower\hasReached!
+			return @__observerFollower\getRenderState!
 		if @__terminalSnapshot
 			return Moonpanel.Canvas.BuildTraceRenderState @__pathFinder.topology,
 				@__terminalSnapshot, @__playData and @__playData.finalSequence or 0
@@ -1335,7 +1355,6 @@ class Canvas
 	ApplyTraceSample: (xQ, yQ, boost = false, controllingPly = nil,
 		constraintDecisions = nil) =>
 		return false unless @__pathFinder
-		oldTouchingExit = @__pathFinder.touchingExit == true
 		changed = @__pathFinder\applySample xQ, yQ, boost, controllingPly,
 			constraintDecisions
 		return false unless changed
@@ -1344,8 +1363,10 @@ class Canvas
 		touchingExit = @__pathFinder.touchingExit == true
 		@__playData.touchingExit = touchingExit if @__playData
 
-		if CLIENT and @__presentation and touchingExit ~= oldTouchingExit
-			@__presentation\setExitContact touchingExit
+		exitPath = @__pathFinder\isExitPath!
+		if CLIENT and @__presentation and exitPath ~= @__exitPath
+			@__exitPath = exitPath
+			@__presentation\setExitContact exitPath
 
 		true
 
@@ -1402,6 +1423,7 @@ class Canvas
 			controller: ply
 			touchingExit: false
 		}
+		@__exitPath = false
 
 		@OnStart! if @OnStart ~= nil
 		@StopPathCompleteLoop!
@@ -1423,6 +1445,24 @@ class Canvas
 
 		return if @__playData.endTime
 		return if SERVER and not IsValid @__worldEntity
+
+		-- Keep an accessibility submit from making a partially traced exit
+		-- disappear or snap to its endpoint. Seed the observer follower with the
+		-- live geometry, then target the canonical post-evaluation snapshot so
+		-- the rendered head travels the same short distance as the engine nudge.
+		pathfinder = @__pathFinder
+		nudgeExitAnimation = CLIENT and forceAbort ~= true and pathfinder and
+			pathfinder\canSubmit! and pathfinder.active and
+			pathfinder.active.primary and pathfinder.active.primary.isExit and
+			(not pathfinder.active.secondary or pathfinder.active.secondary.isExit) and
+			not pathfinder.touchingExit
+		partialTraceSnapshot = pathfinder\snapshot! if nudgeExitAnimation
+		if nudgeExitAnimation
+			follower = Moonpanel.Canvas.ObserverTraceFollower pathfinder.topology
+			follower\reset partialTraceSnapshot, true, 0
+			@SetObserverFollower follower
+			@SetPresentationExit true
+
 		@__playData.endTime = CurTime!
 
 		@__playData.wasAborted = forceAbort == true or not @__pathFinder\canSubmit!
@@ -1432,6 +1472,7 @@ class Canvas
 			return @FinishSolution!
 
 		@__pathFinder\beginEvaluation!
+		@__observerFollower\setTarget @__pathFinder\snapshot!, 1 if nudgeExitAnimation
 
 		crt, createError = @CreateSolutionCoroutine!
 		if crt

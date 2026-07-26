@@ -163,7 +163,7 @@ hook.Add "Think", "TheMP Trace Network", ->
 			while session.presentationEvents[1] and follower and
 					follower\hasReached session.presentationEvents[1].sequence
 				event = table.remove session.presentationEvents, 1
-				canvas\SetPresentationExit event.touchingExit
+				canvas\SetPresentationExit event.exitPath
 			if session.visualResult and follower and
 					follower\hasReached session.visualResult.finalSequence
 				canvas\ApplyVisualResult session.visualResult
@@ -197,7 +197,7 @@ receive flowTypes.TraceControlGrant, ->
 	existing = Moonpanel.Net.TraceSessions[panel]
 	if existing and existing.id == sessionId
 		if controller ~= LocalPlayer!
-			oldTouchingExit = pathfinder.touchingExit == true
+			oldExitPath = pathfinder\isExitPath!
 			pathfinder\restore snapshot
 			follower = panel\GetCanvas!\GetObserverFollower!
 			unless follower
@@ -208,10 +208,10 @@ receive flowTypes.TraceControlGrant, ->
 				follower\setTarget snapshot, lastSequence
 			existing.nextSequence = lastSequence
 			existing.serverHash = pathfinder\hash!
-			if oldTouchingExit ~= (snapshot.touchingExit == true)
+			if oldExitPath ~= pathfinder\isExitPath!
 				table.insert existing.presentationEvents, {
 					sequence: lastSequence
-					touchingExit: snapshot.touchingExit == true
+					exitPath: pathfinder\isExitPath!
 				}
 		return
 	if existing and existing.controller == LocalPlayer! and Moonpanel.EndPillarOrbit
@@ -229,7 +229,7 @@ receive flowTypes.TraceControlGrant, ->
 		sessionId: sessionId
 	}
 	canvas\BeginPresentation { :sessionId, :revision }, lateJoin
-	canvas\SetPresentationExit snapshot.touchingExit == true, lateJoin
+	canvas\SetPresentationExit pathfinder\isExitPath!, lateJoin
 
 	local follower
 	if controller ~= LocalPlayer!
@@ -294,7 +294,7 @@ receive flowTypes.TraceObserverAdvance, ->
 
 	canvas = panel\GetCanvas!
 	pathfinder = canvas\GetPathFinder!
-	oldTouchingExit = pathfinder.touchingExit == true
+	oldExitPath = pathfinder\isExitPath!
 	for sample in *samples
 		pathfinder\applySample sample.xQ, sample.yQ, sample.boost,
 			nil, sample.constraints
@@ -309,10 +309,10 @@ receive flowTypes.TraceObserverAdvance, ->
 			" client ", tostring(clientHash), " server ",
 			tostring(serverHash), " revision ", tostring(session.revision), "\n"
 		return
-	if oldTouchingExit ~= (pathfinder.touchingExit == true)
+	if oldExitPath ~= pathfinder\isExitPath!
 		table.insert session.presentationEvents, {
 			sequence: finalSequence
-			touchingExit: pathfinder.touchingExit == true
+			exitPath: pathfinder\isExitPath!
 		}
 	if follower = canvas\GetObserverFollower!
 		follower\setTarget pathfinder\snapshot!, finalSequence

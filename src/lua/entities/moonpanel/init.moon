@@ -11,6 +11,7 @@ ENT.InitializeSided = =>
 
     @__syncedPlayers = {}
     @__pendingSyncs = {}
+    @__dataRevision = 0
 
     -- Server-side screen matrix for occlusion checks.
     info = Moonpanel.Canvas.ResolveScreenInfo @, @GetModel!
@@ -18,43 +19,67 @@ ENT.InitializeSided = =>
     @ScreenInfo = info
 
 ENT.SetData = (data, solved = false, visualResult = nil) =>
-	@EndTraceSession true if @__traceSession
-	@GetCanvas!\CancelSolution("panel_edit") if @GetCanvas! and
-		@GetCanvas!\CancelSolution
-	@SetSolvedState false if @SetSolvedState
-	if @__endingTraceSession
-		@GetCanvas!.__solutionCoroutine = nil
-		Moonpanel.Net.BroadcastVisualResult @, {
-			aborted: true
-			evaluationError: "panel_edit"
-		}
-		@__endingTraceSession = nil
-	@__lastVisualResult = nil
-	@__lastVisualResultAt = nil
-	canvas = @GetCanvas!
+    data = Moonpanel.Canvas.SanitizeData data
+    return false unless data
+    controller = @__traceSession and @__traceSession.controller
+    controller or= @GetController! if @GetController
+    @EndTraceSession true if @__traceSession
+    if IsValid(controller) and controller\IsPlayer!
+        Moonpanel\SetFocused controller, false if Moonpanel.IsFocused and
+            Moonpanel\IsFocused controller
+    @SetController game.GetWorld! if @SetController and
+        IsValid(@GetController!) and @GetController!\IsPlayer!
+    @GetCanvas!\CancelSolution("panel_edit") if @GetCanvas! and
+        @GetCanvas!\CancelSolution
+    @SetSolvedState false if @SetSolvedState
+    if @__endingTraceSession
+        @GetCanvas!.__solutionCoroutine = nil
+        Moonpanel.Net.BroadcastVisualResult @, {
+            aborted: true
+            evaluationError: "panel_edit"
+        }
+        @__endingTraceSession = nil
+    @__lastVisualResult = nil
+    @__lastVisualResultAt = nil
+    canvas = @GetCanvas!
     canvas\ImportData data
-	@TheMoonpanelTileData = canvas\ExportData!
-	@SetSolvedState solved, visualResult if @SetSolvedState
+    importedData = canvas\ExportData!
+    return false unless importedData
+    @TheMoonpanelTileData = importedData
+    @__dataRevision = ((@__dataRevision or 0) + 1) % 4294967295
+    @__dataRevision = 1 if @__dataRevision == 0
+    @SetSolvedState solved, visualResult if @SetSolvedState
 
     @SetPowered true
 
     @ExecutePendingSyncs!
+    true
 
 ENT.ExecutePendingSyncs = =>
-    return if not @__pendingSyncs
+    recipients = {}
+    for ply in pairs @__syncedPlayers or {}
+        recipients[ply] = true
+    for ply in pairs @__pendingSyncs or {}
+        recipients[ply] = true
 
-    for ply in pairs @__pendingSyncs
-        @SyncPlayer ply
-
-    @__pendingSyncs = nil
+    @__pendingSyncs = {}
+    for ply in pairs recipients
+        if IsValid(ply) and ply\IsPlayer!
+            @SyncPlayer ply
+        else
+            @__syncedPlayers[ply] = nil
 
 ENT.SyncPlayer = (ply) =>
-	data = @BuildPanelSyncData!
-	if not data
-		@__pendingSyncs[ply] = true
-		return
-	Moonpanel.Net.SendPanelData ply, @, data
-	Moonpanel.Net.SendControlGrant ply, @ if @__traceSession or @__endingTraceSession
+    data = @BuildPanelSyncData!
+    if not data
+        @__pendingSyncs or= {}
+        @__pendingSyncs[ply] = true
+        return
+    @__syncedPlayers or= {}
+    @__syncedPlayers[ply] = true
+    @__pendingSyncs[ply] = nil if @__pendingSyncs
+    Moonpanel.Net.SendPanelData ply, @, data
+    Moonpanel.Net.SendControlGrant ply, @ if @__traceSession or @__endingTraceSession
 
 ENT.BuildPanelSyncData = =>
 	canvas = @GetCanvas!
@@ -64,6 +89,7 @@ ENT.BuildPanelSyncData = =>
 		playData: canvas\ExportPlayData!
 		powered: @GetPowered!
 		solved: @GetSolvedState!
+		dataRevision: @__dataRevision or 0
 	}
 	if @__lastVisualResult
 		data.visualResult = table.Copy @__lastVisualResult

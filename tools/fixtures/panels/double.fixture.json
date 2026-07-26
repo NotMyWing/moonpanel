@@ -36,6 +36,16 @@
         "constraintKinds": ["eraser_unsatisfied", "eraser_unsatisfied"],
         "polyominoBackends": []
       }
+    },
+    {
+      "name": "right then up leaves the untraced hexagon erroring",
+      "traces": [
+        [[0,3],[1,3],[2,3],[3,3],[3,2],[3,1],[3,0]]
+      ],
+      "expected": {
+        "success": false,
+        "status": "complete"
+      }
     }
   ]
 }

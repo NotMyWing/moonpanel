@@ -1243,6 +1243,10 @@ class Canvas
 
 	GetPathFinder: => @__pathFinder
 
+	FindStartNode: (x, y, radius = 32) =>
+		return unless @__pathFinder and @__pathFinder.topology
+		@__pathFinder.topology\getClosestStart x, y, radius
+
 	GetTraceSnapshot: =>
 		return unless @__pathFinder
 		@__pathFinder\snapshot!

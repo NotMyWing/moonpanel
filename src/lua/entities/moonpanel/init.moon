@@ -1,6 +1,7 @@
 AddCSLuaFile "cl_init.lua"
 AddCSLuaFile "shared.lua"
 include "shared.lua"
+include "moonpanel/sh_trace_session.lua"
 include "moonpanel/sv_wire.lua"
 
 wireDirection = (fromNode, toNode, width) ->
@@ -85,8 +86,26 @@ ENT.GetWireState = => {
 }
 
 ENT.GetPanelRevision = => @__dataRevision or 0
-ENT.GetTraceSession = => @__traceSession
-ENT.GetEndingTraceSession = => @__endingTraceSession
+ENT.GetTraceSession = =>
+	return Moonpanel.TraceSession.Get(@) if Moonpanel.TraceSession and
+		Moonpanel.TraceSession.Get
+	@__traceSession
+ENT.GetEndingTraceSession = =>
+	return Moonpanel.TraceSession.GetEnding(@) if Moonpanel.TraceSession and
+		Moonpanel.TraceSession.GetEnding
+	@__endingTraceSession
+
+ENT.SetTraceSession = (session) =>
+	if Moonpanel.TraceSession and Moonpanel.TraceSession.Set
+		return Moonpanel.TraceSession.Set @, session
+	@__traceSession = session
+	session
+
+ENT.SetEndingTraceSession = (session) =>
+	if Moonpanel.TraceSession and Moonpanel.TraceSession.SetEnding
+		return Moonpanel.TraceSession.SetEnding @, session
+	@__endingTraceSession = session
+	session
 ENT.SetVisualResult = (result, at = CurTime!) =>
 	@__lastVisualResult = table.Copy result if istable result
 	@__lastVisualResultAt = at if istable result
@@ -99,7 +118,10 @@ ENT.NextVisualEventSerial = =>
 
 ENT.GetVisualEventSerial = => @__visualEventSerial or 0
 ENT.ClearEndingTraceSession = (session) =>
-	@__endingTraceSession = nil if not session or @__endingTraceSession == session
+	if Moonpanel.TraceSession and Moonpanel.TraceSession.ClearEnding
+		Moonpanel.TraceSession.ClearEnding @, session
+	else
+		@__endingTraceSession = nil if not session or @__endingTraceSession == session
 
 ENT.BeginWireTrace = =>
 	@__wireSuccess = 0
@@ -130,9 +152,11 @@ ENT.HandleWireTerminalResult = (result, maximum = 512) =>
 ENT.SetData = (data, solved = false, visualResult = nil) =>
     data = Moonpanel.Canvas.SanitizeData data
     return false unless data
-    controller = @__traceSession and @__traceSession.controller
+    activeSession = @GetTraceSession!
+    endingSession = @GetEndingTraceSession!
+    controller = activeSession and activeSession.controller
     controller or= @GetController! if @GetController
-    @EndTraceSession true if @__traceSession
+    @EndTraceSession true if activeSession
     if IsValid(controller) and controller\IsPlayer!
         Moonpanel\SetFocused controller, false if Moonpanel.IsFocused and
             Moonpanel\IsFocused controller
@@ -143,12 +167,12 @@ ENT.SetData = (data, solved = false, visualResult = nil) =>
     timer.Remove "TheMP_SolvedState_#{@EntIndex!}" if timer and timer.Remove
     @__pendingSolvedResult = nil
     @SetSolvedState false if @SetSolvedState
-    if @__endingTraceSession
+    if endingSession
 		Moonpanel.Net.BroadcastVisualResult @, {
             aborted: true
             evaluationError: "panel_edit"
         }
-        @__endingTraceSession = nil
+		@ClearEndingTraceSession!
     @__lastVisualResult = nil
     @__lastVisualResultAt = nil
     canvas = @GetCanvas!
@@ -190,7 +214,8 @@ ENT.SyncPlayer = (ply) =>
     @__syncedPlayers[ply] = true
     @__pendingSyncs[ply] = nil if @__pendingSyncs
     Moonpanel.Net.SendPanelData ply, @, data
-    Moonpanel.Net.SendControlGrant ply, @ if @__traceSession or @__endingTraceSession
+	Moonpanel.Net.SendControlGrant ply, @ if @GetTraceSession! or
+		@GetEndingTraceSession!
 
 ENT.BuildPanelSyncData = =>
 	canvas = @GetCanvas!
@@ -214,56 +239,57 @@ ENT.RequestDataFromPlayer = (ply) =>
     Moonpanel.Net.PanelRequestDataFromPlayer ply, @, (data) ->
         @SetData data
 
-ENT.RequestControl = (ply, x, y, inputSensitivity = 1,
+ENT.CanRequestControl = (ply) =>
+	return false if @GetEndingTraceSession!
+	controller = @GetController!
+	return false if IsValid(controller) and controller\IsPlayer!
+	return false unless IsValid(ply) and ply\Alive! and Moonpanel\IsFocused(ply)
+	return false unless @GetPowered!
+	return false if ply\EyePos!\DistToSqr(@GetPos!) > 1024 * 1024
+	true
+
+ENT.StartTraceSession = (ply, x, y, inputSensitivity = 1,
 	gamepadSensitivity = 1, gamepadDeadzone = 0.16) =>
-	return if @__endingTraceSession
+	canvas = @GetCanvas!
+	node = canvas\FindStartNode x, y, 32 if canvas and canvas.FindStartNode
+	return false unless node
+	return false unless @SolveStart ply, node.id
+
 	timer.Remove "TheMP_SolvedState_#{@EntIndex!}" if timer and timer.Remove
 	@__pendingSolvedResult = nil
 	@ResetWireState! if @ResetWireState
-	controller = @GetController!
-	return if IsValid(controller) and controller\IsPlayer!
-	return unless IsValid(ply) and ply\Alive! and Moonpanel\IsFocused(ply)
-	return unless @GetPowered!
-	return if ply\EyePos!\DistToSqr(@GetPos!) > 1024 * 1024
+	@SetSolvedState false if @SetSolvedState
+	@__lastVisualResult = nil
+	@__lastVisualResultAt = nil
+	pathfinder = canvas\GetPathFinder!
+	ruleDefinition = canvas\GetRuleDefinition!
+	session = Moonpanel.TraceSession.Create @, {
+		controller: ply
+		revision: pathfinder.topology.revision
+		ruleRevision: ruleDefinition and ruleDefinition.ruleRevision or 0
+		lastSequence: 0
+		rateWindow: CurTime!
+		rateSamples: 0
+		lastKeyframe: CurTime!
+		inputSensitivity: math.Clamp(tonumber(inputSensitivity) or 1, 0.05, 8)
+		gamepadSensitivity: math.Clamp(tonumber(gamepadSensitivity) or 1, 0.05, 8)
+		gamepadDeadzone: math.Clamp(tonumber(gamepadDeadzone) or 0.16, 0, 0.95)
+	}
+	@SetTraceSession session
+	if @MoonpanelPillar and not Moonpanel\BeginPillarOrbit(@, ply, session.id)
+		@EndTraceSession true
+		return false
+	canvas\SetTraceSessionId session.id if canvas.SetTraceSessionId
+	@BeginWireTrace! if @BeginWireTrace
+	Moonpanel.Wire.UpdateState @ if Moonpanel.Wire and Moonpanel.Wire.UpdateState
+	Moonpanel.Net.SendControlGrant nil, @
+	true
 
-    canvas = @GetCanvas!
-
-    pathfinder = canvas\GetPathFinder!
-    return if not pathfinder
-
-    node = pathfinder.topology\getClosestStart x, y, 32
-    return if not node
-
-	result = @SolveStart ply, node.id
-	if result
-		@BeginWireTrace! if @BeginWireTrace
-		Moonpanel.Wire.UpdateState @ if Moonpanel.Wire and Moonpanel.Wire.UpdateState
-		@SetSolvedState false if @SetSolvedState
-		@__lastVisualResult = nil
-		@__lastVisualResultAt = nil
-		Moonpanel.__nextTraceSession = ((Moonpanel.__nextTraceSession or 0) + 1) % 4294967295
-		Moonpanel.__nextTraceSession = 1 if Moonpanel.__nextTraceSession == 0
-		@__traceSession = {
-			id: Moonpanel.__nextTraceSession
-			controller: ply
-			revision: pathfinder.topology.revision
-			ruleRevision: canvas\GetRuleDefinition! and
-				canvas\GetRuleDefinition!.ruleRevision or 0
-			lastSequence: 0
-			rateWindow: CurTime!
-			rateSamples: 0
-			lastKeyframe: CurTime!
-			inputSensitivity: math.Clamp(tonumber(inputSensitivity) or 1, 0.05, 8)
-			gamepadSensitivity: math.Clamp(tonumber(gamepadSensitivity) or 1, 0.05, 8)
-			gamepadDeadzone: math.Clamp(tonumber(gamepadDeadzone) or 0.16, 0, 0.95)
-		}
-		if @MoonpanelPillar and not Moonpanel\BeginPillarOrbit(@, ply, @__traceSession.id)
-			@EndTraceSession true
-			return false
-		canvas\SetTraceSessionId @__traceSession.id if canvas.SetTraceSessionId
-		Moonpanel.Net.SendControlGrant nil, @
-
-	result
+ENT.RequestControl = (ply, x, y, inputSensitivity = 1,
+	gamepadSensitivity = 1, gamepadDeadzone = 0.16) =>
+	return false unless @CanRequestControl ply
+	@StartTraceSession ply, x, y, inputSensitivity, gamepadSensitivity,
+		gamepadDeadzone
 
 ENT.StopControl = (ply) =>
 	@EndTraceSession true
@@ -306,18 +332,18 @@ ENT.ApplyTerminalResult = (envelope) =>
 	true
 
 ENT.EndTraceSession = (forceAbort = true) =>
-	session = @__traceSession
+	session = @GetTraceSession!
 	return false unless session
 
 	canvas = @GetCanvas!
-	@__endingTraceSession = session
+	@SetEndingTraceSession session
 	ended = @SolveStop forceAbort
 	unless ended
 		Moonpanel.Net.BroadcastVisualResult @, {
 			aborted: true
 			evaluationError: "session_termination"
 		}
-	@__traceSession = nil
+	@SetTraceSession nil
 	@SetController game.GetWorld!
 	controller = session.controller
 	Moonpanel\EndPillarOrbit controller if @MoonpanelPillar
@@ -330,7 +356,7 @@ ENT.ResetPanel = (restorePower = true) =>
 	canvas = @GetCanvas!
 	return false unless canvas and canvas\GetData!
 	hadRuntimeState = canvas\HasRuntimeState! if canvas.HasRuntimeState
-	@EndTraceSession true if @__traceSession
+	@EndTraceSession true if @GetTraceSession!
 	canvas\CancelSolution "panel_reset" if canvas\CancelSolution
 	pathfinder = canvas\GetTraceSnapshot! if canvas.GetTraceSnapshot
 	@__resetSerial = ((@__resetSerial or 0) + 1) % 4294967295
@@ -339,7 +365,7 @@ ENT.ResetPanel = (restorePower = true) =>
 	if @__resetSnapshot and Moonpanel.Net.BroadcastPanelResetPresentation
 		Moonpanel.Net.BroadcastPanelResetPresentation @, @__resetSnapshot,
 			@__resetSerial
-	@__endingTraceSession = nil
+	@ClearEndingTraceSession!
 	@__lastVisualResult = nil
 	@__lastVisualResultAt = nil
 	@__pendingSolvedResult = nil
@@ -391,7 +417,7 @@ ENT.OnRestore = =>
 	WireLib.Restored @ if SERVER and WireLib and WireLib.Restored
 
 ENT.TraceSessionThink = =>
-	session = @__traceSession
+	session = @GetTraceSession!
 	return unless session
 	ply = session.controller
 	unless IsValid(ply) and ply\Alive! and Moonpanel\IsFocused(ply) and
@@ -408,7 +434,7 @@ ENT.TraceSessionThink = =>
 				not Moonpanel.Net.ProcessPendingPillarSession(@, session)
 			@EndTraceSession true
 			return
-		return unless @__traceSession == session
+		return unless @GetTraceSession! == session
 
 	if CurTime! - session.lastKeyframe >= 2
 		session.lastKeyframe = CurTime!

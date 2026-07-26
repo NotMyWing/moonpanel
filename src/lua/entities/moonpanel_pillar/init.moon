@@ -61,7 +61,7 @@ ENT.ApplyPillarCellFit = =>
 	@SetPillarHeight math.Clamp fitted, 32, 512
 
 ENT.SetPillarDimensions = (radius, height, fitCells = false) =>
-	@EndTraceSession true if @__traceSession
+	@EndTraceSession true if @GetTraceSession!
 	@SetPillarFitCells fitCells == true
 	@SetPillarRadius math.Clamp tonumber(radius) or 48, 16, 256
 	@SetPillarHeight math.Clamp tonumber(height) or 96, 32, 512

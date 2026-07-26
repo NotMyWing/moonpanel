@@ -162,6 +162,14 @@ Moonpanel.Net.SendPanelData = (ply, panel, data) ->
 	}
 	true
 
+Moonpanel.Net.BroadcastPanelResetPresentation = (panel, snapshot, serial) ->
+	return unless IsValid(panel) and istable(snapshot)
+	startFlow flowTypes.PanelResetPresentation
+	net.WriteEntity panel
+	net.WriteUInt math.max(0, math.floor(tonumber(serial) or 0)), 32
+	net.WriteTable snapshot
+	net.Broadcast!
+
 Moonpanel.Net.HashPanelSyncData = (data) ->
 	return unless istable data
 	-- visualElapsed is presentation timing, not panel state. Hashing it would

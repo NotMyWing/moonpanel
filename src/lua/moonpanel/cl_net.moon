@@ -408,6 +408,16 @@ receive flowTypes.PanelRequestData, ->
 	canvas\ImportNetworkState panel, data
 	request.callback panel, data if istable(request) and isfunction(request.callback)
 
+receive flowTypes.PanelResetPresentation, ->
+	panel = net.ReadEntity!
+	serial = net.ReadUInt 32
+	snapshot = net.ReadTable!
+	return unless IsValid(panel) and panel.Moonpanel and panel.GetCanvas and
+		istable(snapshot)
+	canvas = panel\GetCanvas!
+	canvas\BeginResetPresentation snapshot, serial if canvas and
+		canvas.BeginResetPresentation
+
 receive flowTypes.TraceVisualResult, ->
 	panel = net.ReadEntity!
 	return unless validPanel panel

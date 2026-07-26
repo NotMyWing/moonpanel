@@ -16,6 +16,7 @@ Moonpanel.Net.FlowTypes = {
 	"FocusExit"
 
 	"PanelRequestData"
+	"PanelResetPresentation"
 	"PanelRequestDataFromPlayer"
 	"PanelRequestControl"
 	"TraceVisualResult"

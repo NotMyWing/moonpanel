@@ -641,7 +641,8 @@ CANVAS.IsLocalFocusHintTarget = =>
 
 CANVAS.ImportNetworkState = (panel, data = {}) =>
 	resetSerial = math.max 0, math.floor tonumber(data.resetSerial) or 0
-	resetRequested = resetSerial > (@__resetPresentationSerial or 0)
+	resetRequested = resetSerial > (@__resetPresentationSerial or 0) or
+		resetSerial == (@__resetPresentationSerial or 0) and resetSerial > 0
 	resetSnapshot = data.resetSnapshot
 	dataRevision = math.max 0, math.floor tonumber(data.dataRevision) or 0
 	dataChanged = @__dataRevision ~= nil and @__dataRevision ~= dataRevision
@@ -690,7 +691,7 @@ CANVAS.ImportNetworkState = (panel, data = {}) =>
 	else
 		false
 	@SetPowerState powered
-	@BeginResetPresentation resetSnapshot, resetSerial if resetRequested and
+	@BeginResetPresentation resetSnapshot, resetSerial, true if resetRequested and
 		resetSnapshot and @BeginResetPresentation
 
 CANVAS.GetPowerStateBuffer = => @__powerStateBuffer or 1

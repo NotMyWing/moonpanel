@@ -1247,6 +1247,17 @@ class Canvas
 		return unless @__pathFinder
 		@__pathFinder\snapshot!
 
+	HasRuntimeState: =>
+		return true if @__solutionCoroutine
+		if @__playData and (@__playData.startTime or @__playData.endTime or
+			@__playData.visualResult)
+			return true
+		return false unless @__pathFinder
+		snapshot = @__pathFinder\snapshot!
+		for stack in *(snapshot and snapshot.stacks or {})
+			return true if istable(stack) and #stack > 1
+		false
+
 	SetTraceSessionId: (sessionId) =>
 		@__playData or= {}
 		@__playData.sessionId = sessionId
@@ -1298,9 +1309,11 @@ class Canvas
 		@__rtDirty = true
 		true
 
-	BeginResetPresentation: (snapshot, serial = 0) =>
+	BeginResetPresentation: (snapshot, serial = 0, replay = false) =>
 		return false unless CLIENT and @__presentation and snapshot
-		return false if serial > 0 and serial <= (@__resetPresentationSerial or 0)
+		return false if serial > 0 and serial < (@__resetPresentationSerial or 0)
+		return false if serial > 0 and serial == (@__resetPresentationSerial or 0) and
+			not replay
 		@__resetPresentationSerial = serial if serial > 0
 		@BeginPresentation {
 			id: -math.abs(serial)

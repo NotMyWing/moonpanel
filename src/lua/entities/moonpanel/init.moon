@@ -329,12 +329,16 @@ ENT.EndTraceSession = (forceAbort = true) =>
 ENT.ResetPanel = (restorePower = true) =>
 	canvas = @GetCanvas!
 	return false unless canvas and canvas\GetData!
+	hadRuntimeState = canvas\HasRuntimeState! if canvas.HasRuntimeState
 	@EndTraceSession true if @__traceSession
 	canvas\CancelSolution "panel_reset" if canvas\CancelSolution
 	pathfinder = canvas\GetTraceSnapshot! if canvas.GetTraceSnapshot
 	@__resetSerial = ((@__resetSerial or 0) + 1) % 4294967295
 	@__resetSerial = 1 if @__resetSerial == 0
-	@__resetSnapshot = pathfinder if pathfinder
+	@__resetSnapshot = pathfinder if pathfinder and hadRuntimeState
+	if @__resetSnapshot and Moonpanel.Net.BroadcastPanelResetPresentation
+		Moonpanel.Net.BroadcastPanelResetPresentation @, @__resetSnapshot,
+			@__resetSerial
 	@__endingTraceSession = nil
 	@__lastVisualResult = nil
 	@__lastVisualResultAt = nil

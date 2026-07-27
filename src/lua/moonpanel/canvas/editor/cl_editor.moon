@@ -42,25 +42,18 @@ MATERIALS = {
 }
 Editor.MATERIALS = MATERIALS
 
+Helpers = Moonpanel.Helpers
+deepCopy = Helpers.deepCopy
+clearChildren = Helpers.clearChildren
+colorValue = Helpers.colorValue
+
 -- Load submodules
 include "cl_brushes.lua"
 include "cl_tooltip.lua"
 include "cl_sidebar.lua"
 include "cl_windmill.lua"
 
-deepCopy = (value) -> Moonpanel.EditorDocument.DeepCopy value
 isEmpty = (entry) -> not entry or not entry.Type
-
-clearChildren = (panel) ->
-	if panel.Clear
-		panel\Clear!
-		return
-	target = panel.GetCanvas and panel\GetCanvas! or panel
-	child\Remove! for child in *target\GetChildren!
-
-colorValue = (id) ->
-	value = Moonpanel.Canvas.ColorValues[id] or Moonpanel.Canvas.ColorValues[Moonpanel.Color.White]
-	Color value.r, value.g, value.b, value.a or 255
 
 styledButton = (parent, text, callback, width) ->
 	button = with parent\Add "DButton"

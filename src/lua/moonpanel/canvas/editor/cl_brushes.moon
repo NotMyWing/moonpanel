@@ -25,7 +25,8 @@ CLUE_TYPES = {
 	"Start", "End", "Hexagon", "Disjoint", "Invisible"
 }
 
-deepCopy = (value) -> Moonpanel.EditorDocument.DeepCopy value
+Helpers = Moonpanel.Helpers
+deepCopy = Helpers.deepCopy
 
 Editor.GetClueFamily = (typeName) -> CLUE_FAMILIES[typeName]
 

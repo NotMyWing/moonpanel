@@ -21,8 +21,10 @@ Moonpanel.Canvas.PresentationConstants = {
 }
 
 CONSTANTS = Moonpanel.Canvas.PresentationConstants
+Helpers = Moonpanel.Helpers
+copyArray = Helpers.copyArray
 
-clamp01 = (value) -> math.max 0, math.min 1, value
+clamp01 = (value) -> Helpers.clamp value, 0, 1
 smoothstep = (value) ->
 	value = clamp01 value
 	value * value * (3 - 2 * value)
@@ -32,8 +34,6 @@ copyAttemptKey = (key = {}) ->
 		sessionId: key.sessionId or key.id or 0
 		revision: key.revision or 0
 	}
-
-copyArray = (values = {}) -> [value for value in *values]
 
 copyFeedback = (feedback = {}) ->
 	erasures = {}

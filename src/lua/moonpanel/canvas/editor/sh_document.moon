@@ -3,14 +3,9 @@
 
 Document = {}
 Document.__index = Document
-
-deepCopy = (value, seen = {}) ->
-	return value unless type(value) == "table"
-	return seen[value] if seen[value]
-	output = {}
-	seen[value] = output
-	output[deepCopy(key, seen)] = deepCopy(child, seen) for key, child in pairs value
-	output
+Helpers = Moonpanel.Helpers
+tableOrEmpty = Helpers.tableOrEmpty
+deepCopy = Helpers.deepCopy
 
 stableEncode = (value, output = {}) ->
 	valueType = type value
@@ -241,9 +236,6 @@ Document.CalculateDockLayout = (width, options = {}) ->
 -- Normalize clue data for semantic comparison. Unknown fields are retained so
 -- right-click sampling and exact-match removal remain faithful as the clue
 -- format grows. Only representation details and omitted defaults are folded.
-tableOrEmpty = (value) ->
-	if type(value) == "table" then value else {}
-
 trimPolyominoShape = (shape) ->
 	shape = tableOrEmpty shape
 	local minX, minY, maxX, maxY

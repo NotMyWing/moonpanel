@@ -29,6 +29,7 @@ util = {
   TableToJSON = function() return '' end,
 }
 
+dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 dofile('dest/lua/moonpanel/canvas/sh_paneldata.lua')
 
 local function flatIndex(width, gx, gy)

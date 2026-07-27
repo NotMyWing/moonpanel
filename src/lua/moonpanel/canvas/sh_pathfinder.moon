@@ -1,15 +1,13 @@
 AddCSLuaFile!
 
+Helpers = Moonpanel.Helpers
+round = Helpers.round
+clamp = Helpers.clamp
+
 TRACE_UNITS = 4096
 UINT32 = 4294967296
 CRC_MASK = 4294967295
 CRC_POLYNOMIAL = 3988292384
-
-round = (value) ->
-	value >= 0 and math.floor(value + 0.5) or math.ceil(value - 0.5)
-
-clamp = (value, minimum, maximum) ->
-	math.max minimum, math.min maximum, value
 
 fallbackXor = (left, right) ->
 	left %= UINT32

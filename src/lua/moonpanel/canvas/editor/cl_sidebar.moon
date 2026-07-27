@@ -21,7 +21,10 @@ C = Editor.C or {
 
 MATERIALS = Editor.MATERIALS or {}
 
-deepCopy = (value) -> Moonpanel.EditorDocument.DeepCopy value
+Helpers = Moonpanel.Helpers
+deepCopy = Helpers.deepCopy
+clearChildren = Helpers.clearChildren
+colorValue = Helpers.colorValue
 
 COLORS = {
 	{ "Black", Moonpanel.Color.Black }, { "White", Moonpanel.Color.White }
@@ -74,10 +77,6 @@ TRACE_APPEARANCE = {
 	{ "Secondary trace", "Trace2" }
 }
 
-colorValue = (id) ->
-	value = Moonpanel.Canvas.ColorValues[id] or Moonpanel.Canvas.ColorValues[Moonpanel.Color.White]
-	Color value.r, value.g, value.b, value.a or 255
-
 colorEqual = (left, right) ->
 	return false unless left and right
 	(left.r or 255) == (right.r or 255) and
@@ -129,14 +128,6 @@ getActiveSoundPreset = (data, names) ->
 	for presetName in *names
 		return presetName if name == presetName
 	"Custom"
-
-clearChildren = (panel) ->
-	return unless IsValid panel
-	if panel.Clear
-		panel\Clear!
-		return
-	target = panel.GetCanvas and panel\GetCanvas! or panel
-	child\Remove! for child in *target\GetChildren!
 
 addLabel = (parent, text, font = "MoonpanelEditorBody", color = C.text, tall = 20) ->
 	with parent\Add "DLabel"

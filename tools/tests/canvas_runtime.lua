@@ -64,6 +64,7 @@ local canvasRoot = 'dest/lua/moonpanel/canvas/'
 include = function(path)
   return dofile(canvasRoot .. path)
 end
+dofile(canvasRoot .. 'sh_helpers.lua')
 dofile(canvasRoot .. 'sh_canvas.lua')
 
 local function fixture(name)

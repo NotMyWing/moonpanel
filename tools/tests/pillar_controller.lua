@@ -5,6 +5,7 @@ CLIENT = false
 SERVER = false
 Moonpanel = { Canvas = {} }
 
+dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 dofile('dest/lua/moonpanel/canvas/sh_pathfinder.lua')
 dofile('dest/lua/moonpanel/sh_pillar_controller.lua')
 

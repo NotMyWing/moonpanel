@@ -56,4 +56,6 @@ function Harness.run()
   io.stdout:write(string.format('PASS: %d tests\n', #Harness.tests))
 end
 
+dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
+
 return Harness

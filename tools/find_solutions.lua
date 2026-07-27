@@ -23,6 +23,7 @@ math.Clamp = math.Clamp or function(value, minimum, maximum)
 end
 util = util or { JSONToTable = function() return nil end }
 
+dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 dofile('dest/lua/moonpanel/canvas/sh_paneldata.lua')
 local RuleEngine = dofile('dest/lua/moonpanel/canvas/sh_rule_engine.lua')
 local input = dofile(panelPath)

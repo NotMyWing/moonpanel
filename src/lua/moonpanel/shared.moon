@@ -1,6 +1,11 @@
 _moonpanel = Moonpanel or {}
 export Moonpanel = _moonpanel
 
+AddCSLuaFile "canvas/sh_helpers.lua"
+AddCSLuaFile "canvas/editor/cl_helpers.lua"
+include "canvas/sh_helpers.lua"
+include "canvas/editor/cl_helpers.lua" if CLIENT
+
 Moonpanel.Data or= {}
 
 Moonpanel.Color = {

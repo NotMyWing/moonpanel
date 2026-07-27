@@ -1,6 +1,11 @@
 AddCSLuaFile!
 
 Canvas = Moonpanel.Canvas
+Helpers = Moonpanel.Helpers
+tableOrEmpty = Helpers.tableOrEmpty
+num = Helpers.num
+bool = Helpers.bool
+copyColor = Helpers.copyColor
 Canvas.SchemaVersion = 7
 Canvas.DefaultDisjointLength = 0.4
 
@@ -189,27 +194,6 @@ Canvas.WindmillDefaultEntityColors = {
 	Sun: Moonpanel.Color.White
 }
 
-tableOrEmpty = (value) ->
-	istable(value) and value or {}
-
-num = (value, default) ->
-	value = tonumber value
-	value == nil and default or value
-
-bool = (value) ->
-	value == true
-
-copyColor = (input, fallback) ->
-	input = tableOrEmpty input
-	fallback = fallback or {}
-
-	{
-		r: math.Clamp math.floor(num input.r, fallback.r or 255), 0, 255
-		g: math.Clamp math.floor(num input.g, fallback.g or 255), 0, 255
-		b: math.Clamp math.floor(num input.b, fallback.b or 255), 0, 255
-		a: math.Clamp math.floor(num input.a, fallback.a or 255), 0, 255
-	}
-
 Canvas.ResolveColorPreset = (name) ->
 	preset = Canvas.ColorPresets[name]
 	return nil unless preset
@@ -335,8 +319,7 @@ entitySocketType = (typeName) ->
 			"PathOrIntersection"
 
 flatIndex = (gridX, gridY, width) ->
-	numCols = width * 2 + 1
-	1 + (gridX - 1) + (gridY - 1) * numCols
+	Helpers.flatIndex width, gridX, gridY
 
 legacyTypeName = (typeValue) ->
 	if isstring typeValue

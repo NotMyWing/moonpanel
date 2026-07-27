@@ -1,5 +1,7 @@
 local function runStore(exists, serializedData, initialData)
   CLIENT = true
+  Moonpanel = {}
+  dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
   Moonpanel = {
     Editor = initialData and { CurrentData = initialData } or {},
     EditorDocument = dofile('dest/lua/moonpanel/canvas/editor/sh_document.lua'),

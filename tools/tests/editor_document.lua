@@ -1,4 +1,5 @@
 local test = dofile('tools/tests/harness.lua')
+dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 local Document = dofile('dest/lua/moonpanel/canvas/editor/sh_document.lua')
 
 local function newDocument(data, writes)

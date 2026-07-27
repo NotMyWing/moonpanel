@@ -28,6 +28,7 @@ util = util or {
   TableToJSON = function() return '' end,
 }
 
+dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 dofile('dest/lua/moonpanel/canvas/sh_paneldata.lua')
 Moonpanel.Canvas.DLX = dofile('dest/lua/moonpanel/canvas/sh_dlx.lua')
 dofile('dest/lua/moonpanel/canvas/sh_polyomino.lua')

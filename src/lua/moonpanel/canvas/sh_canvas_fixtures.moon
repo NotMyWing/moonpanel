@@ -2,8 +2,8 @@ AddCSLuaFile!
 
 return unless SERVER
 
-flatIndex = (width, gridX, gridY) ->
-	1 + (gridX - 1) + (gridY - 1) * (width * 2 + 1)
+Helpers = Moonpanel.Helpers
+flatIndex = Helpers.flatIndex
 
 intersectionIndex = (width, x, y) ->
 	flatIndex width, (x - 1) * 2 + 1, (y - 1) * 2 + 1

@@ -7,6 +7,7 @@ Moonpanel.Net or= {}
 
 Moonpanel.Net.FlowTypes = {
 	"TraceControlGrant"
+	"TraceControlReject"
 	"TraceInputBatch"
 	"TraceObserverAdvance"
 	"TraceAck"
@@ -30,6 +31,17 @@ Moonpanel.Net.FlowSize = math.ceil(math.log(#Moonpanel.Net.FlowTypes, 2))
 flowTypes = Moonpanel.Net.FlowTypes
 Moonpanel.Net.FlowTypes = {v, k - 1 for k, v in ipairs flowTypes}
 Moonpanel.Net.Receivers = {}
+Moonpanel.Net.TraceControlRejectReasons = {
+	unknown: 0
+	busy: 1
+	ending: 2
+	notFocused: 3
+	notPlayable: 4
+	invalidStart: 5
+	tooFar: 6
+	dead: 7
+	notPowered: 8
+}
 
 net.Receive "TheMP Flow", (len, ply) ->
 	flowType = net.ReadUInt Moonpanel.Net.FlowSize

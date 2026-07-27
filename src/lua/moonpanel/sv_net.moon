@@ -98,6 +98,14 @@ Moonpanel.Net.SendControlGrant = (recipients, panel, omitController = false) ->
 	else
 		net.Broadcast!
 
+Moonpanel.Net.SendTraceControlReject = (ply, panel, reason = "unknown") ->
+	return unless IsValid(ply) and ply\IsPlayer! and IsValid(panel)
+	startFlow flowTypes.TraceControlReject
+	net.WriteEntity panel
+	reasons = Moonpanel.Net.TraceControlRejectReasons
+	net.WriteUInt reasons[reason] or reasons.unknown, 4
+	net.Send ply
+
 Moonpanel.Net.SendTraceAck = (ply, panel, session) ->
 	startFlow flowTypes.TraceAck
 	net.WriteEntity panel
@@ -133,10 +141,9 @@ Moonpanel.Net.BroadcastObserverAdvance = (controller, panel, session, firstSeque
 		for decision in *sample.constraints
 			net.WriteUInt decision, 32
 	net.WriteUInt pathfinder\hash!, 32
-	if IsValid controller
-		net.SendOmit controller
-	else
-		net.Broadcast!
+	-- Controllers normally ignore this observer stream, but the
+	-- server-authoritative debug mode consumes it directly.
+	net.Broadcast!
 
 Moonpanel.Net.BroadcastTraceResult = (panel, sessionId, aborted) ->
 	startFlow flowTypes.TraceResult
@@ -263,9 +270,11 @@ Moonpanel.Net.PanelRequestDataFromPlayer = (ply, panel, callback) ->
 	Moonpanel.Net.SendPanelDataFromPlayerRequest ply, panel
 
 receive flowTypes.PanelRequestControl, (len, ply) ->
-	Moonpanel\RequestControl ply, net.ReadEntity!, net.ReadUInt(16), net.ReadUInt(16),
+	panel = net.ReadEntity!
+	accepted, reason = Moonpanel\RequestControl ply, panel, net.ReadUInt(16), net.ReadUInt(16),
 		net.ReadUInt(14) / 1000, net.ReadUInt(14) / 1000,
 		net.ReadUInt(10) / 1000
+	Moonpanel.Net.SendTraceControlReject ply, panel, reason unless accepted
 
 receive flowTypes.FocusExit, (len, ply) ->
 	Moonpanel\SetFocused ply, false if Moonpanel\IsFocused ply
@@ -344,7 +353,8 @@ processTraceBatch = (ply, panel, session, batch) ->
 	Moonpanel.Net.BroadcastObserverAdvance ply, panel, session,
 		batch.firstSequence, batch.samples
 	Moonpanel.Net.SendTraceAck ply, panel, session
-	if pillarCorrection or serverHash ~= batch.predictedHash
+	if pillarCorrection or batch.predictedHash ~= 0 and
+		serverHash ~= batch.predictedHash
 		for record in *proofRecords
 			logPillarProof session, record.sample, record.proof,
 				record.actualStart, record.actualEnd

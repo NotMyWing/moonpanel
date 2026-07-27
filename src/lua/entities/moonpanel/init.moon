@@ -240,20 +240,21 @@ ENT.RequestDataFromPlayer = (ply) =>
         @SetData data
 
 ENT.CanRequestControl = (ply) =>
-	return false if @GetEndingTraceSession!
+	return false, "ending" if @GetEndingTraceSession!
 	controller = @GetController!
-	return false if IsValid(controller) and controller\IsPlayer!
-	return false unless IsValid(ply) and ply\Alive! and Moonpanel\IsFocused(ply)
-	return false unless @GetPowered!
-	return false if ply\EyePos!\DistToSqr(@GetPos!) > 1024 * 1024
+	return false, "busy" if IsValid(controller) and controller\IsPlayer!
+	return false, "dead" unless IsValid(ply) and ply\Alive!
+	return false, "notFocused" unless Moonpanel\IsFocused(ply)
+	return false, "notPowered" unless @GetPowered!
+	return false, "tooFar" if ply\EyePos!\DistToSqr(@GetPos!) > 1024 * 1024
 	true
 
 ENT.StartTraceSession = (ply, x, y, inputSensitivity = 1,
 	gamepadSensitivity = 1, gamepadDeadzone = 0.16) =>
 	canvas = @GetCanvas!
 	node = canvas\FindStartNode x, y, 32 if canvas and canvas.FindStartNode
-	return false unless node
-	return false unless @SolveStart ply, node.id
+	return false, "invalidStart" unless node
+	return false, "invalidStart" unless @SolveStart ply, node.id
 
 	timer.Remove "TheMP_SolvedState_#{@EntIndex!}" if timer and timer.Remove
 	@__pendingSolvedResult = nil
@@ -278,7 +279,7 @@ ENT.StartTraceSession = (ply, x, y, inputSensitivity = 1,
 	@SetTraceSession session
 	if @MoonpanelPillar and not Moonpanel\BeginPillarOrbit(@, ply, session.id)
 		@EndTraceSession true
-		return false
+		return false, "invalidStart"
 	canvas\SetTraceSessionId session.id if canvas.SetTraceSessionId
 	@BeginWireTrace! if @BeginWireTrace
 	Moonpanel.Wire.UpdateState @ if Moonpanel.Wire and Moonpanel.Wire.UpdateState
@@ -287,7 +288,8 @@ ENT.StartTraceSession = (ply, x, y, inputSensitivity = 1,
 
 ENT.RequestControl = (ply, x, y, inputSensitivity = 1,
 	gamepadSensitivity = 1, gamepadDeadzone = 0.16) =>
-	return false unless @CanRequestControl ply
+	ok, reason = @CanRequestControl ply
+	return false, reason unless ok
 	@StartTraceSession ply, x, y, inputSensitivity, gamepadSensitivity,
 		gamepadDeadzone
 

@@ -74,6 +74,18 @@ const compiledChecks = {
 			/canvas:ImportNetworkState\(panel, data\)/,
 			/request\.nextAttempt = now \+ 1/,
 		], message: 'late-join panel state lacks direct apply or bounded retry' },
+		{ all: [
+			/CreateClientConVar\("moonpanel_server_authoritative_trace", "0"/,
+			/serverSequence = lastSequence/,
+			/isLocalController and not Moonpanel:IsServerAuthoritativeTrace\(\)/,
+			/canvas:ApplyTraceSample\(sample\.xQ, sample\.yQ, sample\.boost, nil, sample\.constraints\)/,
+		], message: 'server-authoritative controller mode does not consume the existing server advance stream' },
+		{ all: [
+			/hash = \(function\(\)[\s\S]*?Moonpanel:IsServerAuthoritativeTrace\(\)[\s\S]*?return 0/,
+			/if not \(Moonpanel:IsServerAuthoritativeTrace\(\)\) then/,
+			/panel:GetCanvas\(\):End\(false\)/,
+			/panel:GetCanvas\(\):End\(true\)/,
+		], message: 'server-authoritative mode does not suppress local prediction and terminal gameplay' },
 		{ not: /MaintainPanelDataRequests = function[\s\S]*?ents_GetAll\(\)/, message: 'retry maintenance scans every entity instead of pending panels' },
 	],
 	'dest/lua/moonpanel/cl_init.lua': [
@@ -185,6 +197,10 @@ function runServerNetworkChecks(source, file, failures) {
 		/sample = sample or \{ \}\s+proof = proof or \{ \}/,
 		/local proof = nil\s+local original = \{\s+xQ = sample\.xQ,\s+yQ = sample\.yQ,\s+commandNumber = sample\.commandNumber/,
 	], 'pillar mismatch diagnostics can escape local scope or interrupt the session');
+	requireAll(failures, file, source, [
+		/net\.Broadcast\(\)/,
+		/batch\.predictedHash ~= 0 and serverHash ~= batch\.predictedHash/,
+	], 'server-authoritative trace updates are not broadcast or hash-gated correctly');
 	const observerAdvance = source.match(/Moonpanel\.Net\.BroadcastObserverAdvance = function[\s\S]*?Moonpanel\.Net\.BroadcastTraceResult = function/);
 	if (!observerAdvance || !/net\.WriteUInt\(#sample\.constraints, 2\)/.test(observerAdvance[0]) || /net\.WriteTable/.test(observerAdvance[0])) {
 		addFailure(failures, file, 'observer advance must stream constrained samples, not per-batch snapshots');

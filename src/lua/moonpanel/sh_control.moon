@@ -29,11 +29,16 @@ if CLIENT
 		ply = LocalPlayer!
 		return false unless IsValid ply
 		gui.EnableScreenClicker false
+		if Moonpanel.Net and Moonpanel.Net.SyncClickerState
+			Moonpanel.Net.SyncClickerState!
 		ply\SetNW2VarProxy "TheMP Control", (owner, _, old, new) ->
 			return if old == new
 			return unless IsValid owner
 			if Moonpanel\IsFocused owner
-				gui.EnableScreenClicker not (IsValid(new) and new.Moonpanel)
+				if Moonpanel.Net and Moonpanel.Net.SyncClickerState
+					Moonpanel.Net.SyncClickerState!
+				else
+					gui.EnableScreenClicker not (IsValid(new) and new.Moonpanel)
 		true
 
 	Moonpanel.GetPredictedControl = (ply = LocalPlayer!) =>
@@ -113,10 +118,14 @@ else
 				return
 			ply\SetNW2Entity "TheMP Control", game.GetWorld!
 		if IsEntity(entity) and IsValid(entity)
-			if entity.Moonpanel and entity.RequestControl and
-					entity\RequestControl(ply, x, y, sensitivity,
-						gamepadSensitivity, gamepadDeadzone)
-				ply\SetNW2Entity "TheMP Control", entity
+			if entity.Moonpanel and entity.RequestControl
+				accepted, reason = entity\RequestControl(ply, x, y, sensitivity,
+					gamepadSensitivity, gamepadDeadzone)
+				if accepted
+					ply\SetNW2Entity "TheMP Control", entity
+					return true
+				return false, reason
+		return false, "unknown"
 
 	Moonpanel.StopControl = (ply) =>
 		controlled = ply\GetNW2Entity "TheMP Control"
@@ -151,7 +160,8 @@ Moonpanel.ApplyDeltas = (ply, dX = 0, dY = 0, boost = false) =>
 			yQ = math.Round yQ * factor
 		xQ = math.Clamp xQ, -32767, 32767
 		yQ = math.Clamp yQ, -32767, 32767
-		canvas\ApplyTraceSample xQ, yQ, boost, ply
+		unless CLIENT and Moonpanel\IsServerAuthoritativeTrace!
+			canvas\ApplyTraceSample xQ, yQ, boost, ply
 		Moonpanel.Net.QueueTraceSample controlled, xQ, yQ, boost,
 			pathfinder\GetConstraintDecisions!
 		return true

@@ -3,12 +3,38 @@ AddCSLuaFile!
 Moonpanel.FocusDuration = 0.4
 
 Moonpanel.__focusHolding or= {}
+Moonpanel.__focusPrediction = nil
+
+if CLIENT
+	focusDebug = CreateClientConVar "moonpanel_debug_focus", "0", true, false,
+		"Log predicted and replicated Moonpanel focus transitions"
+	Moonpanel.FocusDebugPrint = (event, details = "") ->
+		return unless focusDebug\GetBool!
+		MsgC Color(120, 210, 255), "[Moonpanel Focus] ", event,
+			" ct=", string.format("%.3f", CurTime!),
+			" rt=", string.format("%.3f", RealTime!),
+			" ", details, "\n"
+else
+	Moonpanel.FocusDebugPrint = (...) ->
+
+if CLIENT
+	hook.Add "Think", "TheMP Focus Prediction", () ->
+		prediction = Moonpanel.__focusPrediction
+		return unless prediction
+		ply = LocalPlayer!
+		return unless IsValid ply
+		nwState = ply\GetNW2Bool "TheMP Focused"
+		if not prediction.acknowledged and RealTime! >= prediction.deadline
+			Moonpanel.FocusDebugPrint "prediction-timeout", "state=#{tostring(prediction.state)} nw=#{tostring(nwState)}"
+			Moonpanel.__focusPrediction = nil
 
 ------------------------------------------------
 -- Gets whether the player is focused or not. --
 ------------------------------------------------
 Moonpanel.IsFocused = (ply = CLIENT and LocalPlayer!) =>
 	return false unless IsValid ply
+	if CLIENT and ply == LocalPlayer! and Moonpanel.__focusPrediction
+		return Moonpanel.__focusPrediction.state == true
 	ply\GetNW2Bool "TheMP Focused"
 
 ----------------------------------------------------------------------
@@ -17,22 +43,40 @@ Moonpanel.IsFocused = (ply = CLIENT and LocalPlayer!) =>
 ----------------------------------------------------------------------
 Moonpanel.GetFocusAngles = (ply = CLIENT and LocalPlayer!) =>
 	return Angle! unless IsValid ply
+	if CLIENT and ply == LocalPlayer! and Moonpanel.__focusPrediction and
+		Moonpanel.__focusPrediction.state
+		return Moonpanel.__focusPrediction.angles
 	if Moonpanel.PillarFocusAngles and Moonpanel.PillarFocusAngles[ply]
 		return Moonpanel.PillarFocusAngles[ply]
     ply\GetNW2Angle "TheMP FocusAngle"
+
+Moonpanel.GetFocusTime = (ply = CLIENT and LocalPlayer!) =>
+	return 0 unless IsValid ply
+	if CLIENT and ply == LocalPlayer! and Moonpanel.__focusPrediction
+		return Moonpanel.__focusPrediction.time
+	ply\GetNW2Float "TheMP FocusTime", 0
+
+Moonpanel.GetFocusAnimationElapsed = (ply = CLIENT and LocalPlayer!) =>
+	return 0 unless IsValid ply
+	if CLIENT and ply == LocalPlayer! and Moonpanel.__focusPrediction
+		return math.max 0, RealTime! - Moonpanel.__focusPrediction.realTime
+	focusTime = ply\GetNW2Float "TheMP FocusTime", 0
+	math.max 0, CurTime! - focusTime
 
 -------------------------------------------------------
 -- Sets whether the player should be focused or not. --
 -------------------------------------------------------
 Moonpanel.SetFocused = (ply = CLIENT and LocalPlayer!, state) =>
-	return if CLIENT
 	return unless IsValid ply
 
     oldState = @IsFocused ply
+	Moonpanel.FocusDebugPrint "set-enter", "realm=#{CLIENT and 'client' or 'server'} old=#{tostring(oldState)} new=#{tostring(state)} nw=#{tostring(ply\GetNW2Bool 'TheMP Focused')}"
     if oldState ~= state
         lastFocus = ply\GetNW2Float "TheMP FocusTime", 0
 
-		return if state and lastFocus + 0.5 > CurTime!
+		if state and lastFocus + 0.5 > CurTime!
+			Moonpanel.FocusDebugPrint "set-rejected", "cooldown last=#{tostring(lastFocus)}"
+			return
 
 		if state
 			Moonpanel.PillarFocusAngles[ply] = nil if Moonpanel.PillarFocusAngles
@@ -40,6 +84,20 @@ Moonpanel.SetFocused = (ply = CLIENT and LocalPlayer!, state) =>
 
         ply\SetNW2Bool "TheMP Focused", state
         ply\SetNW2Float "TheMP FocusTime", CurTime!
+		if CLIENT
+			Moonpanel.__focusPrediction = {
+				state: state
+				time: CurTime!
+				realTime: RealTime!
+				angles: state and ply\EyeAngles! or nil
+				deadline: RealTime! + 1.5
+				localWritePending: true
+			}
+		Moonpanel.ApplyFocusPresentation ply, state if CLIENT and
+			Moonpanel.ApplyFocusPresentation
+		if CLIENT and Moonpanel.__focusPrediction
+			Moonpanel.__focusPrediction.localWritePending = false
+		Moonpanel.FocusDebugPrint "set-written", "state=#{tostring(state)} nw=#{tostring(ply\GetNW2Bool 'TheMP Focused')} time=#{tostring(ply\GetNW2Float 'TheMP FocusTime')}"
 		if SERVER
 			if state
 				ply\CrosshairDisable!
@@ -75,19 +133,21 @@ if SERVER
 -- Handle focus/unfocus requests. --
 ------------------------------------
 hook.Add "KeyPress", "TheMP Focus", (ply, key) ->
-	return if CLIENT
+	if CLIENT and not IsFirstTimePredicted!
+		return
+	Moonpanel.FocusDebugPrint "keypress", "key=#{tostring(key)} focused=#{tostring(Moonpanel\IsFocused ply)}"
     if key == IN_USE
 		return if IsValid Moonpanel.__focusHolding[ply]
 
         if Moonpanel\IsFocused ply
-            Moonpanel\SetFocused ply, false
+			Moonpanel\SetFocused ply, false
 
         else
 			return if not ply\Alive!
 
             trace = ply\GetEyeTraceNoCursor!
             if trace.Entity and trace.Entity.Moonpanel
-                Moonpanel\SetFocused ply, true
+				Moonpanel\SetFocused ply, true
 
 --------------------------------------------------------------
 -- Handle locking the player camera in place while focused. --
@@ -97,6 +157,11 @@ actionHeld = false
 cancelHeld = false
 
 hook.Add "StartCommand", "TheMP Move", (ply, cmd) ->
+	if CLIENT
+		commandFocused = Moonpanel\IsFocused ply
+		if commandFocused ~= Moonpanel.__focusCommandState
+			Moonpanel.FocusDebugPrint "startcommand-state", "cmd=#{tostring(cmd\CommandNumber!)} focused=#{tostring(commandFocused)} nw=#{tostring(ply\GetNW2Bool 'TheMP Focused')}"
+			Moonpanel.__focusCommandState = commandFocused
 	if Moonpanel\IsFocused ply
 		originalButtons = cmd\GetButtons!
 		actionDown = cmd\KeyDown(IN_ATTACK) or cmd\KeyDown(IN_JUMP)
@@ -118,16 +183,21 @@ hook.Add "StartCommand", "TheMP Move", (ply, cmd) ->
 				Moonpanel.PillarController.ProcessCommand(
 					ply, cmd, use, originalButtons)
 			cmd\ClearMovement!
+			if Moonpanel.__focusMovementLogged ~= true
+				Moonpanel.FocusDebugPrint "movement-lock", "cmd=#{tostring(cmd\CommandNumber!)}"
+				Moonpanel.__focusMovementLogged = true
 			cmd\SetViewAngles Moonpanel\GetFocusAngles ply
 			cmd\SetButtons use
 
 		-- Clientside stuff.
 		if CLIENT and (input.WasMousePressed(MOUSE_RIGHT) or cmdCancelPressed)
+			Moonpanel.FocusDebugPrint "cancel-input", "cmd=#{tostring(cmd\CommandNumber!)}"
 			controlled = if Moonpanel.GetPredictedControl
 				Moonpanel\GetPredictedControl ply
 			else
 				ply\GetNW2Entity "TheMP Control"
 			Moonpanel.Net.SendTraceAction controlled, 0 if IsValid controlled
+			Moonpanel\SetFocused ply, false
 			Moonpanel.Net.SendFocusExit!
 			return
 
@@ -158,6 +228,7 @@ hook.Add "StartCommand", "TheMP Move", (ply, cmd) ->
 	else
 		actionHeld = false if CLIENT
 		cancelHeld = false if CLIENT
+		Moonpanel.__focusMovementLogged = false if CLIENT
 
 hook.Add "CalcMainActivity", "TheMP FocusAnim", (ply) ->
 	return if Moonpanel.IsPillarControlling and Moonpanel\IsPillarControlling ply
@@ -174,25 +245,48 @@ if CLIENT
 
 	SOUND_FOCUS_ON = Sound "moonpanel/focus_on.ogg"
 	SOUND_FOCUS_OFF = Sound "moonpanel/focus_off.ogg"
+	Moonpanel.__focusRenderedStates or= setmetatable {}, __mode: "k"
+
+	Moonpanel.ApplyFocusPresentation = (owner, state) ->
+		return unless IsValid owner
+		state = state == true
+		Moonpanel.FocusDebugPrint "presentation", "state=#{tostring(state)} rendered=#{tostring(Moonpanel.__focusRenderedStates[owner])} nw=#{tostring(owner\GetNW2Bool 'TheMP Focused')}"
+		return if Moonpanel.__focusRenderedStates[owner] == state
+		Moonpanel.__focusRenderedStates[owner] = state
+		if Moonpanel.PillarFocusAngles
+			Moonpanel.PillarFocusAngles[owner] = nil
+		Moonpanel.FocusDebugPrint "sound-gui", "state=#{tostring(state)}"
+		surface.PlaySound state and SOUND_FOCUS_ON or SOUND_FOCUS_OFF
+		controlled = Moonpanel.GetPredictedControl and
+			Moonpanel\GetPredictedControl owner
+		if owner == LocalPlayer!
+			if Moonpanel.Net and Moonpanel.Net.SyncClickerState
+				Moonpanel.Net.SyncClickerState!
+			else
+				gui.EnableScreenClicker state and not IsValid controlled
 
 	-- Initialize stuff.
 	Moonpanel.InitFocus = =>
 		ply = LocalPlayer!
 		return false unless IsValid ply
 		gui.EnableScreenClicker false
+		if Moonpanel.Net and Moonpanel.Net.SyncClickerState
+			Moonpanel.Net.SyncClickerState!
 
 		-- Watch the "TheMP Focused" NW2 variable for changes.
 		ply\SetNW2VarProxy "TheMP Focused", (owner, _, old, new) ->
-			--return if not game.SinglePlayer! and not IsFirstTimePredicted!
-
 			if old ~= new
 				return unless IsValid owner
-				if Moonpanel.PillarFocusAngles
-					Moonpanel.PillarFocusAngles[owner] = nil
-				surface.PlaySound new and SOUND_FOCUS_ON or SOUND_FOCUS_OFF
-				controlled = Moonpanel.GetPredictedControl and
-					Moonpanel\GetPredictedControl owner
-				gui.EnableScreenClicker new and not IsValid controlled
+				Moonpanel.FocusDebugPrint "nw2-proxy", "old=#{tostring(old)} new=#{tostring(new)} read=#{tostring(owner\GetNW2Bool 'TheMP Focused')}"
+				prediction = Moonpanel.__focusPrediction if owner == LocalPlayer!
+				if prediction and not prediction.localWritePending
+					if prediction.state == (new == true)
+						Moonpanel.FocusDebugPrint "prediction-confirmed", "state=#{tostring(prediction.state)}"
+						prediction.acknowledged = true
+					else
+						Moonpanel.FocusDebugPrint "prediction-rejected", "wanted=#{tostring(prediction.state)} server=#{tostring(new == true)}"
+						Moonpanel.__focusPrediction = nil
+				Moonpanel.ApplyFocusPresentation owner, new
 		true
 
 	---------------------------------------------
@@ -202,10 +296,14 @@ if CLIENT
 		-- Surprised the player can be invalid here.
 		return unless IsValid LocalPlayer!
 
+		elapsed = Moonpanel\GetFocusAnimationElapsed LocalPlayer!
 		time = math.min 1, math.max 0,
-			(CurTime! - LocalPlayer!\GetNW2Float "TheMP FocusTime") / Moonpanel.FocusDuration
+			elapsed / Moonpanel.FocusDuration
 
 		focused = Moonpanel\IsFocused!
+		if focused ~= Moonpanel.__focusDrawState
+			Moonpanel.FocusDebugPrint "border-draw", "focused=#{tostring(focused)} time=#{tostring(time)}"
+			Moonpanel.__focusDrawState = focused
 		return if time == 1 and not focused
 
 		-- Flip time if unfocusing.
@@ -234,8 +332,9 @@ if CLIENT
 	hook.Add "CalcViewModelView", "TheMP ViewModel Angles", (_, _, _, _, pos, ang) ->
 		ply = LocalPlayer!
 		return unless IsValid ply
+		elapsed = Moonpanel\GetFocusAnimationElapsed ply
 		time = math.min 1, math.max 0,
-			(CurTime! - ply\GetNW2Float "TheMP FocusTime") / Moonpanel.FocusDuration
+			elapsed / Moonpanel.FocusDuration
 
 		focused = Moonpanel\IsFocused ply
 		return if time == 1 and not focused

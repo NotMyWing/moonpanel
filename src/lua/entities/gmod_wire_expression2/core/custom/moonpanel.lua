@@ -15,9 +15,7 @@ end
 
 local function canvasData(entity)
     local panel = panelEntity(entity)
-    if not panel or not panel.GetCanvas then return nil end
-    local canvas = panel:GetCanvas()
-    return canvas and canvas:GetData() or nil
+    return panel and panel:GetCanvas():GetData() or nil
 end
 
 e2function number entity:moonpanelPowered()
@@ -37,13 +35,13 @@ end
 
 e2function string entity:moonpanelPath()
     local panel = panelEntity(this)
-    local state = panel and panel.GetWireState and panel:GetWireState()
+    local state = panel and panel:GetWireState()
     return state and state.path or ""
 end
 
 e2function number entity:moonpanelRevision()
     local panel = panelEntity(this)
-    return panel and panel.GetPanelRevision and panel:GetPanelRevision() or 0
+    return panel and panel:GetPanelRevision() or 0
 end
 
 e2function number entity:moonpanelWidth()
@@ -56,32 +54,11 @@ e2function number entity:moonpanelHeight()
     return data and data.Meta and (tonumber(data.Meta.Height) or 0) or 0
 end
 
--- Read one authored cell without exposing the entire mutable canvas.
-e2function string entity:moonpanelCell(number x, number y)
-    local panel = panelEntity(this)
-    local canvas = panel and panel:GetCanvas()
-    if not canvas or not canvas.GetCellSocketAt then return "" end
-    local socket = canvas:GetCellSocketAt(math.floor(x), math.floor(y))
-    local entity = socket and socket:GetEntity()
-    local data = entity and entity:ExportData()
-    return data and data.Type or ""
-end
-
-__e2setcost(10)
-
-e2function string entity:moonpanelData()
-    local data = canvasData(this)
-    if not data then return "" end
-    -- Keep E2 string traffic bounded; callers needing individual values can
-    -- use the typed helpers above.
-    return string.sub(util.TableToJSON(data, false) or "", 1, 8192)
-end
-
 __e2setcost(5)
 
 e2function number entity:moonpanelReset()
     local panel = panelEntity(this)
-    if not panel or not panel.ResetPanel or not isOwner(self, panel) then
+    if not panel or not isOwner(self, panel) then
         return 0
     end
     return panel:ResetPanel() and 1 or 0

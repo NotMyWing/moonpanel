@@ -83,8 +83,7 @@ const compiledChecks = {
 		{ all: [
 			/hash = \(function\(\)[\s\S]*?Moonpanel:IsServerAuthoritativeTrace\(\)[\s\S]*?return 0/,
 			/if not \(Moonpanel:IsServerAuthoritativeTrace\(\)\) then/,
-			/panel:GetCanvas\(\):End\(false\)/,
-			/panel:GetCanvas\(\):End\(true\)/,
+			/panel:GetCanvas\(\):End\(action ~= 1\)/,
 		], message: 'server-authoritative mode does not suppress local prediction and terminal gameplay' },
 		{ not: /MaintainPanelDataRequests = function[\s\S]*?ents_GetAll\(\)/, message: 'retry maintenance scans every entity instead of pending panels' },
 	],
@@ -108,7 +107,7 @@ const compiledChecks = {
 	'dest/lua/moonpanel/sh_focus.lua': [
 		{ all: [
 			/Moonpanel\.IsFocused = function\(self, ply\)[\s\S]*?if not \(IsValid\(ply\)\) then[\s\S]*?return false/,
-			/Moonpanel:GetPredictedControl\(owner\)/,
+			/Moonpanel\.Net\.SyncClickerState\(\)/,
 		], message: 'focus access or its NW2 proxy is unsafe during LocalPlayer teardown' },
 		{ pattern: /PillarController\.ProcessCommand\(ply, cmd, use, originalButtons\)/, message: 'StartCommand does not delegate pillar input to the isolated controller' },
 	],
@@ -129,8 +128,7 @@ const compiledChecks = {
 		{ not: /trace\.Entity:RequestDataFromPlayer\(ply\)/, message: 'existing-panel tool clicks issue duplicate editor payload requests' },
 	],
 	'dest/lua/entities/moonpanel/shared.lua': [
-		{ pattern: /ENT\.Monitor_Offsets = Moonpanel\.Canvas\.Monitor_Offsets/, message: 'toolgun model-offset compatibility alias is missing' },
-		{ pattern: /if self\.__rendering and self\.__canvas then\s+return self\.__canvas:RenderRT\(\)/, message: 'render-target maintenance is not using the existing entity Think' },
+		{ pattern: /if self\.__rendering then\s+return self\.__canvas:RenderRT\(\)/, message: 'render-target maintenance is not using the existing entity Think' },
 	],
 	'dest/lua/entities/moonpanel/cl_init.lua': [
 		{ not: /hook\.Add\("Think"/, message: 'panel installs a redundant per-entity global Think hook' },

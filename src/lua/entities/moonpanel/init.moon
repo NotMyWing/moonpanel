@@ -24,9 +24,9 @@ wirePath = (panel, result, maximum = 512) ->
 	return "" unless result and result.snapshot and
 		istable(result.snapshot.stacks)
 	canvas = panel\GetCanvas!
-	topology = canvas and canvas\GetTraceTopology!
+	topology = canvas\GetTraceTopology!
 	return "" unless topology and topology.nodes
-	data = canvas\GetData! if canvas
+	data = canvas\GetData!
 	width = data and data.Meta and tonumber(data.Meta.Width)
 	stack = result.snapshot.stacks[1]
 	return "" unless istable stack
@@ -41,12 +41,12 @@ wirePath = (panel, result, maximum = 512) ->
 wireErased = (panel, result) ->
 	values = {}
 	feedback = result and result.feedback
-	canvas = panel\GetCanvas! if panel and panel.GetCanvas
-	return values unless canvas and feedback and istable(feedback.erasures)
+	canvas = panel\GetCanvas!
+	return values unless feedback and istable(feedback.erasures)
 	for pair in *feedback.erasures
 		index = tonumber(pair and pair.targetIndex)
 		socket = index and canvas\GetSocketAtDataIndex index
-		continue unless socket and socket.GetSocketType
+		continue unless socket
 		typeId = socket\GetSocketType!
 		x, y = socket\GetX!, socket\GetY!
 		if typeId == Moonpanel.Canvas.SocketType.Path
@@ -80,31 +80,14 @@ ENT.GetWireState = => {
 	powered: @GetPowered!
 	solved: @GetSolvedState!
 	errored: @GetErrored!
-	success: @__wireSuccess or 0
 	path: @__wirePath or ""
 }
 
 ENT.GetPanelRevision = => @__dataRevision or 0
-ENT.GetTraceSession = =>
-	return Moonpanel.TraceSession.Get(@) if Moonpanel.TraceSession and
-		Moonpanel.TraceSession.Get
-	@__traceSession
-ENT.GetEndingTraceSession = =>
-	return Moonpanel.TraceSession.GetEnding(@) if Moonpanel.TraceSession and
-		Moonpanel.TraceSession.GetEnding
-	@__endingTraceSession
-
-ENT.SetTraceSession = (session) =>
-	if Moonpanel.TraceSession and Moonpanel.TraceSession.Set
-		return Moonpanel.TraceSession.Set @, session
-	@__traceSession = session
-	session
-
-ENT.SetEndingTraceSession = (session) =>
-	if Moonpanel.TraceSession and Moonpanel.TraceSession.SetEnding
-		return Moonpanel.TraceSession.SetEnding @, session
-	@__endingTraceSession = session
-	session
+ENT.GetTraceSession = => Moonpanel.TraceSession.Get @
+ENT.GetEndingTraceSession = => Moonpanel.TraceSession.GetEnding @
+ENT.SetTraceSession = (session) => Moonpanel.TraceSession.Set @, session
+ENT.SetEndingTraceSession = (session) => Moonpanel.TraceSession.SetEnding @, session
 ENT.SetVisualResult = (result, at = CurTime!) =>
 	@__lastVisualResult = table.Copy result if istable result
 	@__lastVisualResultAt = at if istable result
@@ -117,35 +100,19 @@ ENT.NextVisualEventSerial = =>
 
 ENT.GetVisualEventSerial = => @__visualEventSerial or 0
 ENT.ClearEndingTraceSession = (session) =>
-	if Moonpanel.TraceSession and Moonpanel.TraceSession.ClearEnding
-		Moonpanel.TraceSession.ClearEnding @, session
-	else
-		@__endingTraceSession = nil if not session or @__endingTraceSession == session
-
-ENT.BeginWireTrace = =>
-	@__wireSuccess = 0
-	@__wirePath = ""
+	Moonpanel.TraceSession.ClearEnding @, session
 
 ENT.ResetWireState = =>
-	@__wireSuccess = 0
 	@__wirePath = ""
-
-ENT.SetWireSuccess = (value) =>
-	@__wireSuccess = value == true and 1 or 0
 
 ENT.HandleWireTerminalResult = (result, maximum = 512) =>
 	return unless result
 	@__wirePath = wirePath @, result, maximum
-	@__wireSuccess = 0
-	@SetErrored result.aborted ~= true and
-		result.evaluationStatus ~= "complete"
 	{
 		path: @__wirePath
 		erased: wireErased @, result
 		aborted: result.aborted == true
 		solved: result.success == true
-		delayedSuccess: result.success == true and result.feedback and
-			result.feedback.erasures and #result.feedback.erasures > 0
 	}
 
 ENT.SetData = (data, solved = false, visualResult = nil) =>
@@ -154,18 +121,15 @@ ENT.SetData = (data, solved = false, visualResult = nil) =>
     activeSession = @GetTraceSession!
     endingSession = @GetEndingTraceSession!
     controller = activeSession and activeSession.controller
-    controller or= @GetController! if @GetController
+    controller or= @GetController!
     @EndTraceSession true if activeSession
     if IsValid(controller) and controller\IsPlayer!
-        Moonpanel\SetFocused controller, false if Moonpanel.IsFocused and
-            Moonpanel\IsFocused controller
-    @SetController game.GetWorld! if @SetController and
-        IsValid(@GetController!) and @GetController!\IsPlayer!
-    @GetCanvas!\CancelSolution("panel_edit") if @GetCanvas! and
-        @GetCanvas!\CancelSolution
-    timer.Remove "TheMP_SolvedState_#{@EntIndex!}" if timer and timer.Remove
+        Moonpanel\SetFocused controller, false if Moonpanel\IsFocused controller
+        @SetController game.GetWorld! unless activeSession
+    @GetCanvas!\CancelSolution "panel_edit"
+    timer.Remove "TheMP_SolvedState_#{@EntIndex!}"
     @__pendingSolvedResult = nil
-    @SetSolvedState false if @SetSolvedState
+    @SetSolvedState false
     if endingSession
 		Moonpanel.Net.BroadcastVisualResult @, {
             aborted: true
@@ -181,10 +145,10 @@ ENT.SetData = (data, solved = false, visualResult = nil) =>
     @TheMoonpanelTileData = importedData
     @__dataRevision = ((@__dataRevision or 0) + 1) % 4294967295
     @__dataRevision = 1 if @__dataRevision == 0
-    @SetSolvedState solved, visualResult if @SetSolvedState
+    @SetSolvedState solved, visualResult
 
 	@SetPowered true
-	@SetErrored false if @SetErrored
+	@SetErrored false
 
     @ExecutePendingSyncs!
     true
@@ -251,14 +215,15 @@ ENT.CanRequestControl = (ply) =>
 ENT.StartTraceSession = (ply, x, y, inputSensitivity = 1,
 	gamepadSensitivity = 1, gamepadDeadzone = 0.16) =>
 	canvas = @GetCanvas!
-	node = canvas\FindStartNode x, y, 32 if canvas and canvas.FindStartNode
+	node = canvas\FindStartNode x, y, 32
 	return false, "invalidStart" unless node
 	return false, "invalidStart" unless @SolveStart ply, node.id
 
-	timer.Remove "TheMP_SolvedState_#{@EntIndex!}" if timer and timer.Remove
+	timer.Remove "TheMP_SolvedState_#{@EntIndex!}"
 	@__pendingSolvedResult = nil
-	@ResetWireState! if @ResetWireState
-	@SetSolvedState false if @SetSolvedState
+	@ResetWireState!
+	@SetSolvedState false
+	@SetErrored false
 	@__lastVisualResult = nil
 	@__lastVisualResultAt = nil
 	ruleDefinition = canvas\GetRuleDefinition!
@@ -278,9 +243,8 @@ ENT.StartTraceSession = (ply, x, y, inputSensitivity = 1,
 	if @MoonpanelPillar and not Moonpanel\BeginPillarOrbit(@, ply, session.id)
 		@EndTraceSession true
 		return false, "invalidStart"
-	canvas\SetTraceSessionId session.id if canvas.SetTraceSessionId
-	@BeginWireTrace! if @BeginWireTrace
-	Moonpanel.Wire.UpdateState @ if Moonpanel.Wire and Moonpanel.Wire.UpdateState
+	canvas\SetTraceSessionId session.id
+	Moonpanel.Wire.UpdateState @
 	Moonpanel.Net.SendControlGrant nil, @
 	true
 
@@ -298,10 +262,11 @@ ENT.ApplyTerminalResult = (envelope) =>
 	return false unless SERVER and istable envelope
 
 	timerName = "TheMP_SolvedState_#{@EntIndex!}"
-	timer.Remove timerName if timer and timer.Remove
+	timer.Remove timerName
 	feedback = envelope.feedback or {}
 	erasures = feedback.erasures or {}
 	hasErasures = istable(erasures) and #erasures > 0
+	failed = envelope.success ~= true and envelope.aborted ~= true
 	resultAt = CurTime!
 
 	-- A successful rule evaluation is not a solved panel until its eraser
@@ -309,23 +274,25 @@ ENT.ApplyTerminalResult = (envelope) =>
 	-- aligned throughout that interval.
 	envelope.solved = envelope.success == true and not hasErasures
 	@SetSolvedState envelope.solved
+	@SetErrored failed and not hasErasures
 	@__lastVisualResult = table.Copy envelope
 	@__lastVisualResultAt = resultAt
 
-	return true unless envelope.success == true and hasErasures
+	return true unless hasErasures
 
 	@__pendingSolvedResult = table.Copy envelope
 	@__pendingSolvedResultAt = resultAt
 	panel = @
 	delay = Moonpanel.Canvas.EraserRevealDelay or 0.75
-	return true unless timer and timer.Create
 	timer.Create timerName, delay, 1, ->
 		return unless IsValid panel
 		return unless panel.__pendingSolvedResult
 		result = panel.__pendingSolvedResult
 		panel.__pendingSolvedResult = nil
-		result.solved = true
-		panel\SetSolvedState true
+		result.solved = result.success == true
+		panel\SetSolvedState result.solved
+		panel\SetErrored result.success ~= true and result.aborted ~= true
+		Moonpanel.Wire.UpdateState panel
 		panel.__lastVisualResult = table.Copy result
 		panel.__lastVisualResultAt = panel.__pendingSolvedResultAt or CurTime!
 		panel\ExecutePendingSyncs!
@@ -355,25 +322,25 @@ ENT.EndTraceSession = (forceAbort = true) =>
 ENT.ResetPanel = (restorePower = true) =>
 	canvas = @GetCanvas!
 	return false unless canvas and canvas\GetData!
-	hadRuntimeState = canvas\HasRuntimeState! if canvas.HasRuntimeState
+	hadRuntimeState = canvas\HasRuntimeState!
 	@EndTraceSession true if @GetTraceSession!
-	canvas\CancelSolution "panel_reset" if canvas\CancelSolution
-	pathfinder = canvas\GetTraceSnapshot! if canvas.GetTraceSnapshot
+	canvas\CancelSolution "panel_reset"
+	pathfinder = canvas\GetTraceSnapshot!
 	@__resetSerial = ((@__resetSerial or 0) + 1) % 4294967295
 	@__resetSerial = 1 if @__resetSerial == 0
 	@__resetSnapshot = pathfinder if pathfinder and hadRuntimeState
-	if @__resetSnapshot and Moonpanel.Net.BroadcastPanelResetPresentation
+	if @__resetSnapshot
 		Moonpanel.Net.BroadcastPanelResetPresentation @, @__resetSnapshot,
 			@__resetSerial
 	@ClearEndingTraceSession!
 	@__lastVisualResult = nil
 	@__lastVisualResultAt = nil
 	@__pendingSolvedResult = nil
-	@ResetWireState! if @ResetWireState
-	timer.Remove "TheMP_SolvedState_#{@EntIndex!}" if timer and timer.Remove
-	canvas\ResetRuntime "panel-reset" if canvas.ResetRuntime
+	@ResetWireState!
+	timer.Remove "TheMP_SolvedState_#{@EntIndex!}"
+	canvas\ResetRuntime "panel-reset"
 	@SetSolvedState false
-	@SetErrored false if @SetErrored
+	@SetErrored false
 	@SetPowered true if restorePower
 	@ExecutePendingSyncs!
 	@__resetSnapshot = nil
@@ -425,13 +392,11 @@ ENT.TraceSessionThink = =>
 		@EndTraceSession true
 		return
 	if @MoonpanelPillar
-		state = Moonpanel.PillarController and
-			Moonpanel.PillarController.GetState(ply)
+		state = Moonpanel.PillarController.GetState ply
 		if state and state.abortRequested
 			@EndTraceSession true
 			return
-		if Moonpanel.Net.ProcessPendingPillarSession and
-				not Moonpanel.Net.ProcessPendingPillarSession(@, session)
+		if not Moonpanel.Net.ProcessPendingPillarSession @, session
 			@EndTraceSession true
 			return
 		return unless @GetTraceSession! == session

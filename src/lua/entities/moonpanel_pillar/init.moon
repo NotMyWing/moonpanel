@@ -55,7 +55,7 @@ ENT.OnPillarDimensionsChanged = =>
 
 ENT.ApplyPillarCellFit = =>
 	return unless @GetPillarFitCells!
-	data = @GetCanvas! and @GetCanvas!\GetData!
+	data = @GetCanvas!\GetData!
 	return unless data and data.Meta and data.Meta.Width > 0
 	fitted = math.pi * 2 * @GetPillarRadius! * data.Meta.Height / data.Meta.Width
 	@SetPillarHeight math.Clamp fitted, 32, 512

@@ -125,10 +125,7 @@ else
         modelPanel = vgui.Create("DPanelSelect", panel)
         modelPanel\EnableVerticalScrollbar()
         modelPanel\SetTall(66 * 5 + 2)
-        stored = scripted_ents.GetStored "moonpanel"
-        t = Moonpanel.Canvas.Monitor_Offsets or
-            (stored and stored.t and stored.t.Monitor_Offsets) or {}
-        for model in pairs t
+        for _, model in ipairs Moonpanel.Canvas.GetMonitorModels!
             icon = vgui.Create("SpawnIcon")
             icon\SetModel(model)
             icon.Model = model

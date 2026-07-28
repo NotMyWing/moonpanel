@@ -63,7 +63,7 @@ getLocalFocusTarget = ->
 	focusTargetEntity = nil
 	return unless Moonpanel.IsFocused!
 
-	controlled = Moonpanel.GetPredictedControl! if Moonpanel.GetPredictedControl
+	controlled = Moonpanel\GetPredictedControl!
 	if IsValid controlled
 		focusTargetEntity = controlled
 		return focusTargetEntity
@@ -519,6 +519,29 @@ CANVAS.IsLocalFocusHintTarget = =>
 	return true if @__focusHintOverride
 	return false unless IsValid @__worldEntity
 	getLocalFocusTarget! == @__worldEntity
+
+CANVAS.ImportTraceSession = (controller, sessionId, revision, snapshot,
+	lastSequence, lateJoin = false, observer = false, importedPlay = {},
+	startPresentation = true) =>
+	return false unless @__pathFinder and snapshot
+	return false unless @RestoreTraceSnapshot snapshot
+	playData = table.Copy importedPlay
+	playData.startTime = CurTime! unless lateJoin and playData.startTime
+	playData.endTime = nil unless lateJoin
+	playData.controller = controller
+	playData.touchingExit = snapshot.touchingExit == true
+	playData.sessionId = sessionId
+	@SetPlayData playData
+	if startPresentation
+		@BeginPresentation {sessionId: sessionId, revision: revision}, lateJoin
+	@SetPresentationExit @IsExitPath!, lateJoin
+	if observer
+		follower = Moonpanel.Canvas.ObserverTraceFollower @__pathFinder.topology
+		follower\reset snapshot, true, lastSequence
+		@SetObserverFollower follower
+	else
+		@SetObserverFollower nil
+	true
 
 CANVAS.ImportNetworkState = (panel, data = {}) =>
 	resetSerial = math.max 0, math.floor tonumber(data.resetSerial) or 0

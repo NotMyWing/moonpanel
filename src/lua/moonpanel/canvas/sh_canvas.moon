@@ -19,13 +19,13 @@ Moonpanel.Canvas.SocketType = {
 Moonpanel.Canvas.Resolution = 512
 
 -- Shared screen-matrix construction helpers used by both client and server.
--- Monitor_Offsets maps model paths to screen transform parameters.
+-- The private model map feeds screen-matrix construction and tool selection.
 plateInfo = (name, rs, extent, offsetZ, z) -> {
     Name: name, RS: rs, RatioX: 1
     offset: Vector(0, 0, offsetZ), rot: Angle(0, 90, 180)
     x1: -extent, x2: extent, y1: -extent, y2: extent, z: z
 }
-Moonpanel.Canvas.Monitor_Offsets = {
+monitorOffsets = {
     ["models//cheeze/pcb/pcb4.mdl"]: {
         Name: "pcb4.mdl", RS: 0.0625, RatioX: 1,
         offset: Vector(0, 0, 0.5), rot: Angle(0, 0, 180),
@@ -121,10 +121,16 @@ Moonpanel.Canvas.Monitor_Offsets = {
     },
 }
 
+Moonpanel.Canvas.GetMonitorModels = =>
+	models = {}
+	for model in pairs monitorOffsets
+		models[#models + 1] = model
+	models
+
 -- Resolve screen info for an entity and model name.
 -- Returns the model-specific offset table or a fallback computed from bounding box.
 Moonpanel.Canvas.ResolveScreenInfo = (ent, modelName) ->
-    info = Moonpanel.Canvas.Monitor_Offsets[modelName]
+    info = monitorOffsets[modelName]
     if info
         return info
 
@@ -616,8 +622,6 @@ class Canvas
 			@__geometry.innerHeight = @__geometry.barWidth +
 				@__geometry.verticalBarLength * @__data.Meta.Height
 
-		@OnImportData @__data if @OnImportData ~= nil
-
 		@ResetPresentation "topology-change" if CLIENT and @__presentation
 
 		if not @__data
@@ -915,19 +919,7 @@ class Canvas
 	GetPillarTraceEngine: => @__pathFinder
 	GetDebugState: =>
 		p = @__pathFinder
-		trace = if p
-			{
-			phase: p.phase
-			hash: p\hash!
-			canSubmit: p\canSubmit!
-			touchingExit: p.touchingExit
-			topology: p.topology
-			stacks: p.stacks
-			cursors: p.cursors
-			history: p.history
-			constraints: p\GetConstraintDecisions!
-			active: p.active
-		}
+		trace = p and p\GetDebugState!
 		{
 			trace: trace
 			geometry: @__geometry
@@ -1179,26 +1171,16 @@ class Canvas
 
 		true
 
-	GetTracePrecisionScale: =>
-		data = @GetData!
-		meta = data and data.Meta or {}
-		largestDimension = math.max 3,
-			math.floor(tonumber(meta.Width) or 3),
-			math.floor(tonumber(meta.Height) or 3)
-		-- Keep the established 3x3 feel, while large boards become easier to
-		-- trace precisely. The exponent makes the reduction win over the
-		-- smaller physical cells on large boards. The floor prevents extreme
-		-- dimensions from making input unusably slow, and the player's
-		-- sensitivity convar remains an explicit override on top of this
-		-- accessibility adjustment.
-		math.Clamp math.pow(3 / largestDimension, 1.5), 0.2, 1
-
 	QuantizeDeltas: (x, y, sensitivity = 1) =>
 		-- Sensitivity is a user multiplier over the original panel feel. The
 		-- quarter-scale prevents one ordinary mouse sample crossing an edge.
 		scale = 0.25 * Moonpanel.Canvas.TraceEngine.Units /
 			math.max(@GetBarLength!, 0.000001)
-		scale *= @GetTracePrecisionScale!
+		meta = @__data and @__data.Meta or {}
+		largestDimension = math.max 3,
+			math.floor(tonumber(meta.Width) or 3),
+			math.floor(tonumber(meta.Height) or 3)
+		scale *= math.Clamp math.pow(3 / largestDimension, 1.5), 0.2, 1
 		math.Round(x * sensitivity * scale), math.Round(y * sensitivity * scale)
 
 	-- Compatibility entrypoint for local/editor callers. Network play uses
@@ -1229,7 +1211,6 @@ class Canvas
 		}
 		@__exitPath = false
 
-		@OnStart! if @OnStart ~= nil
 		@StopPathCompleteLoop!
 
 		if CLIENT

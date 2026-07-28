@@ -1070,3 +1070,30 @@ class Moonpanel.Canvas.TraceEngine
 	Snapshot: => @snapshot!
 	Restore: (snapshot) => @restore snapshot
 	Hash: => @hash!
+	GetPhase: => @phase
+	GetRevision: => @topology.revision
+	GetCursor: (index = 1) => @cursors and @cursors[index]
+	GetActiveAxis: =>
+		edge = @active and @active.primary
+		return unless edge
+		math.abs(edge.unitX) > math.abs(edge.unitY) and "x" or "y"
+	IsTracing: => @phase == @@Phase.Tracing
+	SetOcclusionConstraint: (constraint) => @occlusionConstraint = constraint
+	GetDebugState: => {
+		phase: @phase
+		hash: @hash!
+		canSubmit: @canSubmit!
+		touchingExit: @touchingExit
+		topology: @topology
+		stacks: @stacks
+		cursors: @cursors
+		history: @history
+		constraints: @GetConstraintDecisions!
+		active: @active
+	}
+	Fork: =>
+		copy = Moonpanel.Canvas.TraceEngine @topology
+		snapshot = @snapshot!
+		copy\restore snapshot
+		copy\SetOcclusionConstraint @occlusionConstraint
+		copy

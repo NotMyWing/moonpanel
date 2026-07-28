@@ -83,6 +83,7 @@ local canvas = {
 }
 local panel = {
   __rendering = true,
+  IsRendering = function() return true end,
   EntIndex = function() return 42 end,
   GetModel = function() return 'models/test.mdl' end,
   GetCanvas = function() return canvas end,

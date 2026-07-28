@@ -11,7 +11,7 @@ Moonpanel.Initialize = =>
 
 	-- Ask the server to provide info about every single panel in the game.
 	for entity in *ents.GetAll!
-		continue unless entity.Moonpanel and entity.GetCanvas
+		continue unless entity.Moonpanel
 
 		canvas = entity\GetCanvas!
 		if not canvas\GetData!
@@ -28,5 +28,5 @@ if Moonpanel.Initialized
 
 timer.Create "TheMP Panel State Synchronization", 1, 0, ->
 	Moonpanel\Initialize! unless Moonpanel.Initialized
-	return unless Moonpanel.Initialized and Moonpanel.Net.MaintainPanelDataRequests
+	return unless Moonpanel.Initialized
 	Moonpanel.Net.MaintainPanelDataRequests!

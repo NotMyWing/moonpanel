@@ -174,7 +174,7 @@ panelLines = (panel) ->
 		{ "model  #{panel\GetModel! or "-"}", DIM }
 		{ "distance #{numberText(LocalPlayer!\EyePos!\Distance(panel\WorldSpaceCenter!), 1)}u", DIM }
 		{ "sync #{boolText(data ~= nil)}  powered #{boolText(panel\GetPowered!)}  local-power #{boolText(debug and debug.power)}", data and GOOD or BAD }
-		{ "RT allocated #{boolText(rtAllocated)}  drawing #{boolText(panel.__rendering)}  dirty #{boolText(debug and debug.dirty)}", rtAllocated and GOOD or WARN }
+		{ "RT allocated #{boolText(rtAllocated)}  drawing #{boolText(panel\IsRendering!)}  dirty #{boolText(debug and debug.dirty)}", rtAllocated and GOOD or WARN }
 		{ "grid #{meta.Width or "-"}x#{meta.Height or "-"}  symmetry #{meta.Symmetry or 0}  entities #{data and #(data.Entities or {}) or 0}", WHITE }
 		{ "geometry bar #{numberText(geometry and geometry.barWidth)} / #{numberText(geometry and geometry.barLength)}  margin #{numberText(geometry and geometry.margin)}", WHITE }
 	}
@@ -248,7 +248,7 @@ panelLines = (panel) ->
 	lines
 
 drawPanelDebug = (panel) ->
-	return unless IsValid(panel) and panel.GetCanvas
+	return unless IsValid panel
 	transform = panel\GetScreenTransform!
 	return unless transform
 	panelWidth = Moonpanel.Canvas.Resolution / (panel.Aspect or 1)

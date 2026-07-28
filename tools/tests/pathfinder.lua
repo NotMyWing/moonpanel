@@ -46,6 +46,32 @@ test.test('partial movement, commit, and backtracking', function()
   assert(#engine.nodeStacks[1] == 1, 'backtrack did not return to start')
 end)
 
+test.test('trace engine exposes a stable query and fork contract', function()
+  local start = { x = 0, y = 0, screenX = 0, screenY = 0, clickable = true, neighbors = {} }
+  local finish = { x = 1, y = 0, screenX = 100, screenY = 0, neighbors = {} }
+  start.neighbors = { finish }
+  finish.neighbors = { start }
+  local engine = movementFixture({
+    nodes = { start, finish }, barWidth = 10, barLength = 100, screenWidth = 100,
+    screenHeight = 100, symmetry = 0,
+  })
+  assert(engine:start(engine.topology.nodes[1].id), 'contract fixture did not start')
+  assert(engine:GetPhase() == Moonpanel.Canvas.TraceEngine.Phase.Tracing,
+    'phase query returned the wrong state')
+  assert(engine:GetRevision() == engine.topology.revision, 'revision query drifted')
+  assert(engine:GetCursor(1), 'cursor query returned no head')
+  assert(engine:applyDeltas(25, 0), 'contract fixture did not move')
+  assert(engine:GetActiveAxis() == 'x', 'active-axis query lost direction')
+  local debugState = engine:GetDebugState()
+  assert(debugState.phase == engine:GetPhase() and debugState.topology == engine.topology,
+    'debug query did not expose the engine-owned state')
+  local constraint = function() return 1 end
+  engine:SetOcclusionConstraint(constraint)
+  local fork = engine:Fork()
+  assert(fork:Hash() == engine:Hash(), 'fork did not preserve trace state')
+  assert(fork.occlusionConstraint == constraint, 'fork did not preserve obstruction')
+end)
+
 test.test('continuous edges use the short wrapped direction and stable display endpoint', function()
   local left = {
     x = -2, y = 0, screenX = 0, screenY = 50,

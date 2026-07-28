@@ -183,11 +183,7 @@ Moonpanel.Net.HashPanelSyncData = (data) ->
 	-- turn every later request for an unchanged solved panel into a new sync.
 	hashData = table.Copy data
 	hashData.visualElapsed = nil
-	return Moonpanel.Canvas.RuleEngine\HashValue hashData if Moonpanel.Canvas.RuleEngine
-	-- This fallback is only for load-order safety. Normal panel networking
-	-- loads the shared rule engine before this module is used.
-	json = util.TableToJSON hashData
-	tonumber(util.CRC(json or "")) or 0
+	Moonpanel.Canvas.RuleEngine\HashValue hashData
 
 Moonpanel.Net.GetPanelSyncState = (ply, panel) ->
 	state = Moonpanel.Net.PanelDataSyncState[ply]
@@ -230,18 +226,13 @@ Moonpanel.Net.BroadcastVisualResult = (panel, data) ->
 		solved: data.success == true
 		eventSerial: visualEventSerial
 	}
-	if panel.ApplyTerminalResult
-		panel\ApplyTerminalResult envelope
-	else
-		panel\SetVisualResult envelope if panel.SetVisualResult
-		panel\SetSolvedState envelope.solved == true, envelope if panel.SetSolvedState
-	Moonpanel.Wire.HandleResult panel, envelope if Moonpanel.Wire and
-		Moonpanel.Wire.HandleResult
+	panel\ApplyTerminalResult envelope
+	Moonpanel.Wire.HandleResult panel, envelope
 	startFlow flowTypes.TraceVisualResult
 	net.WriteEntity panel
 	net.WriteTable envelope
 	net.Broadcast!
-	panel\ClearEndingTraceSession session if panel.ClearEndingTraceSession
+	panel\ClearEndingTraceSession session
 
 Moonpanel.Net.SendEditorOpen = (ply, surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) ->
 	startFlow flowTypes.EditorOpen
@@ -284,7 +275,7 @@ hook.Add "PlayerDisconnected", "Moonpanel Multiplayer Safeguards", (ply) ->
 		Moonpanel.Net.PendingPlayerDataRequests[panel] = nil if request.ply == ply
 	state = Moonpanel.Canvas.VerifierState
 	canvas = state and state.activeByPlayer[ply]
-	canvas\CancelSolution("player_disconnect") if canvas and canvas.CancelSolution
+	canvas\CancelSolution "player_disconnect" if canvas
 	ply.__moonpanelMalformed = nil
 	Moonpanel.Net.PanelDataSyncState[ply] = nil
 
@@ -431,8 +422,8 @@ receive flowTypes.TraceInputBatch, (len, ply) ->
 		}
 	predictedHash = net.ReadUInt 32
 
-	return unless IsValid(panel) and panel.Moonpanel and panel.GetCanvas
-	session = panel\GetTraceSession! if panel.GetTraceSession
+	return unless IsValid(panel) and panel.Moonpanel
+	session = panel\GetTraceSession!
 	return unless session and session.controller == ply and session.id == sessionId
 	return unless revision == session.revision
 	return unless ruleRevision == session.ruleRevision
@@ -480,7 +471,7 @@ receive flowTypes.TraceAction, (len, ply) ->
 	ruleRevision = net.ReadUInt 32
 	finalSequence = net.ReadUInt 32
 	action = net.ReadUInt 2
-	return unless IsValid(panel) and panel.GetTraceSession and panel\GetTraceSession!
+	return unless IsValid(panel) and panel\GetTraceSession!
 	session = panel\GetTraceSession!
 	return unless session.id == sessionId and session.controller == ply
 	return unless revision == session.revision and ruleRevision == session.ruleRevision
@@ -505,12 +496,12 @@ receive flowTypes.TraceAction, (len, ply) ->
 
 receive flowTypes.PanelRequestData, (len, ply) ->
 	entity = net.ReadEntity!
-	return unless IsValid(entity) and entity.Moonpanel and entity.GetCanvas
+	return unless IsValid(entity) and entity.Moonpanel
 	now = CurTime!
 	syncState = Moonpanel.Net.GetPanelSyncState ply, entity
 	if syncState
 		return if syncState.nextRequest and now < syncState.nextRequest
-		currentData = entity\BuildPanelSyncData! if entity.BuildPanelSyncData
+		currentData = entity\BuildPanelSyncData!
 		return if currentData and
 			Moonpanel.Net.HashPanelSyncData(currentData) == syncState.hash
 	request = Moonpanel.Net.PendingPlayerDataRequests[entity]
@@ -522,7 +513,7 @@ receive flowTypes.PanelRequestDataFromPlayer, (len, ply) ->
 	entity = net.ReadEntity!
 	request = Moonpanel.Net.PendingPlayerDataRequests[entity]
 	return unless request and request.ply == ply
-	return unless IsValid(entity) and entity.Moonpanel and entity.GetCanvas
+	return unless IsValid(entity) and entity.Moonpanel
 	unless Moonpanel.Net.CanEditPanel ply, entity
 		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
 		return

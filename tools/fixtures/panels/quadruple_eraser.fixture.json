@@ -1,0 +1,18 @@
+{
+  "name": "quadruple_eraser",
+  "panel": "quadruple_eraser.txt",
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "the only route solves and erases every eraser",
+      "traces": [],
+      "allSimpleTraces": {"from": [0, 2], "to": [2, 0], "count": 1},
+      "expected": {
+        "success": true,
+        "status": "complete",
+        "erasureCount": 4,
+        "remainingCount": 0
+      }
+    }
+  ]
+}

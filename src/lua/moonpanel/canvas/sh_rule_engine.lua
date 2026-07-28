@@ -1252,30 +1252,97 @@ local function solveEraserRegion(facts, baseActive, region, erasers, targets, op
         searchCheckpoints = searchCheckpoints + 1
         return not options or not options.checkpoint or options.checkpoint(1) ~= false
     end
-    -- If no other clue is eligible, Erasers may consume one another. Use a
-    -- cyclic, non-self assignment and accept it only when removing the full
-    -- authored set leaves the region valid.
+    -- Without other targets, the largest even set of Erasers consumes itself.
+    -- An odd survivor remains an unsatisfied clue.
     if #targets == 0 and #erasers > 1 then
+        local usedCount = #erasers - #erasers % 2
+        local used, retained = {}, {}
+        for index, eraserIndex in ipairs(erasers) do
+            local destination = index <= usedCount and used or retained
+            destination[#destination + 1] = eraserIndex
+        end
         local candidate = evaluateRegionWithRemoved(
-            facts, baseActive, region.id, erasers, {}, options)
+            facts, baseActive, region.id, used, {}, options)
         if candidate.status ~= "complete" then
             return { status = candidate.status, report = candidate }
         end
-        if candidate.success then
+        if candidate.success or #retained == 1 and #(candidate.violations or {}) == 1 then
             local assignments = {}
-            for index, eraserIndex in ipairs(erasers) do
+            for index, eraserIndex in ipairs(used) do
                 assignments[#assignments + 1] = {
                     eraserIndex = eraserIndex,
-                    targetIndex = erasers[index % #erasers + 1],
+                    targetIndex = used[index % #used + 1],
                 }
             end
             return {
                 status = "complete",
-                success = true,
+                success = candidate.success,
                 baseline = baseline,
                 selected = candidate,
                 erasures = assignments,
-                proof = { minimumUsed = #erasers, targets = {} },
+                invalidErasers = #retained > 0 and retained or nil,
+                proof = { minimumUsed = usedCount, targets = {} },
+            }
+        end
+    end
+    -- Find the smallest set of non-Eraser clues that makes the region valid;
+    -- any remaining Erasers can only cancel in pairs, with an odd survivor
+    -- reported as the remaining error.
+    if #targets > 0 and #targets <= #erasers then
+        local solution
+        for targetCount = 1, #targets do
+            local failedStatus
+            forEachCombination(targets, targetCount, nil, function(targetSet)
+                local candidate = evaluateRegionWithRemoved(
+                    facts, baseActive, region.id, erasers, targetSet, options)
+                if candidate.status ~= "complete" then
+                    failedStatus = candidate
+                    return false
+                end
+                if candidate.success then
+                    solution = { report = candidate, targets = arrayCopy(targetSet) }
+                    return false
+                end
+                return true
+            end, profile, 0, false)
+            if failedStatus then
+                return { status = failedStatus.status, report = failedStatus }
+            end
+            if solution then break end
+        end
+        if solution then
+            local targetCount = #solution.targets
+            local remainder = #erasers - targetCount
+            local cycleCount = remainder - remainder % 2
+            local assignments = {}
+            for index, targetIndex in ipairs(solution.targets) do
+                assignments[#assignments + 1] = {
+                    eraserIndex = erasers[index],
+                    targetIndex = targetIndex,
+                }
+            end
+            local cycleStart = targetCount + 1
+            local cycleEnd = targetCount + cycleCount
+            for index = cycleStart, cycleEnd do
+                assignments[#assignments + 1] = {
+                    eraserIndex = erasers[index],
+                    targetIndex = erasers[index < cycleEnd and index + 1 or cycleStart],
+                }
+            end
+            local retained = {}
+            for index = cycleEnd + 1, #erasers do retained[#retained + 1] = erasers[index] end
+            local used = {}
+            for index = 1, cycleEnd do used[index] = erasers[index] end
+            local selected = evaluateRegionWithRemoved(
+                facts, baseActive, region.id, used, solution.targets, options)
+            return {
+                status = "complete",
+                success = #retained == 0 and selected.success,
+                baseline = baseline,
+                selected = selected,
+                erasures = assignments,
+                invalidErasers = #retained > 0 and retained or nil,
+                proof = { minimumUsed = cycleEnd, targets = solution.targets },
             }
         end
     end

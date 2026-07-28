@@ -1,0 +1,21 @@
+{
+  "name": "eraser_with_colors",
+  "panel": "eraser_with_colors.txt",
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "right right right up up up reports solved",
+      "traces": [
+        [[0,3],[1,3],[2,3],[3,3],[3,2],[3,1],[3,0]]
+      ],
+      "expected": {
+        "success": true,
+        "status": "complete",
+        "erasureCount": 7,
+        "eraserTargetCount": 6,
+        "nonEraserTargetCount": 1,
+        "remainingCount": 0
+      }
+    }
+  ]
+}

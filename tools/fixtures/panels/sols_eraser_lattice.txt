@@ -1,0 +1,30 @@
+{
+  "SchemaVersion": 7,
+  "Meta": {
+    "Width": 3,
+    "Height": 3,
+    "Symmetry": 0,
+    "Continuous": false
+  },
+  "Extensions": {
+    "MidpointTerminals": true
+  },
+  "Sounds": {
+    "Preset": "Default"
+  },
+  "Entities": [
+    [], [], [], [], [], [], {"Type": "End", "Data": []},
+    [], {"Type": "Color", "Data": {"RuleColor": 6}}, [],
+    {"Type": "Color", "Data": {"RuleColor": 2}}, [],
+    {"Type": "Color", "Data": {"RuleColor": 8}}, [],
+    [], [], [], [], [], [], [],
+    [], {"Type": "Triangle", "Data": {"RuleColor": 9, "Count": 3}}, [],
+    {"Type": "Eraser", "Data": {"RuleColor": 2}}, [],
+    {"Type": "Triangle", "Data": {"RuleColor": 9, "Count": 1}}, [],
+    [], [], [], [], [], [], [],
+    [], {"Type": "Color", "Data": {"RuleColor": 7}}, [],
+    {"Type": "Triangle", "Data": {"RuleColor": 9, "Count": 1}}, [],
+    {"Type": "Triangle", "Data": {"RuleColor": 6, "Count": 1}}, [],
+    {"Type": "Start", "Data": []}, [], [], [], [], [], []
+  ]
+}

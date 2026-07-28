@@ -625,7 +625,7 @@ test.test('equivalent eraser targets choose the lowest stable socket', function(
     'equivalent eraser mapping was not lexicographically minimal')
 end)
 
-test.test('all erasers receive targets even when a subset could validate', function()
+test.test('only necessary erasers receive clues before pair cancellation', function()
   local data = panel(5, 1)
   setCell(data, 1, 'Color', {Color = 1, RuleColor = 1})
   setCell(data, 2, 'Color', {Color = 2, RuleColor = 2})
@@ -642,8 +642,9 @@ test.test('all erasers receive targets even when a subset could validate', funct
   setCell(subsetValid, 3, 'Eraser', {Color = 3, RuleColor = 3})
   setCell(subsetValid, 4, 'Eraser', {Color = 4, RuleColor = 4})
   local complete = evaluate(subsetValid)
-  assert(complete.success and #complete.erasures == 2,
-    'the complete eraser assignment stopped at a valid subset')
+  assert(not complete.success and #complete.erasures == 1 and
+    #complete.remaining == 1,
+    'the solver did not preserve the unnecessary eraser as an error')
 end)
 
 test.test('erasers can target every clue family but never another eraser', function()

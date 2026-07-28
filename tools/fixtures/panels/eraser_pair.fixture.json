@@ -1,0 +1,19 @@
+{
+  "name": "eraser_pair",
+  "panel": "eraser_pair.txt",
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "right right up up leaves one eraser erroring",
+      "traces": [[[0,2],[1,2],[2,2],[2,1],[2,0]]],
+      "expected": {
+        "success": false,
+        "status": "complete",
+        "erasureCount": 1,
+        "eraserTargetCount": 0,
+        "nonEraserTargetCount": 1,
+        "remainingCount": 1
+      }
+    }
+  ]
+}

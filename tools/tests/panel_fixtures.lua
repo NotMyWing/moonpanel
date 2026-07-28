@@ -181,6 +181,10 @@ local function allSimpleTraces(spec, topology, nodeAt, source)
 
   visit(start)
   assert(#traces > 0, source .. ': exhaustive trace fixture has no start-to-exit routes')
+  if spec.count then
+    assert(#traces == spec.count,
+      string.format('%s: expected %d simple routes, found %d', source, spec.count, #traces))
+  end
   return traces
 end
 
@@ -209,6 +213,38 @@ local function polyominoBackends(report)
   return backends
 end
 
+local function checkExpected(report, expected, source, name, definition)
+  local eraserTargets, nonEraserTargets = 0, 0
+  for _, erasure in ipairs(report.erasures or {}) do
+    local target = definition.clueById[erasure.targetIndex]
+    if target and target.kind == 'eraser' then
+      eraserTargets = eraserTargets + 1
+    else
+      nonEraserTargets = nonEraserTargets + 1
+    end
+  end
+  local actualByName = {
+    success = report.success,
+    status = report.status,
+    violations = report.violations,
+    erasures = report.erasures,
+    erasureCount = #(report.erasures or {}),
+    eraserTargetCount = eraserTargets,
+    nonEraserTargetCount = nonEraserTargets,
+    remaining = report.remaining,
+    remainingCount = #(report.remaining or {}),
+    constraintKinds = constraintKinds(report),
+    polyominoBackends = polyominoBackends(report),
+    reportHash = report.reportHash,
+    ruleRevision = report.ruleRevision,
+  }
+  for key, expectedValue in pairs(expected or {}) do
+    assert(actualByName[key] ~= nil, source .. ': unsupported expected field ' .. key)
+    assert(sameValue(actualByName[key], expectedValue),
+      source .. ': ' .. name .. ': report field ' .. key .. ' did not match the fixture')
+  end
+end
+
 for _, fixture in ipairs(fixtures) do
   local function normalizeLegacyKeys(value)
     if type(value) ~= 'table' then return value end
@@ -227,10 +263,36 @@ for _, fixture in ipairs(fixtures) do
   local topology, nodeAt = buildGridTopology(panel, fixture.topologyRevision)
   local definition = RuleEngine.Compile(panel, topology)
   for _, testCase in ipairs(fixture.tests or {}) do
+    local function evaluate(stacks)
+      return RuleEngine.Evaluate(definition, {
+        revision = topology.revision,
+        stacks = stacks,
+      })
+    end
+    local exhaustive = testCase.allSimpleTraces and
+      allSimpleTraces(testCase.allSimpleTraces, topology, nodeAt, fixture.source)
+    if exhaustive and testCase.allSimpleTraces.solutions ~= nil then
+      test.test(fixture.name .. ': ' .. testCase.name, function()
+        local solved, solution = 0
+        for _, stacks in ipairs(exhaustive) do
+          local report = evaluate(stacks)
+          if report.success then
+            solved = solved + 1
+            solution = report
+          end
+        end
+        assert(solved == testCase.allSimpleTraces.solutions,
+          string.format('%s: expected %d solutions, found %d',
+            fixture.source, testCase.allSimpleTraces.solutions, solved))
+        if solution then
+          checkExpected(solution, testCase.expected, fixture.source, testCase.name, definition)
+        end
+      end)
+    else
     local cases = { testCase }
-    if testCase.allSimpleTraces then
+    if exhaustive then
       cases = {}
-      for index, stacks in ipairs(allSimpleTraces(testCase.allSimpleTraces, topology, nodeAt, fixture.source)) do
+      for index, stacks in ipairs(exhaustive) do
         cases[index] = {
           name = testCase.name .. ' #' .. index,
           traces = {},
@@ -241,30 +303,11 @@ for _, fixture in ipairs(fixtures) do
     end
     for _, case in ipairs(cases) do
       test.test(fixture.name .. ': ' .. case.name, function()
-        local report = RuleEngine.Evaluate(definition, {
-          revision = topology.revision,
-          stacks = case._stacks or traceStacks(case, nodeAt, fixture.source, panel),
-        })
-
-      local expected = case.expected
-      local actualByName = {
-        success = report.success,
-        status = report.status,
-        violations = report.violations,
-        erasures = report.erasures,
-        remaining = report.remaining,
-        constraintKinds = constraintKinds(report),
-        polyominoBackends = polyominoBackends(report),
-        reportHash = report.reportHash,
-        ruleRevision = report.ruleRevision,
-      }
-      for key, expectedValue in pairs(expected) do
-        assert(actualByName[key] ~= nil, fixture.source .. ': unsupported expected field ' .. key)
-        assert(sameValue(actualByName[key], expectedValue),
-          fixture.source .. ': ' .. testCase.name .. ': report field ' .. key ..
-          ' did not match the fixture')
-      end
+        local report = evaluate(
+          case._stacks or traceStacks(case, nodeAt, fixture.source, panel))
+        checkExpected(report, case.expected, fixture.source, testCase.name, definition)
       end)
+    end
     end
   end
 end

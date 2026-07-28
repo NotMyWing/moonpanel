@@ -1,0 +1,19 @@
+{
+  "name": "triple_eraser",
+  "panel": "triple_eraser.txt",
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "the authored bottom-left to top-right route is unsatisfiable",
+      "traces": [],
+      "allSimpleTraces": {
+        "from": [0, 2],
+        "to": [2, 0]
+      },
+      "expected": {
+        "success": false,
+        "status": "complete"
+      }
+    }
+  ]
+}

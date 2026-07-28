@@ -62,10 +62,24 @@ local canvas = {
   __rtDirty = false,
   __geometry = { barWidth = 12, barLength = 100, margin = 20 },
   GetData = function() return data end,
-  GetPathFinder = function() return nil end,
+  GetPillarTraceEngine = function() return nil end,
+  GetTraceTopology = function() return nil end,
+  GetTraceDiagnostics = function() return nil end,
+  GetDebugState = function()
+    return { trace = nil, geometry = { barWidth = 12, barLength = 100, margin = 20 },
+      power = true, dirty = false, solving = false, presentation = false,
+      result = false, sound = 'off' }
+  end,
   GetRuleDefinition = function() return nil end,
   GetObserverFollower = function() return nil end,
-  GetSoundEnabled = function() return false end,
+  GetGeometry = function() return { barWidth = 12, barLength = 100, margin = 20 } end,
+  CanRender = function() return true end,
+  IsPowerState = function() return true end,
+  IsRenderDirty = function() return false end,
+  IsPresentationActive = function() return false end,
+  HasVisualResult = function() return false end,
+  IsSolving = function() return false end,
+  GetSoundStatus = function() return 'off' end,
 }
 local panel = {
   __rendering = true,
@@ -112,7 +126,21 @@ test.test('active observer diagnostics cover trace, follower, and occlusion stat
     canSubmit = function() return false end,
     GetConstraintDecisions = function() return { 1024 } end,
   }
-  canvas.GetPathFinder = function() return pathfinder end
+  canvas.GetPillarTraceEngine = function() return pathfinder end
+  canvas.GetTraceTopology = function() return topology end
+  canvas.GetTraceDiagnostics = function()
+    return {
+      phase = pathfinder.phase, hash = pathfinder:hash(), canSubmit = pathfinder:canSubmit(),
+      touchingExit = pathfinder.touchingExit, topology = topology,
+      stacks = pathfinder.stacks, cursors = pathfinder.cursors, history = pathfinder.history,
+      constraints = pathfinder:GetConstraintDecisions(), active = pathfinder.active,
+    }
+  end
+  canvas.GetDebugState = function()
+    return { trace = canvas.GetTraceDiagnostics(), geometry = { barWidth = 4, barLength = 25, margin = 0 },
+      power = true, dirty = false, solving = false, presentation = true,
+      result = false, sound = '0/0 playing' }
+  end
   canvas.GetRuleDefinition = function()
     return { ruleRevision = 456, clues = { {} } }
   end
@@ -122,10 +150,14 @@ test.test('active observer diagnostics cover trace, follower, and occlusion stat
       hasReached = function() return false end,
     }
   end
-  canvas.__presentation = {
-    result = nil,
-    isActive = function() return true end,
-  }
+  canvas.IsPresentationActive = function() return true end
+  canvas.HasVisualResult = function() return false end
+  canvas.IsSolving = function() return false end
+  canvas.GetGeometry = function() return { barWidth = 4, barLength = 25, margin = 0 } end
+  canvas.IsPowerState = function() return true end
+  canvas.IsRenderDirty = function() return false end
+  canvas.CanRender = function() return true end
+  canvas.GetSoundStatus = function() return '0/0 playing' end
   Moonpanel.Net.TraceSessions[panel] = {
     id = 7, controller = {}, nextSequence = 10, revision = 123,
     pending = {}, unsent = {}, serverHash = 987,

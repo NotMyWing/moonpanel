@@ -3,7 +3,7 @@ AddCSLuaFile!
 Moonpanel.Canvas.Sockets = {}
 
 class Moonpanel.Canvas.Sockets.BaseSocket
-    new: (@__canvas, @__id) =>
+    new: (@__canvas, @__id, @__dataIndex) =>
 
     __setCoordinates: (width) =>
         data = @__canvas\GetData!
@@ -30,6 +30,7 @@ class Moonpanel.Canvas.Sockets.BaseSocket
 		@__canvas\RebuildPathFinderCache! unless @__canvas\IsBulkImporting!
 
 	GetEntity: => @__entity
+	GetDataIndex: => @__dataIndex
 
     GetCanvas: => @__canvas
 
@@ -47,8 +48,8 @@ class Moonpanel.Canvas.Sockets.IntersectionSocket extends Moonpanel.Canvas.Socke
     @SocketType = Moonpanel.Canvas.SocketType.Intersection
     @BaseEntity = Moonpanel.Canvas.Entities.BaseIntersection
 
-    new: (canvas, id) =>
-        super canvas, id
+    new: (canvas, id, dataIndex) =>
+        super canvas, id, dataIndex
 
         data = canvas\GetData!
         @__setCoordinates data.Meta.Width + 1
@@ -91,8 +92,8 @@ class Moonpanel.Canvas.Sockets.CellSocket extends Moonpanel.Canvas.Sockets.BaseS
     @SocketType = Moonpanel.Canvas.SocketType.Cell
     @BaseEntity = Moonpanel.Canvas.Entities.BaseCell
 
-    new: (canvas, id) =>
-        super canvas, id
+    new: (canvas, id, dataIndex) =>
+        super canvas, id, dataIndex
 
         data = canvas\GetData!
         @__setCoordinates data.Meta.Width

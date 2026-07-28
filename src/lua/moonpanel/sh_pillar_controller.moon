@@ -58,7 +58,7 @@ Controller.MakeSeed = (panel, ply, sessionId) ->
 	halfWidth = math.max math.abs(mins.x), math.abs(maxs.x)
 	halfDepth = math.max math.abs(mins.y), math.abs(maxs.y)
 	radius = position\Distance panel\GetPillarAxisPoint(position)
-	pathfinder = panel\GetCanvas! and panel\GetCanvas!\GetPathFinder!
+	pathfinder = panel\GetCanvas! and panel\GetCanvas!\GetPillarTraceEngine!
 	head = pathfinder and pathfinder.cursors and pathfinder.cursors[1]
 	return unless head
 	{
@@ -79,7 +79,7 @@ Controller.Begin = (panel, ply, sessionId, seed = nil) ->
 	return false unless ply\GetMoveType! == MOVETYPE_WALK
 	seed or= Controller.MakeSeed panel, ply, sessionId
 	return false unless seed and seed.sessionId == sessionId
-	pathfinder = panel\GetCanvas! and panel\GetCanvas!\GetPathFinder!
+	pathfinder = panel\GetCanvas! and panel\GetCanvas!\GetPillarTraceEngine!
 	return false unless pathfinder and seed.revision == pathfinder.topology.revision
 	defaultMins, defaultMaxs = ply\GetHull!
 	state = {
@@ -338,7 +338,7 @@ Controller.MakeFollowerMovement = (state, ply, cmd, maxSpeed, radiusSafe,
 			unwrappedHead = targetGhostAngle
 		else
 			pathfinder = if SERVER then state.motionPathfinder else
-				panel\GetCanvas!\GetPathFinder!
+				panel\GetCanvas!\GetPillarTraceEngine!
 			unwrappedPlayer, unwrappedHead = Controller.UpdateAngles state, ply,
 				pathfinder
 		if unwrappedHead
@@ -411,7 +411,7 @@ Controller.ProcessCommand = (ply, cmd, retainedButtons = 0,
 		cmd\SetViewAngles viewAngles if viewAngles
 		return true
 	pathfinder = if SERVER then state.motionPathfinder else
-		panel\GetCanvas!\GetPathFinder!
+		panel\GetCanvas!\GetPillarTraceEngine!
 	return false unless pathfinder and pathfinder.phase ==
 		Moonpanel.Canvas.TraceEngine.Phase.Tracing
 	commandNumber = cmd\CommandNumber!
@@ -504,7 +504,7 @@ Controller.ProcessCommand = (ply, cmd, retainedButtons = 0,
 		if CLIENT
 			changed = panel\GetCanvas!\ApplyTraceSample requestedXQ,
 				requestedYQ, false, context
-			constraints = panel\GetCanvas!\GetPathFinder!\GetConstraintDecisions!
+			constraints = panel\GetCanvas!\GetConstraintDecisions!
 		else
 			changed = pathfinder\applySample requestedXQ, requestedYQ, false,
 				context

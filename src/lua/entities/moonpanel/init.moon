@@ -24,8 +24,7 @@ wirePath = (panel, result, maximum = 512) ->
 	return "" unless result and result.snapshot and
 		istable(result.snapshot.stacks)
 	canvas = panel\GetCanvas!
-	pathfinder = canvas and canvas\GetPathFinder!
-	topology = pathfinder and pathfinder.topology
+	topology = canvas and canvas\GetTraceTopology!
 	return "" unless topology and topology.nodes
 	data = canvas\GetData! if canvas
 	width = data and data.Meta and tonumber(data.Meta.Width)
@@ -262,11 +261,10 @@ ENT.StartTraceSession = (ply, x, y, inputSensitivity = 1,
 	@SetSolvedState false if @SetSolvedState
 	@__lastVisualResult = nil
 	@__lastVisualResultAt = nil
-	pathfinder = canvas\GetPathFinder!
 	ruleDefinition = canvas\GetRuleDefinition!
 	session = Moonpanel.TraceSession.Create @, {
 		controller: ply
-		revision: pathfinder.topology.revision
+		revision: canvas\GetTraceRevision!
 		ruleRevision: ruleDefinition and ruleDefinition.ruleRevision or 0
 		lastSequence: 0
 		rateWindow: CurTime!

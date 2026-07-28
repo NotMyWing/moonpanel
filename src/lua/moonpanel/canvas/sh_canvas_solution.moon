@@ -57,7 +57,7 @@ Moonpanel.Canvas.VerifierState or= {
 acquireVerifier = (canvas) ->
 	return true unless SERVER
 	state = Moonpanel.Canvas.VerifierState
-	player = canvas.__playData and canvas.__playData.controller
+	player = canvas\GetAttemptController!
 	return false unless IsValid(player) and player\IsPlayer!
 	return false if state.activeByCanvas[canvas] or state.activeByPlayer[player]
 	return false if state.total >= 2

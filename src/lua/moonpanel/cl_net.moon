@@ -54,9 +54,7 @@ Moonpanel.Net.PredictTraceStart = (panel, x, y) ->
 
 	ply = LocalPlayer!
 	canvas = panel\GetCanvas!
-	pathfinder = canvas and canvas\GetPathFinder!
-
-	return false unless IsValid(ply) and canvas and pathfinder
+	return false unless IsValid(ply) and canvas and canvas\GetTracePhase!
 	return false unless ply\Alive! and Moonpanel\IsFocused ply
 	return false unless panel\GetPowered!
 
@@ -68,25 +66,24 @@ Moonpanel.Net.PredictTraceStart = (panel, x, y) ->
 	return false if compatibility and not compatibility.playable
 
 	phases = Moonpanel.Canvas.TraceEngine.Phase
-	return false unless pathfinder.phase == phases.Idle or
-		pathfinder.phase == phases.Feedback
+	phase = canvas\GetTracePhase!
+	return false unless phase == phases.Idle or phase == phases.Feedback
 
 	node = canvas\FindStartNode x, y, 32
 	return false unless node
 
-	oldSnapshot = pathfinder\snapshot!
+	oldSnapshot = canvas\GetTraceSnapshot!
 	oldPlayData = canvas\GetPlayDataSnapshot!
 	return false unless canvas\Start ply, node.id
 
-	pathfinder = canvas\GetPathFinder!
-	return false unless pathfinder
+	return false unless canvas\GetTracePhase!
 
 	ruleDefinition = canvas\GetRuleDefinition!
 	currentTime = RealTime!
 
 	Moonpanel.Net.TraceSessions[panel] = {
 		id: 0
-		revision: pathfinder.topology.revision
+		revision: canvas\GetTraceRevision!
 		ruleRevision: ruleDefinition and ruleDefinition.ruleRevision or 0
 		controller: ply
 		nextSequence: 0
@@ -187,7 +184,7 @@ Moonpanel.Net.QueueTraceSample = (panel, xQ, yQ, boost = false,
 		boost: boost == true
 		commandNumber: math.max 0, math.floor commandNumber or 0
 		hash: if Moonpanel\IsServerAuthoritativeTrace! then 0 else
-			panel\GetCanvas!\GetPathFinder!\hash!
+			panel\GetCanvas!\GetTraceHash!
 		:constraints
 	}
 	table.insert session.pending, sample
@@ -285,8 +282,7 @@ hook.Add "Think", "TheMP Trace Network", ->
 				session.visualApplied = true
 				session.visualResult = nil
 			if session.terminal and session.visualApplied
-				pathfinder = canvas\GetPathFinder!
-				pathfinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback if pathfinder
+				canvas\SetTraceFeedback!
 				canvas\SetObserverFollower nil
 				Moonpanel.Net.SyncClickerState!
 				Moonpanel.Net.TraceSessions[panel] = nil
@@ -308,9 +304,10 @@ receive flowTypes.TraceControlGrant, ->
 	lastSequence = net.ReadUInt 32
 	snapshot = net.ReadTable!
 	orbitSeed = net.ReadBool! and net.ReadTable! or nil
-	pathfinder = panel\GetCanvas!\GetPathFinder!
+	canvas = panel\GetCanvas!
+	topology = canvas\GetTraceTopology!
 	definition = panel\GetCanvas!\GetRuleDefinition!
-	return unless pathfinder and revision == pathfinder.topology.revision
+	return unless topology and revision == topology.revision
 	return unless definition and ruleRevision == definition.ruleRevision
 	existing = Moonpanel.Net.TraceSessions[panel]
 	provisional = existing and existing.provisional and existing.controller == LocalPlayer!
@@ -318,27 +315,26 @@ receive flowTypes.TraceControlGrant, ->
 	provisionalAction = provisional and existing.pendingAction or nil
 	if existing and existing.id == sessionId
 		if controller ~= LocalPlayer! or Moonpanel\IsServerAuthoritativeTrace!
-			oldExitPath = pathfinder\isExitPath!
-			pathfinder\restore snapshot
+			oldExitPath = panel\GetCanvas!\IsExitPath!
+			panel\GetCanvas!\RestoreTraceSnapshot snapshot
 			follower = panel\GetCanvas!\GetObserverFollower!
 			unless follower
-				follower = Moonpanel.Canvas.ObserverTraceFollower pathfinder.topology
+				follower = Moonpanel.Canvas.ObserverTraceFollower topology
 				follower\reset snapshot, true, lastSequence
 				panel\GetCanvas!\SetObserverFollower follower
 			else
 				follower\setTarget snapshot, lastSequence
 			existing.serverSequence = lastSequence
-			existing.serverHash = pathfinder\hash!
-			if oldExitPath ~= pathfinder\isExitPath!
+			existing.serverHash = canvas\GetTraceHash!
+			if oldExitPath ~= canvas\IsExitPath!
 				table.insert existing.presentationEvents, {
 					sequence: lastSequence
-					exitPath: pathfinder\isExitPath!
+					exitPath: canvas\IsExitPath!
 				}
 		return
 	if existing and not provisional and existing.controller == LocalPlayer! and Moonpanel.EndPillarOrbit
 		Moonpanel\EndPillarOrbit LocalPlayer!
-	return unless pathfinder\restore snapshot
-	canvas = panel\GetCanvas!
+	return unless canvas\RestoreTraceSnapshot snapshot
 	importedPlay = canvas\GetPlayDataSnapshot!
 	lateJoin = lastSequence > 0 or importedPlay and
 		importedPlay.sessionId == sessionId
@@ -351,11 +347,11 @@ receive flowTypes.TraceControlGrant, ->
 	}
 	unless provisional
 		canvas\BeginPresentation { :sessionId, :revision }, lateJoin
-	canvas\SetPresentationExit pathfinder\isExitPath!, lateJoin
+	canvas\SetPresentationExit canvas\IsExitPath!, lateJoin
 
 	local follower
 	if controller ~= LocalPlayer! or Moonpanel\IsServerAuthoritativeTrace!
-		follower = Moonpanel.Canvas.ObserverTraceFollower pathfinder.topology
+		follower = Moonpanel.Canvas.ObserverTraceFollower topology
 		follower\reset snapshot, true, lastSequence
 		canvas\SetObserverFollower follower
 	else
@@ -395,7 +391,7 @@ receive flowTypes.TraceControlGrant, ->
 				controller, sample.constraints
 		sequenceIndex = 1
 		for sample in *Moonpanel.Net.TraceSessions[panel].unsent
-			sample.hash = pathfinder\hash!
+			sample.hash = canvas\GetTraceHash!
 			Moonpanel.Net.TraceSessions[panel].pending[sequenceIndex].hash = sample.hash
 			sequenceIndex += 1
 		Moonpanel.Net.PendingTraceStarts[panel] = nil
@@ -415,11 +411,10 @@ receive flowTypes.TraceControlReject, ->
 		return
 	return unless session and session.provisional
 	canvas = panel\GetCanvas!
-	pathfinder = canvas\GetPathFinder!
 	canvas\ResetRuntime "start-rejected"
-	pathfinder\restore pending.snapshot if pending.snapshot
+	canvas\RestoreTraceSnapshot pending.snapshot if pending.snapshot
 	canvas\SetPlayData pending.playData or {}
-	canvas\SetPresentationExit pathfinder\isExitPath!, true
+	canvas\SetPresentationExit canvas\IsExitPath!, true
 	Moonpanel.Net.ClearTraceSession panel
 	Moonpanel.Net.SyncClickerState!
 	MsgC Color(255, 150, 80), "[Moonpanel] predicted trace start rejected (reason ",
@@ -454,14 +449,13 @@ receive flowTypes.TraceObserverAdvance, ->
 	return unless firstSequence == session.serverSequence + 1
 
 	canvas = panel\GetCanvas!
-	pathfinder = canvas\GetPathFinder!
-	oldExitPath = pathfinder\isExitPath!
+	oldExitPath = canvas\IsExitPath!
 	for sample in *samples
 		if isLocalController and not Moonpanel\IsServerAuthoritativeTrace!
 			canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
 				nil, sample.constraints
 		else
-			pathfinder\applySample sample.xQ, sample.yQ, sample.boost,
+			canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
 				nil, sample.constraints
 	finalSequence = firstSequence + count - 1
 	session.serverSequence = finalSequence
@@ -470,10 +464,10 @@ receive flowTypes.TraceObserverAdvance, ->
 		while session.pending[1] and session.pending[1].sequence <= finalSequence
 			table.remove session.pending, 1
 		unless Moonpanel\IsServerAuthoritativeTrace!
-			return unless pathfinder\hash! == serverHash
+			return unless canvas\GetTraceHash! == serverHash
 			return
 	else
-		clientHash = pathfinder\hash!
+		clientHash = canvas\GetTraceHash!
 		if clientHash ~= serverHash
 			MsgC Color(255, 120, 40),
 				"[Moonpanel] observer trace desync: session ",
@@ -481,13 +475,13 @@ receive flowTypes.TraceObserverAdvance, ->
 				" client ", tostring(clientHash), " server ",
 				tostring(serverHash), " revision ", tostring(session.revision), "\n"
 			return
-	if oldExitPath ~= pathfinder\isExitPath!
+	if oldExitPath ~= canvas\IsExitPath!
 		table.insert session.presentationEvents, {
 			sequence: finalSequence
-			exitPath: pathfinder\isExitPath!
+			exitPath: canvas\IsExitPath!
 		}
 	if follower = canvas\GetObserverFollower!
-		follower\setTarget pathfinder\snapshot!, finalSequence
+		follower\setTarget canvas\GetTraceSnapshot!, finalSequence
 
 receive flowTypes.TraceAck, ->
 	panel = net.ReadEntity!
@@ -508,9 +502,9 @@ receive flowTypes.TraceResyncSnapshot, ->
 	snapshot = net.ReadTable!
 	session = Moonpanel.Net.TraceSessions[panel]
 	return unless session and session.id == sessionId and validPanel(panel)
-	pathfinder = panel\GetCanvas!\GetPathFinder!
-	clientHash = pathfinder\hash!
-	return unless pathfinder\restore snapshot
+	canvas = panel\GetCanvas!
+	clientHash = canvas\GetTraceHash!
+	return unless canvas\RestoreTraceSnapshot snapshot
 	session.serverSequence = lastSequence
 	if Moonpanel.PillarController and Moonpanel.PillarController.ClearCommands and
 			session.controller == LocalPlayer!
@@ -525,11 +519,11 @@ receive flowTypes.TraceResyncSnapshot, ->
 			if sample.sequence > lastSequence
 				table.insert replay, sample
 		for sample in *replay
-			pathfinder\applySample sample.xQ, sample.yQ, sample.boost,
+			canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
 				session.controller, sample.constraints
-			sample.hash = pathfinder\hash!
+			sample.hash = canvas\GetTraceHash!
 		session.pending = replay
-	panel\GetCanvas!\MarkRenderDirty! if panel\GetCanvas!\MarkRenderDirty
+	canvas\MarkRenderDirty! if canvas.MarkRenderDirty
 	MsgC Color(255, 160, 40), "[Moonpanel] prediction recovery: session ",
 		tostring(sessionId), " sequence ", tostring(lastSequence), " client ",
 		tostring(clientHash), " server ", tostring(serverHash), " revision ",
@@ -543,13 +537,13 @@ receive flowTypes.TraceResult, ->
 		if session.id == sessionId
 			if session.controller == LocalPlayer!
 				Moonpanel\EndPillarOrbit LocalPlayer! if Moonpanel.EndPillarOrbit
-				pathfinder = panel\GetCanvas!\GetPathFinder! if validPanel panel
-				if pathfinder
-					if aborted
-						pathfinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback
-					elseif not Moonpanel\IsServerAuthoritativeTrace! and
-						pathfinder.phase == Moonpanel.Canvas.TraceEngine.Phase.Tracing
-						pathfinder\beginEvaluation!
+			canvas = panel\GetCanvas! if validPanel panel
+			if canvas
+				if aborted
+					canvas\SetTraceFeedback!
+				elseif not Moonpanel\IsServerAuthoritativeTrace! and
+					canvas\GetTracePhase! == Moonpanel.Canvas.TraceEngine.Phase.Tracing
+					canvas\BeginTraceEvaluation!
 				panel\SetController game.GetWorld! if validPanel panel
 				Moonpanel.Net.SyncClickerState!
 			Moonpanel.Net.PendingTraceStarts[panel] = nil
@@ -609,8 +603,7 @@ receive flowTypes.TraceVisualResult, ->
 		isnumber(result.ruleRevision) and isnumber(result.reportHash) and
 		istable(result.snapshot) and istable(result.feedback)
 	canvas = panel\GetCanvas!
-	pathfinder = canvas\GetPathFinder!
-	return unless pathfinder and result.revision == pathfinder.topology.revision
+	return unless result.revision == canvas\GetTraceRevision!
 	return unless newerSerial result.eventSerial, canvas\GetVisualEventSerial!
 	canvas\SetSolvedState result.solved == true if canvas.SetSolvedState
 	session = Moonpanel.Net.TraceSessions[panel]
@@ -625,8 +618,8 @@ receive flowTypes.TraceVisualResult, ->
 		Moonpanel.Net.SyncClickerState!
 		return
 	if session.controller == LocalPlayer! and not Moonpanel\IsServerAuthoritativeTrace!
-		pathfinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback
-		localHash = pathfinder\hash!
+		canvas\SetTraceFeedback!
+		localHash = canvas\GetTraceHash!
 		localReport = canvas\GetLastRuleReport!
 		reportMatches = localReport and localReport.status == "complete" and
 			localReport.ruleRevision == result.ruleRevision and
@@ -637,7 +630,7 @@ receive flowTypes.TraceVisualResult, ->
 		local geometryMatches
 		if localHash == result.finalHash
 			geometryMatches = true
-			result.snapshot = pathfinder\snapshot!
+			result.snapshot = canvas\GetTraceSnapshot!
 		else
 			geometryMatches = false
 			MsgC Color(255, 160, 40),

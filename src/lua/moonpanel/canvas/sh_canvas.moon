@@ -20,6 +20,11 @@ Moonpanel.Canvas.Resolution = 512
 
 -- Shared screen-matrix construction helpers used by both client and server.
 -- Monitor_Offsets maps model paths to screen transform parameters.
+plateInfo = (name, rs, extent, offsetZ, z) -> {
+    Name: name, RS: rs, RatioX: 1
+    offset: Vector(0, 0, offsetZ), rot: Angle(0, 90, 180)
+    x1: -extent, x2: extent, y1: -extent, y2: extent, z: z
+}
 Moonpanel.Canvas.Monitor_Offsets = {
     ["models//cheeze/pcb/pcb4.mdl"]: {
         Name: "pcb4.mdl", RS: 0.0625, RatioX: 1,
@@ -61,46 +66,14 @@ Moonpanel.Canvas.Monitor_Offsets = {
         offset: Vector(24, 0, 0), rot: Angle(0, 90, -90),
         x1: -48, x2: 48, y1: -48, y2: 48, z: 24
     },
-    ["models/hunter/plates/plate05x05.mdl"]: {
-        Name: "Panel 0.5x0.5", RS: 0.045, RatioX: 1,
-        offset: Vector(0, 0, 1.7), rot: Angle(0, 90, 180),
-        x1: -48, x2: 48, y1: -48, y2: 48, z: 0
-    },
-    ["models/hunter/plates/plate1x1.mdl"]: {
-        Name: "Panel 1x1", RS: 0.09, RatioX: 1,
-        offset: Vector(0, 0, 2), rot: Angle(0, 90, 180),
-        x1: -48, x2: 48, y1: -48, y2: 48, z: 0
-    },
-    ["models/hunter/plates/plate2x2.mdl"]: {
-        Name: "Panel 2x2", RS: 0.182, RatioX: 1,
-        offset: Vector(0, 0, 2), rot: Angle(0, 90, 180),
-        x1: -48, x2: 48, y1: -48, y2: 48, z: 0
-    },
-    ["models/hunter/plates/plate4x4.mdl"]: {
-        Name: "plate4x4.mdl", RS: 0.3707, RatioX: 1,
-        offset: Vector(0, 0, 2), rot: Angle(0, 90, 180),
-        x1: -94.9, x2: 94.9, y1: -94.9, y2: 94.9, z: 1.7
-    },
-    ["models/hunter/plates/plate8x8.mdl"]: {
-        Name: "plate8x8.mdl", RS: 0.741, RatioX: 1,
-        offset: Vector(0, 0, 2), rot: Angle(0, 90, 180),
-        x1: -189.8, x2: 189.8, y1: -189.8, y2: 189.8, z: 1.7
-    },
-    ["models/hunter/plates/plate16x16.mdl"]: {
-        Name: "plate16x16.mdl", RS: 1.482, RatioX: 1,
-        offset: Vector(0, 0, 2), rot: Angle(0, 90, 180),
-        x1: -379.6, x2: 379.6, y1: -379.6, y2: 379.6, z: 1.7
-    },
-    ["models/hunter/plates/plate24x24.mdl"]: {
-        Name: "plate24x24.mdl", RS: 2.223, RatioX: 1,
-        offset: Vector(0, 0, 2), rot: Angle(0, 90, 180),
-        x1: -569.4, x2: 569.4, y1: -569.4, y2: 569.4, z: 1.7
-    },
-    ["models/hunter/plates/plate32x32.mdl"]: {
-        Name: "plate32x32.mdl", RS: 2.964, RatioX: 1,
-        offset: Vector(0, 0, 2), rot: Angle(0, 90, 180),
-        x1: -759.2, x2: 759.2, y1: -759.2, y2: 759.2, z: 1.7
-    },
+    ["models/hunter/plates/plate05x05.mdl"]: plateInfo "Panel 0.5x0.5", 0.045, 48, 1.7, 0
+    ["models/hunter/plates/plate1x1.mdl"]: plateInfo "Panel 1x1", 0.09, 48, 2, 0
+    ["models/hunter/plates/plate2x2.mdl"]: plateInfo "Panel 2x2", 0.182, 48, 2, 0
+    ["models/hunter/plates/plate4x4.mdl"]: plateInfo "plate4x4.mdl", 0.3707, 94.9, 2, 1.7
+    ["models/hunter/plates/plate8x8.mdl"]: plateInfo "plate8x8.mdl", 0.741, 189.8, 2, 1.7
+    ["models/hunter/plates/plate16x16.mdl"]: plateInfo "plate16x16.mdl", 1.482, 379.6, 2, 1.7
+    ["models/hunter/plates/plate24x24.mdl"]: plateInfo "plate24x24.mdl", 2.223, 569.4, 2, 1.7
+    ["models/hunter/plates/plate32x32.mdl"]: plateInfo "plate32x32.mdl", 2.964, 759.2, 2, 1.7
     ["models/kobilica/wiremonitorbig.mdl"]: {
         Name: "Monitor Big", RS: 0.045, RatioX: 0.991,
         offset: Vector(0.2, -0.4, 13), rot: Angle(0, 0, -90),
@@ -257,72 +230,26 @@ Moonpanel.Canvas.SampleData = {
 	}
 }
 
-PANEL_SOUNDS_LEVEL = 65
 PANEL_SOUNDS = {
-	Scint: {
-		Path: "moonpanel/panel_scint.ogg"
-	}
-	StartScint: {
-		Path: "moonpanel/panel_scint_startpoint.ogg"
-	}
-	Start: {
-		Path: "moonpanel/panel_start_tracing.ogg"
-	}
-	PathCompleteLoop: {
-		Path: "moonpanel/panel_path_complete_loop.wav"
-		SoundLevel: 45
-	}
-	SolvingLoop: {
-		Path: "moonpanel/panel_solving_loop.wav"
-		SoundLevel: 40
-	}
-	PresenceLoop: {
-		Path: "moonpanel/panel_presence_loop.wav"
-		SoundLevel: 40
-	}
-	FinishTracing: {
-		Path: "moonpanel/panel_finish_tracing.ogg"
-	}
-	AbortFinishTracing: {
-		Path: "moonpanel/panel_abort_finish_tracing.ogg"
-	}
+	Scint: {"panel_scint.ogg", nil, false, "panel_scint_endpoint.ogg"}
+	StartScint: {"panel_scint_startpoint.ogg", nil, false, "panel_scint_startpoint.ogg"}
+	Start: {"panel_start_tracing.ogg", nil, false, "panel_start_tracing.ogg"}
+	PathCompleteLoop: {"panel_path_complete_loop.wav", 45}
+	SolvingLoop: {"panel_solving_loop.wav", 40}
+	PresenceLoop: {"panel_presence_loop.wav", 40}
+	FinishTracing: {"panel_finish_tracing.ogg", nil, false, "panel_finish_tracing.ogg"}
+	AbortFinishTracing: {"panel_abort_finish_tracing.ogg", nil, false, "panel_abort_finish_tracing.ogg"}
+	PowerOn: {"powered_on.ogg", nil, true}
+	PowerOff: {"powered_off.ogg", nil, true}
+	Failure: {"panel_failure.ogg", nil, true, "panel_failure.ogg"}
+	PotentialFailure: {"panel_potential_failure.ogg", nil, true, "panel_potential_failure.ogg"}
+	Success: {"panel_success.ogg", nil, true, "panel_success.ogg"}
+	Eraser: {"eraser_apply.ogg", nil, true}
+	Abort: {"panel_abort_tracing.ogg", nil, true, "panel_abort_tracing.ogg"}
 }
-
-PANEL_CSOUNDS = {
-	PowerOn: {
-		Path: "moonpanel/powered_on.ogg"
-	}
-	PowerOff: {
-		Path: "moonpanel/powered_off.ogg"
-	}
-	Failure: {
-		Path: "moonpanel/panel_failure.ogg"
-	}
-	PotentialFailure: {
-		Path: "moonpanel/panel_potential_failure.ogg"
-	}
-	Success: {
-		Path: "moonpanel/panel_success.ogg"
-	}
-	Eraser: {
-		Path: "moonpanel/eraser_apply.ogg"
-	}
-	Abort: {
-		Path: "moonpanel/panel_abort_tracing.ogg"
-	}
-}
-
-PANEL_PRESET_FILES = {
-	Start: "panel_start_tracing.ogg"
-	StartScint: "panel_scint_startpoint.ogg"
-	Scint: "panel_scint_endpoint.ogg"
-	FinishTracing: "panel_finish_tracing.ogg"
-	AbortFinishTracing: "panel_abort_finish_tracing.ogg"
-	Failure: "panel_failure.ogg"
-	PotentialFailure: "panel_potential_failure.ogg"
-	Success: "panel_success.ogg"
-	Abort: "panel_abort_tracing.ogg"
-}
+PRESENTATION_SOUND_CUES = {Start: true, StartScint: true, Scint: true,
+	FinishTracing: true, AbortFinishTracing: true, PotentialFailure: true,
+	Success: true, Failure: true, Eraser: true, Abort: true}
 
 class Canvas
 	new: (data) =>
@@ -331,6 +258,25 @@ class Canvas
 		@__soundEnabled = true
 		@__presentation = Moonpanel.Canvas.TracePresentation! if CLIENT
 		@ImportData data if data
+
+	ResetSolver: =>
+		Moonpanel.Canvas.ReleaseVerifier @ if @__solutionCoroutine and Moonpanel.Canvas.ReleaseVerifier
+		@__solutionCoroutine, @__solutionData, @__lastRuleReport = nil, nil, nil
+		@__predictedVisual = nil
+
+	ResetTraceEngine: =>
+		return unless @__pathFinder
+		@__pathFinder\reset!
+		@BindWorldOcclusion!
+
+	ClearPresentationState: =>
+		@__visualFrame, @__observerFollower = nil, nil
+		@__terminalSnapshot, @__terminalSnapshotRestored = nil, false
+
+	ClearAttempt: =>
+		@ResetSolver!
+		@ClearPresentationState!
+		@__playData = {}
 
 	SetSurfaceSpec: (surfaceSpec) =>
 		nextSurface = Moonpanel.Canvas.MakeSurfaceSpec surfaceSpec and surfaceSpec.kind,
@@ -384,97 +330,54 @@ class Canvas
 		return unless renderTransform
 		renderTransform * Vector point.x, point.y, 0
 
-	-- Offset a canvas-world point toward the eye position so the trace
-	-- hull clears the panel back-face by a scale-aware epsilon.
 	TargetFor: (point, eyePos, epsilon) =>
 		dir = eyePos - point
 		dist = dir\Length!
 		return point if dist < 0.001
-		return point + dir / dist * epsilon
+		point + dir / dist * epsilon
 
 	_IsTraceBlocked: (trace) =>
 		trace and (trace.StartSolid or trace.AllSolid or
 			trace.Hit and (trace.Fraction or 0) < 1) or false
 
-	_TraceOcclusionLine: (startPos, endPos, filter) =>
-		-- This runs for every forward input sample. Reuse both the trace config
-		-- and its documented output table instead of allocating one result table
-		-- per fanout/refinement ray.
+	_TraceOcclusion: (startPos, endPos, filter, stage, index) =>
 		@__occlusionTrace or= { output: {} }
 		trace = @__occlusionTrace
-		trace.start = startPos
-		trace.endpos = endPos
-		trace.filter = filter
-		util.TraceLine trace
+		trace.start, trace.endpos, trace.filter = startPos, endPos, filter
+		result = util.TraceLine trace
+		if CLIENT and Moonpanel.Debug and Moonpanel.Debug.RecordOcclusionRay
+			Moonpanel.Debug\RecordOcclusionRay @__worldEntity, stage, index,
+				startPos, endPos, result
+		result
 
-	_DebugOcclusionRay: (stage, index, startPos, endPos, trace) =>
-		return unless CLIENT and Moonpanel.Debug and
-			Moonpanel.Debug.RecordOcclusionRay
-		Moonpanel.Debug\RecordOcclusionRay @__worldEntity, stage, index,
-			startPos, endPos, trace
-
-	-- Coarse-sample a segment for occlusion, then refine the first
-	-- blocked interval in parameter space. Returns the progress fraction
-	-- in [0, 1] where 1 means fully visible.
 	SampleSegmentVisibility: (eyePos, startWorld, endWorld, filter, sampleCount, epsilon) =>
-		if sampleCount < 1
-			return 1
-
-		-- Trace the starting point first: if the current position is
-		-- already hidden, the edge must stop here.
+		return 1 if sampleCount < 1
 		startTarget = @TargetFor startWorld, eyePos, epsilon
-		tr = @_TraceOcclusionLine eyePos, startTarget, filter
-		@_DebugOcclusionRay "start", 0, eyePos, startTarget, tr
-
-		if @_IsTraceBlocked tr
-			return 0
-
-		-- Endpoint-inclusive sampling: t = i / sampleCount ensures the
-		-- very tip of the segment is always tested.
+		tr = @_TraceOcclusion eyePos, startTarget, filter, "start", 0
+		return 0 if @_IsTraceBlocked tr
 		for i = 1, sampleCount
 			t = i / sampleCount
 			sampleWorld = startWorld + (endWorld - startWorld) * t
 			sampleTarget = @TargetFor sampleWorld, eyePos, epsilon
-			tr = @_TraceOcclusionLine eyePos, sampleTarget, filter
-			@_DebugOcclusionRay "fanout", i, eyePos, sampleTarget, tr
-
+			tr = @_TraceOcclusion eyePos, sampleTarget, filter, "fanout", i
 			if @_IsTraceBlocked tr
-				-- Binary refine between previous clear and this blocked sample.
-				loT = (i - 1) / sampleCount
-				hiT = t
 				return @BinaryRefineInT eyePos, startWorld, endWorld,
-					loT, hiT, filter, epsilon
+					(i - 1) / sampleCount, t, filter, epsilon
+		1
 
-		-- All samples passed; nothing to refine.
-		return 1
-
-	-- Bounded binary search in parameter space between loT (clear) and
-	-- hiT (blocked). Return the absolute last-clear fraction. Returning an
-	-- interval length here loses the location of every interval after the
-	-- first one and makes mirrored heads clamp at unrelated positions.
 	BinaryRefineInT: (eyePos, startWorld, endWorld, loT, hiT, filter, epsilon) =>
 		for iteration = 1, 10
 			midT = (loT + hiT) * 0.5
 			midWorld = startWorld + (endWorld - startWorld) * midT
 			midTarget = @TargetFor midWorld, eyePos, epsilon
-			tr = @_TraceOcclusionLine eyePos, midTarget, filter
-			@_DebugOcclusionRay "refine", iteration, eyePos, midTarget, tr
-
-			if @_IsTraceBlocked tr
-				hiT = midT
-			else
-				loT = midT
-
+			tr = @_TraceOcclusion eyePos, midTarget, filter, "refine", iteration
+			if @_IsTraceBlocked tr then hiT = midT else loT = midT
 		loT
 
-	-- Offset a canvas position to the leading edge of the round trace head.
-	-- Testing the centre (or the trailing edge) permits half a bar of visible
-	-- trace to enter an obstacle before movement is constrained.
 	_CanvasTipOffset: (pos, edge, barWidth) =>
 		return pos unless edge and edge.unitX ~= nil
 		halfBar = barWidth * 0.5
-		{x: pos.x + edge.unitX * halfBar,
-		y: pos.y + edge.unitY * halfBar}
+		{x: pos.x + edge.unitX * halfBar, y: pos.y + edge.unitY * halfBar}
 
 	_EdgeVisibility: (eyePos, renderTransform, edge, oldProgress,
 		candidateProgress, barWidth, filter, epsilon) =>
@@ -482,7 +385,6 @@ class Canvas
 		posA = @__pathFinder\positionAtProgress edge, oldProgress
 		posB = @__pathFinder\positionAtProgress edge, candidateProgress
 		return 1 unless posA and posB
-
 		tipA = @_CanvasTipOffset posA, edge, barWidth
 		tipB = @_CanvasTipOffset posB, edge, barWidth
 		startWorld = @CanvasPointToWorld tipA, renderTransform
@@ -490,43 +392,28 @@ class Canvas
 		return 1 unless startWorld and endWorld
 		@SampleSegmentVisibility eyePos, startWorld, endWorld, filter, 8, epsilon
 
-	-- Main occlusion check. Returns a visibility fraction in [0, 1] for
-	-- the forward direction only; retraction is never clamped.
 	CheckOcclusion: (ply, primaryEdge, oldProgress, candidateProgress) =>
 		return 1 unless IsValid ply
-
 		renderTransform = @GetWorldTransform!
-		return 1 unless renderTransform or @__worldEntity and
-			@__worldEntity.CanvasToWorld
-
-		-- Compute scale-aware epsilon from the transform itself: how far
-		-- does one panel bar-width extend in world space?
-		p0 = @CanvasPointToWorld { x: 0, y: 0 }, renderTransform
-		barWidthWorld = @__pathFinder and @__pathFinder.topology and @__pathFinder.topology.barWidth or 1
-		px = @CanvasPointToWorld { x: barWidthWorld, y: 0 }, renderTransform
+		return 1 unless renderTransform or @__worldEntity and @__worldEntity.CanvasToWorld
+		p0 = @CanvasPointToWorld {x: 0, y: 0}, renderTransform
+		barWidth = @__pathFinder and @__pathFinder.topology and
+			@__pathFinder.topology.barWidth or 1
+		px = @CanvasPointToWorld {x: barWidth, y: 0}, renderTransform
 		return 1 unless p0 and px
-		epsilon = math.Clamp(p0\Distance(px) * 0.01, 0.02, 0.2)
-		eyePos = ply\EyePos!
-		-- Environmental occlusion belongs to the controlled primary head only.
-		-- The secondary branch still follows the resulting shared progress, but
-		-- its own line of sight never constrains that progress.
+		epsilon = math.Clamp p0\Distance(px) * 0.01, 0.02, 0.2
 		unless @__occlusionFilter and @__occlusionFilter[1] == ply and
 				@__occlusionFilter[2] == @__worldEntity
-			@__occlusionFilter = { ply, @__worldEntity }
+			@__occlusionFilter = {ply, @__worldEntity}
 		filter = @__occlusionFilter
-		barWidth = @__pathFinder.topology.barWidth
 		if CLIENT and Moonpanel.Debug and Moonpanel.Debug.BeginOcclusion
 			Moonpanel.Debug\BeginOcclusion @__worldEntity, primaryEdge,
 				oldProgress, candidateProgress
-		fraction = @_EdgeVisibility eyePos, renderTransform, primaryEdge, oldProgress,
-			candidateProgress, barWidth, filter, epsilon
+		fraction = @_EdgeVisibility ply\EyePos!, renderTransform, primaryEdge,
+			oldProgress, candidateProgress, barWidth, filter, epsilon
 		if CLIENT and Moonpanel.Debug and Moonpanel.Debug.EndOcclusion
 			Moonpanel.Debug\EndOcclusion @__worldEntity, fraction
 		fraction
-
-	-- Lifecycle helper: bind/unbind the occlusion constraint on the
-	-- pathfinder. Called from InitPathFinder and SetWorldEntity so the
-	-- constraint follows the panel's world-entity lifecycle.
 	BindWorldOcclusion: =>
 		if not @__pathFinder
 			return
@@ -551,43 +438,16 @@ class Canvas
 
 	SetSoundEnabled: (enabled) =>
 		enabled = enabled == true
-		if @__soundEnabled == enabled
-			@SetupSounds! if enabled and not @__sounds
-			return false
-		@StopSounds! unless enabled
+		changed = @__soundEnabled ~= enabled
+		@StopSounds! if changed and not enabled
 		@__soundEnabled = enabled
 		@SetupSounds! if enabled and not @__sounds
-		true
-
-	GetSoundEnabled: => @__soundEnabled == true
+		changed
 
 	GetSoundPreset: =>
 		name = @__data and @__data.Sounds and @__data.Sounds.Preset
-		if not name or not Moonpanel.Canvas.SoundPresets[name]
-			return Moonpanel.Canvas.DefaultSoundPreset
-		name
-
-	GetSoundDefinitions: =>
-		definitions = {}
-		for soundName, soundData in pairs PANEL_SOUNDS
-			definitions[soundName] = {
-				Path: soundData.Path
-				SoundLevel: soundData.SoundLevel
-			}
-		if CLIENT
-			for soundName, soundData in pairs PANEL_CSOUNDS
-				definitions[soundName] = {
-					Path: soundData.Path
-					SoundLevel: soundData.SoundLevel
-				}
-
-		preset = Moonpanel.Canvas.ResolveSoundPreset @GetSoundPreset!
-		if preset and preset.Directory ~= ""
-			for cue in *Moonpanel.Canvas.SoundCueRoles
-				fileName = PANEL_PRESET_FILES[cue]
-				if fileName and definitions[cue]
-					definitions[cue].Path = "moonpanel/#{preset.Directory}/#{fileName}"
-		definitions
+		Moonpanel.Canvas.SoundPresets[name] and name or
+			Moonpanel.Canvas.DefaultSoundPreset
 
 	SetSoundSuppressed: (soundName, suppressed) =>
 		return false unless isstring soundName
@@ -609,26 +469,21 @@ class Canvas
 		return if @__sounds
 		@__sounds = {}
 
-		target = if SERVER and IsValid @__worldEntity
+		target = if @__worldEntity and
+			((SERVER and IsValid @__worldEntity) or CLIENT)
 			@__worldEntity
-		elseif CLIENT and @__worldEntity
-			@__worldEntity
-		elseif CLIENT and not IsValid @__worldEntity
+		elseif CLIENT
 			LocalPlayer!
 
 		return if not target
-		definitions = @GetSoundDefinitions!
-		for soundName, soundData in pairs definitions
-			sound = CreateSound target, soundData.Path
-			sound\SetSoundLevel soundData.SoundLevel or PANEL_SOUNDS_LEVEL
-
-			@__sounds[soundName] = sound
-
-	ReconfigureSounds: =>
-		return unless @__sounds
-		@StopSounds!
-		@__sounds = nil
-		@SetupSounds! if @__soundEnabled
+		preset = Moonpanel.Canvas.ResolveSoundPreset @GetSoundPreset!
+		for name, definition in pairs PANEL_SOUNDS
+			continue if definition[3] and not CLIENT
+			file = definition[1]
+			file = "#{preset.Directory}/#{definition[4]}" if definition[4] and preset and preset.Directory ~= ""
+			sound = CreateSound target, "moonpanel/#{file}"
+			sound\SetSoundLevel definition[2] or 65
+			@__sounds[name] = sound
 
 	StopSound: (sound) =>
 		return if not @__sounds
@@ -636,7 +491,6 @@ class Canvas
 		sound = @__sounds[sound] if "string" == type sound
 		return if not sound
 
-		sound\Stop! if sound\IsPlaying!
 		sound\Stop!
 
 	StopPathCompleteLoop: =>
@@ -672,16 +526,6 @@ class Canvas
 		if wasPlaying or startVolume ~= nil
 			sound\ChangeVolume volume, fade
 
-	IsLocalController: (ply = LocalPlayer!) =>
-		if SERVER
-			return false
-		else
-			return true if @__worldEntity == nil
-			if IsValid @__worldEntity
-				return LocalPlayer! == ply
-
-			return false
-
 	SetSymmetryType: (type) =>
 		return if not @__data
 
@@ -698,28 +542,19 @@ class Canvas
 
 	GetColors: =>
 		dataColors = @__data and @__data.Colors or {}
-
 		colors = {
 			Background: dataColors.Background or Canvas.DefaultColors.Background
 			Grid: dataColors.Untraced or Canvas.DefaultColors.Untraced
 			Error: dataColors.Errored or Canvas.DefaultColors.Errored
 			Cell: dataColors.Cell or Canvas.DefaultColors.Cell
 			Vignette: dataColors.Vignette or Canvas.DefaultColors.Vignette
-			Trace: {
-				dataColors.Traced or Canvas.DefaultColors.Traced, {
-					r: 255
-					g: 255
-					b: 116
-				}
-			}
-			EndTrace: {
-				dataColors.Finished or Canvas.DefaultColors.Finished, {
-					r: 0
-					g: 255
-					b: 0
-				}
-			}
 		}
+		colors.Trace = {dataColors.Traced or Canvas.DefaultColors.Traced, {
+			r: 255, g: 255, b: 116
+		}}
+		colors.EndTrace = {dataColors.Finished or Canvas.DefaultColors.Finished, {
+			r: 0, g: 255, b: 0
+		}}
 
 		symmetryOptions = @__data and @__data.Meta and @__data.Meta.SymmetryOptions
 		traces = symmetryOptions and symmetryOptions.Traces
@@ -746,21 +581,14 @@ class Canvas
 	-- Imports data from given table. --
 	------------------------------------
 	ImportData: (data) =>
-		Moonpanel.Canvas.ReleaseVerifier @ if @__solutionCoroutine and
-			Moonpanel.Canvas.ReleaseVerifier
-		@__solutionCoroutine = nil
-		@__solutionData = nil
-		@__lastRuleReport = nil
-		@__predictedVisual = nil
-		@__playData = {}
-		@__observerFollower = nil
-		@__terminalSnapshot = nil
-		@__terminalSnapshotRestored = false
+		@ClearAttempt!
 
 		previousSoundPreset = @GetSoundPreset!
 		@__data = data and Moonpanel.Canvas.SanitizeData data
 		if @__data and previousSoundPreset ~= @GetSoundPreset! and @__sounds
-			@ReconfigureSounds!
+			@StopSounds!
+			@__sounds = nil
+			@SetupSounds!
 		if @__data
 			@__surface = Moonpanel.Canvas.MakeSurfaceSpec @GetSurfaceSpec!.kind,
 				@__data.Meta.Continuous
@@ -793,84 +621,75 @@ class Canvas
 		@ResetPresentation "topology-change" if CLIENT and @__presentation
 
 		if not @__data
-			@__data = nil
 			@__geometry = nil
 			@__pathFinder = nil
 			@__clientData = nil
-			@__socketArrays = nil
-
+			@__sockets = nil
+			@__nodes = nil
+			@__nodeMap = nil
 			return
 
 		ents = @__data.Entities or {}
-
 		numCols = @__data.Meta.Width  * 2 + 1
 		numRows = @__data.Meta.Height * 2 + 1
 
 		@__sockets = {}
-		with @__socketArrays = {}
-			.cells = {}
-			.vpaths = {}
-			.hpaths = {}
-			.intersections = {}
-
+		@__nodes = {}
+		@__nodeMap = {}
 		entityInfos = {}
-
-		orderedSocketArrays = {
-			@__socketArrays.intersections
-			@__socketArrays.hpaths
-			@__socketArrays.vpaths
-			@__socketArrays.cells
-		}
-
-		for t in *orderedSocketArrays
-			table.insert @__sockets, t
-
-		-- Initialize the node map.
+		intersectionId, hpathId, vpathId, cellId = 0, 0, 0, 0
 		for i = 1, numCols * numRows
 			row = math.ceil i / numCols
 			column = 1 + (i - 1) % numCols
-
-			local socketClass, dest, isHorizontalPath
-
-			if row % 2 == 1
-				-- Intersection
-				if column % 2 == 1
-					dest = @__socketArrays.intersections
-					socketClass = Moonpanel.Canvas.Sockets.IntersectionSocket
-				-- HBar
-				else
-					isHorizontalPath = true
-
-					dest = @__socketArrays.hpaths
-					socketClass = Moonpanel.Canvas.Sockets.PathSocket
+			rowOdd, columnOdd = row % 2 == 1, column % 2 == 1
+			local socketClass, socketId, horizontal
+			if rowOdd and columnOdd
+				socketClass = Moonpanel.Canvas.Sockets.IntersectionSocket
+				intersectionId += 1
+				socketId = intersectionId
+			elseif rowOdd
+				socketClass = Moonpanel.Canvas.Sockets.PathSocket
+				hpathId += 1
+				socketId, horizontal = hpathId, true
+			elseif columnOdd
+				socketClass = Moonpanel.Canvas.Sockets.PathSocket
+				vpathId += 1
+				socketId, horizontal = vpathId, false
 			else
-				-- VBar
-				if column % 2 == 1
-					isHorizontalPath = false
-
-					dest = @__socketArrays.vpaths
-					socketClass = Moonpanel.Canvas.Sockets.PathSocket
-				-- Cell
-				else
-					dest = @__socketArrays.cells
-					socketClass = Moonpanel.Canvas.Sockets.CellSocket
-
+				socketClass = Moonpanel.Canvas.Sockets.CellSocket
+				cellId += 1
+				socketId = cellId
 			entityClass = ents[i] and Moonpanel.Canvas.GetEntityClass ents[i].Type, socketClass.SocketType
 			entityClass or= socketClass.BaseEntity
-
-			socket = socketClass @, #dest + 1
-			if isHorizontalPath ~= nil
-				socket\SetHorizontal isHorizontalPath
-
-			table.insert entityInfos, {
+			socket = socketClass @, socketId, i
+			socket\SetHorizontal horizontal if horizontal ~= nil
+			@__sockets[i] = socket
+			entityInfos[i] = {
 				socket: socket
 				class: entityClass
 				data: ents[i] and ents[i].Data
 			}
 
-			table.insert dest, socket
+			if socketClass == Moonpanel.Canvas.Sockets.IntersectionSocket
+				intX, intY = math.floor(column / 2), math.floor(row / 2)
+				x = intX - @__data.Meta.Width / 2
+				y = intY - @__data.Meta.Height / 2
+				node = {
+					neighbors: {}
+					:socket
+					id: #@__nodes + 1
+					:x
+					:y
+					screenX: math.floor Moonpanel.Canvas.Resolution * 0.5 +
+						x * @GetBarLength!
+					screenY: math.floor Moonpanel.Canvas.Resolution * 0.5 +
+						y * @GetVerticalBarLength!
+				}
+				socket\SetPathNode node
+				@__nodeMap[intY + 1] or= {}
+				@__nodeMap[intY + 1][intX + 1] = node
+				table.insert @__nodes, node
 
-		@RebuildNodes!
 		-- Socket population links the graph incrementally. Rebuilding the
 		-- pathfinder for every one of those assignments turns a large empty
 		-- board into hundreds of full rule compilations. Defer that work until
@@ -904,133 +723,40 @@ class Canvas
 	GetBarWidth: => @__geometry and @__geometry.barWidth or 1
 
 	GetBarLength: => @__geometry and @__geometry.barLength or 1
-	GetVerticalBarLength: => @__geometry and
-		(@__geometry.verticalBarLength or @__geometry.barLength) or 1
+	GetVerticalBarLength: => @__geometry and (@__geometry.verticalBarLength or
+		@__geometry.barLength) or 1
 
-	noop = ->
-	GetSocketIterator: =>
-		return noop if not @__sockets
-
-		curTable = 1
-		curLength = #@__sockets[1]
-		curIndex = 1
-
-		->
-			if @__sockets[curTable]
-				while curIndex > curLength
-					curTable += 1
-					return if not @__sockets[curTable]
-
-					curLength = #@__sockets[curTable]
-					curIndex = 1
-
-				curIndex += 1
-				return @__sockets[curTable][curIndex - 1]
-
-	translateXY = (table, x, y, width, height, socket) ->
-		return if x > width or y > height or x <= 0 or y <= 0
-
-		index = 1 + (x - 1) + (y - 1) * width
-
-		if socket
-			table[index] = socket
-		else
-			return table[index]
+	socketAt = (canvas, x, y) ->
+		data = canvas\GetData!
+		return unless data
+		width = data.Meta.Width * 2 + 1
+		height = data.Meta.Height * 2 + 1
+		return if x < 1 or y < 1 or x > width or y > height
+		canvas\GetSocketAtDataIndex x + (y - 1) * width
 
 	--------------------------------------------------------
 	-- Returns the first entity at given SCREEN position. --
 	--------------------------------------------------------
 	GetEntityAtScreen: (scrX, scrY) =>
-		return if not @__socketArrays
-		return if not @__data
+		return unless @__sockets
+		for socket in *@__sockets
+			continue if @IsHiddenContinuousSocket socket
+			return socket if socket\CanClick scrX, scrY
 
-		for entity in @GetSocketIterator!
-			continue if @IsHiddenContinuousSocket entity
-			return entity if entity\CanClick scrX, scrY
-
-	------------------------------------------
-	-- Gets intersection at given position. --
-	------------------------------------------
 	GetIntersectionSocketAt: (x, y) =>
-		return if not @__data
-		translateXY @__socketArrays.intersections, x, y,
-			@__data.Meta.Width + 1,
-			@__data.Meta.Height + 1
-
-	----------------------------------
-	-- Gets hpath at given position. --
-	----------------------------------
+		socketAt @, x * 2 - 1, y * 2 - 1
 	GetHPathSocketAt: (x, y) =>
-		return if not @__data
-		translateXY @__socketArrays.hpaths, x, y,
-			@__data.Meta.Width,
-			@__data.Meta.Height + 1
-
-	----------------------------------
-	-- Gets vpath at given position. --
-	----------------------------------
+		socketAt @, x * 2, y * 2 - 1
 	GetVPathSocketAt: (x, y) =>
-		return if not @__data
-		translateXY @__socketArrays.vpaths, x, y,
-			@__data.Meta.Width + 1,
-			@__data.Meta.Height
-
-	---------------------------------------
-	-- Gets/sets cell at given position. --
-	---------------------------------------
+		socketAt @, x * 2 - 1, y * 2
 	GetCellSocketAt: (x, y) =>
-		return if not @__data
-		translateXY @__socketArrays.cells, x, y,
-			@__data.Meta.Width,
-			@__data.Meta.Height
+		socketAt @, x * 2, y * 2
 
-	GetSocketDataIndex: (socket, numCols = nil) =>
-		return unless socket and @__data
-
-		numCols or= @__data.Meta.Width * 2 + 1
-		socketType = socket\GetSocketType!
-		local gridX, gridY
-
-		if socketType == Moonpanel.Canvas.SocketType.Intersection
-			gridX = (socket\GetX! - 1) * 2 + 1
-			gridY = (socket\GetY! - 1) * 2 + 1
-
-		elseif socketType == Moonpanel.Canvas.SocketType.Cell
-			gridX = socket\GetX! * 2
-			gridY = socket\GetY! * 2
-
-		elseif socketType == Moonpanel.Canvas.SocketType.Path
-			if socket\IsHorizontal!
-				gridX = socket\GetX! * 2
-				gridY = (socket\GetY! - 1) * 2 + 1
-			else
-				gridX = (socket\GetX! - 1) * 2 + 1
-				gridY = socket\GetY! * 2
-		else
-			return
-
-		1 + (gridX - 1) + (gridY - 1) * numCols
+	GetSocketDataIndex: (socket) =>
+		socket and socket\GetDataIndex!
 
 	GetSocketAtDataIndex: (index) =>
-		return unless @__data and index
-
-		numCols = @__data.Meta.Width * 2 + 1
-		row = math.ceil index / numCols
-		column = 1 + (index - 1) % numCols
-
-		if row % 2 == 1
-			if column % 2 == 1
-				return @GetIntersectionSocketAt math.floor(column / 2) + 1,
-					math.floor(row / 2) + 1
-
-			return @GetHPathSocketAt column / 2,
-				math.floor(row / 2) + 1
-
-		if column % 2 == 1
-			return @GetVPathSocketAt math.floor(column / 2) + 1,
-				row / 2
-
-		@GetCellSocketAt column / 2, row / 2
+		@__sockets and @__sockets[index]
 
 	--------------------------------------------------
 	-- Fetches the internal panel data table.       --
@@ -1050,15 +776,11 @@ class Canvas
 	ExportData: =>
 		return if not @__data
 
-		numCols = @__data.Meta.Width * 2 + 1
 		copy = table.Copy @__data
 		copy.Entities = {}
-
-		for socket in @GetSocketIterator!
-			index = @GetSocketDataIndex socket, numCols
-			if index
-				entity = socket\GetEntity!
-				copy.Entities[index] = entity and entity\ExportData! or {}
+		for index, socket in ipairs @__sockets
+			entity = socket\GetEntity!
+			copy.Entities[index] = entity and entity\ExportData! or {}
 
 		Moonpanel.Canvas.SanitizeData copy
 
@@ -1087,13 +809,10 @@ class Canvas
 	ImportPlayData: (playData = {}) =>
 		@__playData = table.Copy playData
 		@SetSolvedState @__playData.solved == true
-		@__observerFollower = nil
-		@__terminalSnapshot = nil
+		@ClearPresentationState!
 		if not @__playData.startTime and not @__playData.visualResult and @__pathFinder
-			@__pathFinder\reset!
-			@__solutionData = nil
-			@__lastRuleReport = nil
-			@__predictedVisual = nil
+			@ResetSolver!
+			@ResetTraceEngine!
 
 		if @__pathFinder and @__data and @__playData.traceSnapshot
 			@__pathFinder\restore @__playData.traceSnapshot
@@ -1115,55 +834,6 @@ class Canvas
 				}, true, math.max(0, CurTime! - @__playData.startTime)
 				@SetPresentationExit @__pathFinder\isExitPath!, true
 		@__rtDirty = true
-
-	---------------------
-	-- Rebuilds nodes. --
-	---------------------
-	RebuildNodes: =>
-		return if not @__data
-
-		numCols = @__data.Meta.Width  * 2 + 1
-		numRows = @__data.Meta.Height * 2 + 1
-
-		@__nodeMap = {}
-		@__nodes = {}
-
-		horizontalBarLength = @GetBarLength!
-		verticalBarLength = @GetVerticalBarLength!
-
-		-- Initialize the node map.
-		for i = 1, numCols * numRows
-			row = math.ceil i / numCols
-			column = 1 + (i - 1) % numCols
-
-			if row % 2 == 1 and column % 2 == 1
-				intX = math.floor column / 2
-				intY = math.floor row / 2
-
-				socket = @GetIntersectionSocketAt intX + 1, intY + 1
-
-				x = intX - @__data.Meta.Width  / 2
-				y = intY - @__data.Meta.Height / 2
-				node = {
-					neighbors: {}
-					socket: socket
-
-					id: #@__nodes + 1
-					:x
-					:y
-
-					screenX: math.floor Moonpanel.Canvas.Resolution * 0.5 +
-						x * horizontalBarLength
-					screenY: math.floor Moonpanel.Canvas.Resolution * 0.5 +
-						y * verticalBarLength
-				}
-
-				socket\SetPathNode node
-
-				@__nodeMap[intY + 1] or= {}
-				@__nodeMap[intY + 1][intX + 1] = node
-
-				table.insert @__nodes, node
 
 	------------------------------------------------------------
 	-- Initializes the path finder. The thing responsible for --
@@ -1196,10 +866,11 @@ class Canvas
 		-- Rule evaluation consumes stable socket IDs, never entity/socket
 		-- objects. Enrich the freshly-built topology once at the canvas
 		-- boundary so snapshots can be evaluated identically in either realm.
+		socketIndex = (socket) -> Moonpanel.Canvas.CanonicalSeamIndex(
+			@GetSocketDataIndex(socket), @__data, surfaceSpec)
 		for node in *topology.nodes
 			if node.socket
-				node.socketIndex = Moonpanel.Canvas.CanonicalSeamIndex(
-					@GetSocketDataIndex(node.socket), @__data, surfaceSpec)
+				node.socketIndex = socketIndex node.socket
 
 		resolveEdgeSocket = (fromNode, toNode) ->
 			return fromNode.edgeSockets[toNode] if fromNode.edgeSockets and
@@ -1231,8 +902,7 @@ class Canvas
 		for fromId, fromNode in ipairs topology.nodes
 			for toId, edge in pairs topology.edges[fromId]
 				if socket = resolveEdgeSocket fromNode, topology.nodes[toId]
-					edge.socketIndex = Moonpanel.Canvas.CanonicalSeamIndex(
-						@GetSocketDataIndex(socket), @__data, surfaceSpec)
+					edge.socketIndex = socketIndex socket
 		@__pathFinder = Moonpanel.Canvas.TraceEngine topology
 		ruleData = if @IsContinuous!
 			Moonpanel.Canvas.CanonicalizeContinuousData @__data
@@ -1241,7 +911,58 @@ class Canvas
 		@__ruleDefinition = Moonpanel.Canvas.RuleEngine.Compile ruleData, topology
 		@BindWorldOcclusion!
 
-	GetPathFinder: => @__pathFinder
+	GetTraceHash: => @__pathFinder and @__pathFinder\hash!
+	GetPillarTraceEngine: => @__pathFinder
+	GetDebugState: =>
+		p = @__pathFinder
+		trace = if p
+			{
+			phase: p.phase
+			hash: p\hash!
+			canSubmit: p\canSubmit!
+			touchingExit: p.touchingExit
+			topology: p.topology
+			stacks: p.stacks
+			cursors: p.cursors
+			history: p.history
+			constraints: p\GetConstraintDecisions!
+			active: p.active
+		}
+		{
+			trace: trace
+			geometry: @__geometry
+			power: @__powerState == true
+			dirty: @__rtDirty == true
+			solving: @__solutionCoroutine ~= nil
+			presentation: @__presentation and @__presentation\isActive! or false
+			result: @__presentation and @__presentation.result ~= nil or false
+			sound: @GetSoundStatus!
+		}
+	CanSubmitTrace: => @__pathFinder and @__pathFinder\canSubmit! or false
+	GetTraceTopology: => @__pathFinder and @__pathFinder.topology
+	GetTraceCursor: (index = 1) => @__pathFinder and @__pathFinder.cursors and @__pathFinder.cursors[index]
+	GetConstraintDecisions: => @__pathFinder and @__pathFinder\GetConstraintDecisions!
+	GetTraceRevision: => @__pathFinder and @__pathFinder.topology.revision or 0
+	GetTracePhase: => @__pathFinder and @__pathFinder.phase
+	IsExitPath: => @__pathFinder and @__pathFinder\isExitPath! or false
+	SetTraceFeedback: =>
+		return unless @__pathFinder
+		@__pathFinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback
+	BeginTraceEvaluation: => @__pathFinder and @__pathFinder\beginEvaluation!
+	RestoreTraceSnapshot: (snapshot) =>
+		return false unless @__pathFinder and snapshot
+		@__pathFinder\restore snapshot
+		true
+
+	GetRenderMaterial: => @__rtAlloc and @__rtAlloc.rt and @__rtAlloc.rt.material
+	GetSoundStatus: =>
+		return "off" unless @__soundEnabled
+		return "enabled/uninitialized" unless @__sounds
+		total, playing = 0, 0
+		for _, sound in pairs @__sounds
+			total += 1
+			playing += 1 if sound and sound.IsPlaying and sound\IsPlaying!
+		"#{playing}/#{total} playing"
 
 	FindStartNode: (x, y, radius = 32) =>
 		return unless @__pathFinder and @__pathFinder.topology
@@ -1270,6 +991,7 @@ class Canvas
 	GetPlayDataSnapshot: =>
 		return {} unless @__playData
 		table.Copy @__playData
+	GetAttemptController: => @__playData and @__playData.controller
 	SetPlayData: (playData = {}) =>
 		@__playData = table.Copy playData
 		@__rtDirty = true if CLIENT
@@ -1302,14 +1024,11 @@ class Canvas
 		@__exitPath = false
 		now = CurTime!
 		@__presentation\beginAttempt attemptKey, now - math.max(0, elapsed or 0)
-		@__visualFrame = nil
-		@__observerFollower = nil
+		@ClearPresentationState!
 		if silent
 			@__presentation\drainCues!
 			@SetLoop "SolvingLoop"
 			@SetLoop "PresenceLoop", 0, 0
-		@__terminalSnapshot = nil
-		@__terminalSnapshotRestored = false
 		@__rtDirty = true
 		true
 
@@ -1339,19 +1058,13 @@ class Canvas
 				transitionSerial ~= @__resetPresentationSerial
 			@ResetPresentation "reset-complete"
 			@__playData = {}
-			@__pathFinder\reset! if @__pathFinder
+			@ResetTraceEngine!
 			@__rtDirty = true
 		true
 
 	ResetRuntime: (reason = "reset") =>
-		@__pathFinder\reset! if @__pathFinder
-		@__playData = {}
-		@__solutionData = nil
-		@__lastRuleReport = nil
-		@__predictedVisual = nil
-		@__observerFollower = nil
-		@__terminalSnapshot = nil
-		@__terminalSnapshotRestored = false
+		@ClearAttempt!
+		@ResetTraceEngine!
 		@__exitPath = false
 		@ResetPresentation reason if CLIENT and @__presentation
 		@__rtDirty = true if CLIENT
@@ -1384,14 +1097,16 @@ class Canvas
 		-- snapshot until it settles, otherwise the trace snaps to the exit.
 		if @__observerFollower and not @__observerFollower\hasReached!
 			return @__observerFollower\getRenderState!
+		topology = @__pathFinder.topology
+		sequence = @__playData and @__playData.finalSequence or 0
 		if @__terminalSnapshot
-			return Moonpanel.Canvas.BuildTraceRenderState @__pathFinder.topology,
-				@__terminalSnapshot, @__playData and @__playData.finalSequence or 0
+			return Moonpanel.Canvas.BuildTraceRenderState topology,
+				@__terminalSnapshot, sequence
 		if @__observerFollower
 			return @__observerFollower\getRenderState!
 		snapshot = @__pathFinder\snapshot!
-		Moonpanel.Canvas.BuildTraceRenderState @__pathFinder.topology, snapshot,
-			@__playData and @__playData.finalSequence or 0
+		Moonpanel.Canvas.BuildTraceRenderState topology, snapshot,
+			sequence
 
 	ApplyVisualResult: (result, elapsed = 0, silent = false) =>
 		return false unless CLIENT and @__presentation and result
@@ -1414,10 +1129,7 @@ class Canvas
 	ResetPresentation: (reason = "reset") =>
 		return unless CLIENT and @__presentation
 		@__presentation\reset reason
-		@__visualFrame = nil
-		@__observerFollower = nil
-		@__terminalSnapshot = nil
-		@__terminalSnapshotRestored = false
+		@ClearPresentationState!
 		@StopPathCompleteLoop!
 		@StopSound "SolvingLoop"
 		@__rtDirty = true
@@ -1440,10 +1152,7 @@ class Canvas
 			@SetLoop "PresenceLoop", 0, 5, 1
 		elseif cue == "PresenceResume"
 			@SetLoop "PresenceLoop", 1, 1, 0
-		elseif cue == "Start" or cue == "StartScint" or cue == "FinishTracing" or
-				cue == "AbortFinishTracing" or cue == "PotentialFailure" or
-				cue == "Success" or cue == "Failure" or cue == "Eraser" or
-				cue == "Abort" or cue == "Scint"
+		elseif PRESENTATION_SOUND_CUES[cue]
 			@PlaySound cue, (cue == "Scint" or cue == "StartScint") and
 				(@__visualFrame and @__visualFrame.scintPower or 1) or 1
 
@@ -1512,12 +1221,7 @@ class Canvas
 
 		@__rtDirty = true if CLIENT
 
-		@__solutionData = nil
-		@__lastRuleReport = nil
-		@__predictedVisual = nil
-		Moonpanel.Canvas.ReleaseVerifier @ if @__solutionCoroutine and
-			Moonpanel.Canvas.ReleaseVerifier
-		@__solutionCoroutine = nil
+		@ResetSolver!
 		@__playData = {
 			startTime: CurTime!
 			controller: ply
@@ -1626,37 +1330,32 @@ class Canvas
 		Moonpanel.Canvas.ReleaseVerifier @ if Moonpanel.Canvas.ReleaseVerifier
 		if @__pathFinder
 			@__pathFinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback
-		local result
+		report = solutionData and solutionData.ruleReport
+		result = {
+			ruleRevision: report and report.ruleRevision
+			reportHash: report and report.reportHash
+		}
 		if not solutionData or solutionData.status and solutionData.status ~= "complete"
-			result = {
-				aborted: true
-				evaluationError: solutionData and solutionData.status or nil
-				ruleRevision: solutionData and solutionData.ruleReport and
-					solutionData.ruleReport.ruleRevision or 0
-				reportHash: solutionData and solutionData.ruleReport and
-					solutionData.ruleReport.reportHash or 0
-			}
+			result.aborted = true
+			result.evaluationError = solutionData and solutionData.status or nil
+			result.ruleRevision or= 0
+			result.reportHash or= 0
 		else
-			result = {
-				success: solutionData.success
-				feedback: solutionData.feedback
-				ruleRevision: solutionData.ruleReport and solutionData.ruleReport.ruleRevision
-				reportHash: solutionData.ruleReport and solutionData.ruleReport.reportHash
+			result.success = solutionData.success
+			result.feedback = solutionData.feedback
+
+		if CLIENT
+			result.snapshot = @__pathFinder\snapshot! if @__pathFinder
+			@__predictedVisual = {
+				aborted: result.aborted == true
+				ruleRevision: result.ruleRevision or 0
+				reportHash: result.reportHash or 0
 			}
+			@ApplyVisualResult result
+		else
+			Moonpanel.Net.BroadcastVisualResult @__worldEntity, result
 
-		if result
-			if CLIENT
-				result.snapshot = @__pathFinder\snapshot! if @__pathFinder
-				@__predictedVisual = {
-					aborted: result.aborted == true
-					ruleRevision: result.ruleRevision or 0
-					reportHash: result.reportHash or 0
-				}
-				@ApplyVisualResult result
-			else
-				Moonpanel.Net.BroadcastVisualResult @__worldEntity, result
-
-			true
+		true
 
 Moonpanel.Canvas.Canvas = Canvas
 

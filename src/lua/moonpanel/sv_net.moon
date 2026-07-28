@@ -87,7 +87,7 @@ Moonpanel.Net.SendControlGrant = (recipients, panel, omitController = false) ->
 	net.WriteUInt session.revision, 32
 	net.WriteUInt session.ruleRevision or 0, 32
 	net.WriteUInt session.lastSequence, 32
-	net.WriteTable panel\GetCanvas!\GetPathFinder!\snapshot!
+	net.WriteTable panel\GetCanvas!\GetTraceSnapshot!
 	hasOrbitSeed = panel.MoonpanelPillar == true and istable session.orbitSeed
 	net.WriteBool hasOrbitSeed
 	net.WriteTable session.orbitSeed if hasOrbitSeed
@@ -111,22 +111,22 @@ Moonpanel.Net.SendTraceAck = (ply, panel, session) ->
 	net.WriteEntity panel
 	net.WriteUInt session.id, 32
 	net.WriteUInt session.lastSequence, 32
-	net.WriteUInt panel\GetCanvas!\GetPathFinder!\hash!, 32
+	net.WriteUInt panel\GetCanvas!\GetTraceHash!, 32
 	net.Send ply
 
 Moonpanel.Net.SendTraceResync = (ply, panel, session) ->
-	pathfinder = panel\GetCanvas!\GetPathFinder!
+	canvas = panel\GetCanvas!
 	startFlow flowTypes.TraceResyncSnapshot
 	net.WriteEntity panel
 	net.WriteUInt session.id, 32
 	net.WriteUInt session.lastSequence, 32
-	net.WriteUInt pathfinder\hash!, 32
-	net.WriteTable pathfinder\snapshot!
+	net.WriteUInt canvas\GetTraceHash!, 32
+	net.WriteTable canvas\GetTraceSnapshot!
 	net.Send ply
 
 Moonpanel.Net.BroadcastObserverAdvance = (controller, panel, session, firstSequence, samples) ->
-	pathfinder = panel\GetCanvas!\GetPathFinder!
-	return unless pathfinder
+	canvas = panel\GetCanvas!
+	return unless canvas
 	startFlow flowTypes.TraceObserverAdvance
 	net.WriteEntity panel
 	net.WriteUInt session.id, 32
@@ -140,7 +140,7 @@ Moonpanel.Net.BroadcastObserverAdvance = (controller, panel, session, firstSeque
 		net.WriteUInt #sample.constraints, 2
 		for decision in *sample.constraints
 			net.WriteUInt decision, 32
-	net.WriteUInt pathfinder\hash!, 32
+	net.WriteUInt canvas\GetTraceHash!, 32
 	-- Controllers normally ignore this observer stream, but the
 	-- server-authoritative debug mode consumes it directly.
 	net.Broadcast!
@@ -201,17 +201,17 @@ Moonpanel.Net.BroadcastVisualResult = (panel, data) ->
 	return unless IsValid panel
 	session = panel\GetTraceSession! or panel\GetEndingTraceSession!
 	return unless session
-	pathfinder = panel\GetCanvas!\GetPathFinder!
-	return unless pathfinder
+	canvas = panel\GetCanvas!
+	return unless canvas
 	visualEventSerial = panel\NextVisualEventSerial!
 	envelope = {
 		sessionId: session.id
 		revision: session.revision
 		finalSequence: session.lastSequence
-		finalHash: pathfinder\hash!
+		finalHash: canvas\GetTraceHash!
 		ruleRevision: session.ruleRevision or 0
 		reportHash: data.reportHash or 0
-		snapshot: pathfinder\snapshot!
+		snapshot: canvas\GetTraceSnapshot!
 		aborted: data.aborted == true
 		success: data.success == true
 		outcome: if data.aborted
@@ -317,8 +317,8 @@ processTraceBatch = (ply, panel, session, batch) ->
 			return "wait" unless session.pillarProofs and
 				session.pillarProofs[sample.commandNumber]
 
-	pathfinder = panel\GetCanvas!\GetPathFinder!
-	return "invalid" unless pathfinder
+	canvas = panel\GetCanvas!
+	return "invalid" unless canvas
 	pillarCorrection = false
 	proofRecords = {}
 	for sample in *batch.samples
@@ -328,7 +328,7 @@ processTraceBatch = (ply, panel, session, batch) ->
 			yQ: sample.yQ
 			commandNumber: sample.commandNumber
 		}
-		actualStart = pathfinder\hash!
+		actualStart = canvas\GetTraceHash!
 		if panel.MoonpanelPillar
 			proof = session.pillarProofs[sample.commandNumber]
 			session.pillarProofs[sample.commandNumber] = nil
@@ -338,7 +338,7 @@ processTraceBatch = (ply, panel, session, batch) ->
 				pillarCorrection = true
 		context = if panel.MoonpanelPillar and proof and
 			proof.motionAxis == "x" then nil else ply
-		panel\GetCanvas!\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
+		canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
 			context, sample.constraints
 		session.lastSequence += 1
 		if proof
@@ -346,10 +346,10 @@ processTraceBatch = (ply, panel, session, batch) ->
 				sample: original
 				:proof
 				:actualStart
-				actualEnd: pathfinder\hash!
+				actualEnd: canvas\GetTraceHash!
 			}
 
-	serverHash = pathfinder\hash!
+	serverHash = canvas\GetTraceHash!
 	Moonpanel.Net.BroadcastObserverAdvance ply, panel, session,
 		batch.firstSequence, batch.samples
 	Moonpanel.Net.SendTraceAck ply, panel, session
@@ -383,7 +383,7 @@ Moonpanel.Net.ProcessPendingPillarBatches = (panel, session) ->
 	true
 
 finishTraceAction = (panel, session, action) ->
-	if action == 1 and panel\GetCanvas!\GetPathFinder!\canSubmit!
+	if action == 1 and panel\GetCanvas!\CanSubmitTrace!
 		panel\EndTraceSession false
 	else
 		panel\EndTraceSession true

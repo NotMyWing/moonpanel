@@ -40,10 +40,11 @@ nodeAt = (canvas, x, y) ->
 
 runFixture = (fixture) ->
 	canvas = Moonpanel.Canvas.Canvas Moonpanel.Canvas.SanitizeData fixture.data
-	canvas.__pathFinder.stacks = {
+	snapshot = canvas\GetTraceSnapshot!
+	snapshot.stacks = {
 		[(nodeAt canvas, xy[1], xy[2]).id for xy in *fixture.trace]
 	}
-	canvas.__pathFinder\syncCompatibility!
+	canvas\RestoreTraceSnapshot snapshot
 
 	ctx = canvas\BuildSolutionContext!
 	result = canvas\ValidateSolution ctx

@@ -33,8 +33,8 @@ vgui.Register "DMoonCanvas", {
 
 			.DoClick = ->
 				if @__playMode
-					pathfinder = @__canvas\GetPathFinder!
-					return if not pathfinder
+					topology = @__canvas\GetTraceTopology!
+					return if not topology
 
 					if @__mouseCap
 						@__mouseCap = false
@@ -45,7 +45,7 @@ vgui.Register "DMoonCanvas", {
 					x = Moonpanel.Canvas.Resolution * (x / @GetWide!)
 					y = Moonpanel.Canvas.Resolution * (y / @GetTall!)
 
-					node = pathfinder.topology\getClosestStart x, y, 32
+					node = topology\getClosestStart x, y, 32
 					if node and @__canvas\Start LocalPlayer!, node.id
 						@__mouseCap = true
 						@__mouseCapX = node.screenX / Moonpanel.Canvas.Resolution * @GetWide!
@@ -60,12 +60,12 @@ vgui.Register "DMoonCanvas", {
 
 			.Think = ->
 				if @__playMode
-					pathfinder = @__canvas\GetPathFinder!
-					return if not pathfinder
+					topology = @__canvas\GetTraceTopology!
+					return if not topology
 
 					if @__mouseCap
 						x, y = @LocalCursorPos!
-						cursor = (pathfinder.cursors or {})[1]
+						cursor = @__canvas\GetTraceCursor!
 						if cursor
 							cX = cursor.x / Moonpanel.Canvas.Resolution * @GetWide!
 							cY = cursor.y / Moonpanel.Canvas.Resolution * @GetTall!
@@ -114,14 +114,14 @@ vgui.Register "DMoonCanvas", {
 			.TestHover = ->
 				x, y = @LocalCursorPos!
 				if @__playMode
-					pathfinder = @__canvas\GetPathFinder!
-					return if not pathfinder
+					topology = @__canvas\GetTraceTopology!
+					return if not topology
 
 					if not @__mouseCap
 						x = Moonpanel.Canvas.Resolution * (x / @GetWide!)
 						y = Moonpanel.Canvas.Resolution * (y / @GetTall!)
 
-						node = pathfinder.topology\getClosestStart x, y, 32
+						node = topology\getClosestStart x, y, 32
 						not not node
 				else
 					x = Moonpanel.Canvas.Resolution * (x / @GetWide!)

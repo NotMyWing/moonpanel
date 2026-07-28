@@ -23,7 +23,7 @@ ENT.DrawTranslucent = =>
 		@__rendering = false
 	if not @__rendering and canvas\AllocateRT!
 		@__rendering = true
-	return unless @__rendering and canvas.__rtAlloc
+	return unless @__rendering and canvas\GetRenderMaterial!
 	@__lastFrameNumber = FrameNumber!
 	radius = math.max 1, @GetPillarRadius!
 	height = math.max 1, @GetPillarHeight!
@@ -34,7 +34,7 @@ ENT.DrawTranslucent = =>
 	matrix\SetTranslation @GetPos!
 	matrix\SetAngles @GetAngles!
 	matrix\Scale Vector radius, radius, height
-	render.SetMaterial canvas.__rtAlloc.rt.material
+	render.SetMaterial canvas\GetRenderMaterial!
 	cam.PushModelMatrix matrix
 	Moonpanel.Canvas.GetPillarMesh(segments)\Draw!
 	cam.PopModelMatrix!

@@ -67,7 +67,7 @@ const compiledChecks = {
 	'dest/lua/moonpanel/cl_net.lua': [
 		{ pattern: /local geometryMatches\s+if localHash == result\.finalHash then\s+geometryMatches = true/, message: 'visual-result geometryMatches escaped its local scope' },
 		{ pattern: /net\.WriteInt\(sample\.xQ, 16\)\s+net\.WriteInt\(sample\.yQ, 16\)\s+net\.WriteBool\(sample\.boost\)\s+net\.WriteUInt\(sample\.commandNumber or 0, 32\)\s+net\.WriteUInt\(#sample\.constraints, 2\)/, message: 'trace samples do not serialize constraint decisions after movement' },
-		{ pattern: /pathfinder:applySample\(sample\.xQ, sample\.yQ, sample\.boost, nil, sample\.constraints\)/, message: 'observers do not replay authoritative constraint decisions' },
+		{ pattern: /canvas:ApplyTraceSample\(sample\.xQ, sample\.yQ, sample\.boost, nil, sample\.constraints\)/, message: 'observers do not replay authoritative constraint decisions' },
 		{ pattern: /local snapshot = net\.ReadTable\(\)\s+local orbitSeed = net\.ReadBool\(\) and net\.ReadTable\(\) or nil/, message: 'control grants do not read the pillar orbit seed after the trace snapshot' },
 		{ all: [
 			/Moonpanel\.Net\.MaintainPanelDataRequests = function/,
@@ -117,6 +117,7 @@ const compiledChecks = {
 			/Moonpanel\.GetPredictedControl = function\(self, ply\)[\s\S]*?if not \(IsValid\(ply\)\) then[\s\S]*?return/,
 			/Moonpanel:IsFocused\(owner\)/,
 		], message: 'control access or its NW2 proxy is unsafe during LocalPlayer teardown' },
+		{ pattern: /QueueTraceSample\(controlled, xQ, yQ, boost, canvas:GetConstraintDecisions\(\)\)/, message: 'client trace queue reads constraint decisions from a stale pathfinder local' },
 	],
 	'dest/lua/entities/moonpanel/init.lua': [
 		{ pattern: /powered = self:GetPowered\(\),\s+solved = self:GetSolvedState\(\)/, message: 'panel synchronization does not carry authoritative power and solved state together' },
@@ -158,8 +159,8 @@ function runPillarChecks(source, file, failures) {
 }
 
 function runCanvasChecks(source, file, failures) {
-	const raySites = source.match(/self:_DebugOcclusionRay\(/g) || [];
-	if (raySites.length !== 3) addFailure(failures, file, 'expected start, fanout, and refinement occlusion ray sites');
+	const raySites = source.match(/Moonpanel\.Debug:RecordOcclusionRay\(/g) || [];
+	if (raySites.length !== 1) addFailure(failures, file, 'expected one centralized occlusion ray site');
 	forbidPattern(failures, file, source, /current == previous/, 'observer RT invalidation must use visible geometry changes, not table identity');
 	requirePattern(failures, file, source, /local _, geometryChanged = self\.__observerFollower:update\(FrameTime\(\)/, 'observer RT invalidation must use visible geometry changes, not table identity');
 	requirePattern(failures, file, source, /self\.__presentation and \(not self\.__visualFrame or self\.__visualFrame\.needsSampling\)/, 'settled presentations are still sampled every frame');
@@ -188,7 +189,7 @@ function runServerNetworkChecks(source, file, failures) {
 		addFailure(failures, file, 'trace samples do not deserialize constraint decisions in writer order');
 	}
 	requireAll(failures, file, source, [
-		/net\.WriteTable\(panel:GetCanvas\(\):GetPathFinder\(\):snapshot\(\)\)\s+local hasOrbitSeed/,
+		/net\.WriteTable\(panel:GetCanvas\(\):GetTraceSnapshot\(\)\)\s+local hasOrbitSeed/,
 		/Moonpanel\.Net\.PillarProofTimeout = 1\.5/,
 		/deadline = CurTime\(\) \+ Moonpanel\.Net\.PillarProofTimeout/,
 		/session\.pillarProofs\[sample\.commandNumber\]/,

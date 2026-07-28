@@ -78,7 +78,7 @@ test.test('real canvas import preserves pillartest wrapping sockets', function()
   local canvas = Moonpanel.Canvas.Canvas()
   canvas:ImportData(fixture('pillartest'))
   assert(canvas:IsContinuous(), 'real canvas discarded continuous topology')
-  local pathfinder = assert(canvas:GetPathFinder(), 'real canvas did not build a pathfinder')
+  local pathfinder = assert(canvas:GetPillarTraceEngine(), 'real canvas did not build a pathfinder')
   local topology = pathfinder.topology
   local barWidth = canvas:GetBarWidth()
   local start = topology.nodes[10]
@@ -165,7 +165,7 @@ test.test('real canvas retains pillar kind while panel data enables wrapping', f
     'SetSurfaceSpec lost the pillar surface kind')
   assert(surfaceSpec.continuous == true,
     'panel data did not enable continuous topology on the pillar')
-  local topology = canvas:GetPathFinder().topology
+  local topology = canvas:GetPillarTraceEngine().topology
   assert(topology.surfaceKind == Moonpanel.Canvas.SurfaceKind.Pillar and topology.wrapX,
     'pillar surface values did not reach TraceTopology')
 end)
@@ -173,7 +173,7 @@ end)
 test.test('real pillartest pathfinder traverses all four wrapping sockets', function()
   local canvas = Moonpanel.Canvas.Canvas()
   canvas:ImportData(fixture('pillartest'))
-  local topology = canvas:GetPathFinder().topology
+  local topology = canvas:GetPillarTraceEngine().topology
   for y = 0, 3 do
     local seamId = y * 3 + 1
     local rightId = y * 3 + 3
@@ -196,10 +196,8 @@ test.test('replacing canvas data rebuilds topology and clears old runtime state'
   first.Entities = {}
   canvas:ImportData(first)
 
-  local oldPathfinder = assert(canvas:GetPathFinder(), 'first import did not build a pathfinder')
-  canvas.__playData = { startTime = 1, controller = {}, touchingExit = true }
-  canvas.__solutionData = { stale = true }
-  canvas.__lastRuleReport = { stale = true }
+  local oldPathfinder = assert(canvas:GetPillarTraceEngine(), 'first import did not build a pathfinder')
+  canvas:SetPlayData({ startTime = 1, controller = {}, touchingExit = true })
 
   local replacement = table.Copy(Moonpanel.Canvas.SampleData)
   replacement.Meta.Width = 2
@@ -208,15 +206,14 @@ test.test('replacing canvas data rebuilds topology and clears old runtime state'
   replacement.Entities = {}
   canvas:ImportData(replacement)
 
-  local rebuilt = assert(canvas:GetPathFinder(), 'replacement did not build a pathfinder')
+  local rebuilt = assert(canvas:GetPillarTraceEngine(), 'replacement did not build a pathfinder')
   local exported = assert(canvas:ExportData(), 'replacement data was not retained')
   assert(rebuilt ~= oldPathfinder, 'replacement reused the old pathfinder')
   assert(exported.Meta.Width == 2 and exported.Meta.Height == 1,
     'canvas did not ingest the replacement dimensions')
   assert(#canvas:GetPathNodes() > #oldPathfinder.topology.nodes,
     'replacement did not rebuild the larger socket graph')
-  assert(next(canvas.__playData) == nil and canvas.__solutionData == nil and
-    canvas.__lastRuleReport == nil,
+  assert(next(canvas:GetPlayDataSnapshot()) == nil and canvas:GetLastRuleReport() == nil,
     'replacement retained runtime state from the old document')
 end)
 

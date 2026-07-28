@@ -49,7 +49,7 @@ class MoonscriptTransform extends Transform {
 	}
 
 	spawnMoonc() {
-		const moonc = spawn(this.compilerPath, ['--'], { windowsHide: true });
+		const moonc = spawn(this.compilerPath, ['-'], { windowsHide: true });
 		moonc.on('error', this.emit.bind(this, 'error'));
 
 		streamToBuffer(moonc.stderr, (err, content) => {

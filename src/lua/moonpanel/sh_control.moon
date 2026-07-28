@@ -63,8 +63,8 @@ if CLIENT
 		Moonpanel.Net.PanelRequestControl entity, x, y if x and y
 
 	Moonpanel.TraceAction = (entity) =>
-		pathfinder = entity\GetCanvas!\GetPathFinder!
-		action = pathfinder and pathfinder\canSubmit! and 1 or 0
+		canvas = entity\GetCanvas!
+		action = canvas and canvas\CanSubmitTrace! and 1 or 0
 		Moonpanel.Net.SendTraceAction entity, action
 
 	Moonpanel.ApplyControllerTrace = (ply, cmd) =>
@@ -147,9 +147,7 @@ Moonpanel.ApplyDeltas = (ply, dX = 0, dY = 0, boost = false) =>
 		return false unless session and session.controller == ply
 		dX, dY = controlled\TransformInputDeltas(dX, dY) if controlled.TransformInputDeltas
 		canvas = controlled\GetCanvas!
-		pathfinder = canvas\GetPathFinder!
-		return false unless pathfinder and
-			pathfinder.phase == Moonpanel.Canvas.TraceEngine.Phase.Tracing
+		return false unless canvas\GetTracePhase! == Moonpanel.Canvas.TraceEngine.Phase.Tracing
 		xQ, yQ = canvas\QuantizeDeltas dX, dY, panelSensitivity\GetFloat!
 		xQ = math.Clamp xQ, -32767, 32767
 		yQ = math.Clamp yQ, -32767, 32767
@@ -163,7 +161,7 @@ Moonpanel.ApplyDeltas = (ply, dX = 0, dY = 0, boost = false) =>
 		unless CLIENT and Moonpanel\IsServerAuthoritativeTrace!
 			canvas\ApplyTraceSample xQ, yQ, boost, ply
 		Moonpanel.Net.QueueTraceSample controlled, xQ, yQ, boost,
-			pathfinder\GetConstraintDecisions!
+			canvas\GetConstraintDecisions!
 		return true
 
 	false

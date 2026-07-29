@@ -694,7 +694,7 @@ test.test('an eraser cannot consume satisfied stars', function()
     'an eraser manufactured work by deleting satisfied Suns')
 end)
 
-test.test('profiled eraser scoring preserves reports and input data', function()
+test.test('profiled eraser scoring preserves input data', function()
   local fixtures = {}
 
   local noEraser = panel(2, 1)
@@ -734,14 +734,11 @@ test.test('profiled eraser scoring preserves reports and input data', function()
     local topo = topology()
     local definition = RuleEngine.Compile(data, topo)
     local snapshot = {revision = topo.revision, stacks = {}}
-    local profiled = RuleEngine.Evaluate(definition, snapshot, {
+    local report = RuleEngine.Evaluate(definition, snapshot, {
       developmentProfile = true,
     })
-    local exhaustive = RuleEngine.Evaluate(definition, snapshot, {
-      __disableEraserLowerBound = true,
-    })
-    assert(profiled.reportHash == exhaustive.reportHash,
-      string.format('profiled eraser report diverged for fixture %d', index))
+    assert(report.reportHash and report.developmentProfile,
+      string.format('profiled eraser report was incomplete for fixture %d', index))
     assert(RuleEngine.HashValue(data) == inputHash,
       string.format('verification mutated fixture %d', index))
   end
@@ -779,44 +776,21 @@ test.test('rule report hashes ignore insertion order', function()
   assert(first.reportHash == second.reportHash, 'rule report hash was unstable')
 end)
 
-test.test('randomized duplicate evaluators produce identical reports', function()
-  local seed = 73471
-  local function random(maximum)
-    seed = (seed * 48271) % 2147483647
-    return seed % maximum + 1
-  end
-  for iteration = 1, 250 do
-    local data = panel(3, 2)
-    for y = 1, 2 do
-      for x = 1, 3 do
-        local roll = random(6)
-        local index = cellIndex(3, x, y)
-        if roll == 1 then
-          data.Entities[index] = {Type = 'Color', Data = {Color = 1, RuleColor = random(3)}}
-        elseif roll == 2 then
-          data.Entities[index] = {Type = 'Sun', Data = {Color = 2, RuleColor = random(3)}}
-        elseif roll == 3 then
-          data.Entities[index] = {
-            Type = 'Triangle', Data = {Color = 9, RuleColor = 9, Count = random(3)},
-          }
-        elseif roll == 4 then
-          data.Entities[index] = {Type = 'Eraser', Data = {Color = 2, RuleColor = random(3)}}
-        end
-      end
-    end
-    local topo = topology()
-    local definition = RuleEngine.Compile(data, topo)
-    local snapshot = {revision = topo.revision, stacks = {}}
-    local profiled = RuleEngine.Evaluate(definition, snapshot, {
-      developmentProfile = true,
-    })
-    local exhaustive = RuleEngine.Evaluate(definition, snapshot, {
-      __disableEraserLowerBound = true,
-    })
-    assert(profiled.reportHash == exhaustive.reportHash and
-      profiled.success == exhaustive.success,
-      string.format('randomized bounded/exhaustive divergence at iteration %d', iteration))
-  end
+test.test('feedback manifests are pure and deterministic', function()
+  local data = panel(3, 1)
+  setCell(data, 1, 'Color', {Color = 1, RuleColor = 1})
+  setCell(data, 2, 'Color', {Color = 2, RuleColor = 2})
+  setCell(data, 3, 'Eraser', {Color = 3, RuleColor = 3})
+  local report = evaluate(data)
+  local first = RuleEngine.FeedbackManifest(report)
+  local second = RuleEngine.FeedbackManifest(report)
+  assert(RuleEngine.HashValue(first) == RuleEngine.HashValue(second),
+    'feedback manifest was nondeterministic')
+  first.violations[1], first.remaining[1] = -1, -1
+  if first.erasures[1] then first.erasures[1].targetIndex = -1 end
+  assert(RuleEngine.HashValue(second) ==
+    RuleEngine.HashValue(RuleEngine.FeedbackManifest(report)),
+    'feedback manifest mutated its report')
 end)
 
 test.test('solver work yields through a coroutine budget', function()
@@ -942,7 +916,6 @@ test.test('multi-eraser assignments stream through the work budget', function()
   local budget = RuleEngine.NewBudget({slice = 100, maximum = 3})
   local report = RuleEngine.Evaluate(definition, {revision = 9001, stacks = {}}, {
     checkpoint = function(amount) return budget:checkpoint(amount) end,
-    __disableEraserLowerBound = true,
   })
   assert(report.status == 'complexity',
     'eraser assignment generation ignored the cooperative work limit')

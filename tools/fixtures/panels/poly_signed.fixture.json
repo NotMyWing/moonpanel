@@ -1,6 +1,7 @@
 {
   "name": "poly signed",
   "panel": "poly_signed.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

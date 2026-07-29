@@ -181,9 +181,7 @@ class Moonpanel.Canvas.Entities.IntersectionInvisible extends Moonpanel.Canvas.E
     @CanonicalType = "Invisible"
 
     Render: =>
-        return unless CLIENT
-        return unless @GetCanvas!\GetEditorGeometryVisible!
-
+        return unless CLIENT and @GetCanvas!\GetEditorGeometryVisible!
         socket = @GetSocket!
         origin = socket\GetRenderOrigin!
         size = math.max socket\GetRadius! * 2, 6
@@ -195,11 +193,9 @@ class Moonpanel.Canvas.Entities.IntersectionInvisible extends Moonpanel.Canvas.E
         return unless node
 
         node.invisible = true
-        for neighbor in *table.Copy node.neighbors
-            for i, other in ipairs neighbor.neighbors
-                if other == node
-                    table.remove neighbor.neighbors, i
-                    break
+        for neighbor in *node.neighbors
+            for i = #neighbor.neighbors, 1, -1
+                table.remove neighbor.neighbors, i if neighbor.neighbors[i] == node
 
         node.neighbors = {}
 

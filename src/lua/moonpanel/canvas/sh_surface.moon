@@ -317,7 +317,6 @@ Canvas.CylinderClearsBox = (offsetX, offsetY, radius, halfWidth,
 	required = math.max 0, radius - math.max(0, tolerance)
 	nearestX * nearestX + nearestY * nearestY >= required * required - 0.000001
 
-Canvas.SurfaceDataEqual = deepEqual
 
 if CLIENT
 	if Canvas.PillarMeshes

@@ -6,10 +6,6 @@ AddCSLuaFile = function() end
 Moonpanel = { Canvas = { Symmetry = {
     None = 0, Vertical = 1, Horizontal = 2, Rotational = 3,
 } } }
-Moonpanel.Color = {
-    Black = 1, White = 2, Cyan = 3, Magenta = 4, Yellow = 5,
-    Red = 6, Green = 7, Blue = 8, Orange = 9,
-}
 Moonpanel.Canvas.SocketType = { Intersection = 1, Cell = 2, Path = 3 }
 istable = function(value) return type(value) == 'table' end
 isstring = function(value) return type(value) == 'string' end
@@ -23,9 +19,11 @@ math.Clamp = math.Clamp or function(value, minimum, maximum)
 end
 util = util or { JSONToTable = function() return nil end }
 
+dofile('dest/lua/moonpanel/sh_colors.lua')
 dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 dofile('dest/lua/moonpanel/canvas/sh_paneldata.lua')
 local RuleEngine = dofile('dest/lua/moonpanel/canvas/sh_rule_engine.lua')
+local GridTopology = dofile('tools/grid_topology.lua')
 local input = dofile(panelPath)
 
 local function normalizeKeys(value)
@@ -42,59 +40,8 @@ end
 local panel = input.Tile and Moonpanel.Canvas.LegacyToCanvasData(normalizeKeys(input)) or input
 local width = assert(panel.Meta and panel.Meta.Width, 'panel width is missing')
 local height = assert(panel.Meta and panel.Meta.Height, 'panel height is missing')
-
-local function flatIndex(gridX, gridY)
-    return 1 + (gridX - 1) + (gridY - 1) * (width * 2 + 1)
-end
-local function intersectionIndex(x, y)
-    return flatIndex(x * 2 + 1, y * 2 + 1)
-end
-local function hpathIndex(x, y)
-    return flatIndex(x * 2 + 2, y * 2 + 1)
-end
-local function vpathIndex(x, y)
-    return flatIndex(x * 2 + 1, y * 2 + 2)
-end
-local function key(x, y) return x .. ':' .. y end
-
-local topology = { revision = 1, nodes = {}, edges = {} }
-local nodeAt, starts, exits = {}, {}, {}
-for y = 0, height do
-    for x = 0, width do
-        local socket = intersectionIndex(x, y)
-        local node = { id = #topology.nodes + 1, x = x, y = y, socketIndex = socket }
-        topology.nodes[node.id] = node
-        topology.edges[node.id] = {}
-        nodeAt[key(x, y)] = node.id
-        local entity = panel.Entities and panel.Entities[socket]
-        local typeName = entity and entity.Type
-        if typeName == 'Start' then starts[#starts + 1] = node.id end
-        if typeName == 'End' then exits[#exits + 1] = node.id end
-    end
-end
-
-local function connect(fromId, toId, socket)
-    local from, to = topology.nodes[fromId], topology.nodes[toId]
-    if from.invisible or to.invisible then return end
-    local entity = panel.Entities and panel.Entities[socket]
-    local typeName = entity and entity.Type
-    if typeName == 'Disjoint' or typeName == 'Invisible' then return end
-    topology.edges[fromId][toId] = { socketIndex = socket, lengthQ = 4096 }
-    topology.edges[toId][fromId] = { socketIndex = socket, lengthQ = 4096 }
-end
-for y = 0, height do
-    for x = 0, width - 1 do
-        connect(nodeAt[key(x, y)], nodeAt[key(x + 1, y)], hpathIndex(x, y))
-    end
-end
-for y = 0, height - 1 do
-    for x = 0, width do
-        connect(nodeAt[key(x, y)], nodeAt[key(x, y + 1)], vpathIndex(x, y))
-    end
-end
-function topology:getEdge(fromId, toId)
-    return self.edges[fromId] and self.edges[fromId][toId]
-end
+local topology, nodeAt, starts, exits = GridTopology.build(panel, 1)
+local key = GridTopology.key
 
 assert(#starts > 0, 'panel has no Start intersection')
 assert(#exits > 0, 'panel has no End intersection')

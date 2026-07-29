@@ -141,12 +141,6 @@ historyText = (history) ->
 		table.insert values, "#{sample[1]},#{sample[2]}"
 	table.concat values, " | "
 
-countEdges = (topology) ->
-	count = 0
-	for _, edges in pairs topology and topology.edges or {}
-		count += 1 for _ in pairs edges
-	count
-
 controllerText = (controller) ->
 	return "world" if controller == game.GetWorld!
 	return "none" unless IsValid controller
@@ -159,12 +153,12 @@ panelLines = (panel) ->
 	data = canvas and canvas\GetData!
 	debug = canvas and canvas\GetDebugState!
 	trace = debug and debug.trace
+	rule = debug and debug.rule
 	topology = trace and trace.topology
-	definition = canvas and canvas\GetRuleDefinition!
 	session = Moonpanel.Net.TraceSessions and Moonpanel.Net.TraceSessions[panel]
 	pendingSync = Moonpanel.Net.PendingPanelDataRequests and
 		Moonpanel.Net.PendingPanelDataRequests[panel]
-	follower = canvas and canvas\GetObserverFollower!
+	follower = debug and debug.follower
 	geometry = debug and debug.geometry
 	rtAllocated = canvas and canvas\CanRender! or false
 	meta = data and data.Meta or {}
@@ -175,17 +169,18 @@ panelLines = (panel) ->
 		{ "distance #{numberText(LocalPlayer!\EyePos!\Distance(panel\WorldSpaceCenter!), 1)}u", DIM }
 		{ "sync #{boolText(data ~= nil)}  powered #{boolText(panel\GetPowered!)}  local-power #{boolText(debug and debug.power)}", data and GOOD or BAD }
 		{ "RT allocated #{boolText(rtAllocated)}  drawing #{boolText(panel\IsRendering!)}  dirty #{boolText(debug and debug.dirty)}", rtAllocated and GOOD or WARN }
+		{ "DPS #{numberText(debug and debug.drawRate, 1)} / FPS #{numberText(debug and debug.frameRate, 1)}", WHITE }
 		{ "grid #{meta.Width or "-"}x#{meta.Height or "-"}  symmetry #{meta.Symmetry or 0}  entities #{data and #(data.Entities or {}) or 0}", WHITE }
 		{ "geometry bar #{numberText(geometry and geometry.barWidth)} / #{numberText(geometry and geometry.barLength)}  margin #{numberText(geometry and geometry.margin)}", WHITE }
 	}
 
 	if topology
-		table.insert lines, { "topology rev #{topology.revision}  nodes #{#topology.nodes}  edges #{countEdges topology}  starts #{#topology.starts}  exits #{#topology.exits}  gaps #{#topology.gaps}", WHITE }
+		table.insert lines, { "topology rev #{topology.revision}  nodes #{topology.nodes}  edges #{topology.edges}  starts #{topology.starts}  exits #{topology.exits}  gaps #{topology.gaps}", WHITE }
 	else
 		table.insert lines, { "topology unavailable", BAD }
 
-	if definition
-		table.insert lines, { "rules rev #{definition.ruleRevision or 0}  clues #{#(definition.clues or {})}", WHITE }
+	if rule
+		table.insert lines, { "rules rev #{rule.revision or 0}  clues #{rule.clues or 0}", WHITE }
 	else
 		table.insert lines, { "rules unavailable", BAD }
 
@@ -233,7 +228,7 @@ panelLines = (panel) ->
 		table.insert lines, { "session none  state-request attempts #{pendingSync and pendingSync.attempts or 0}", DIM }
 
 	if follower
-		table.insert lines, { "follower reached #{follower.reachedSequence or 0}/#{follower.targetSequence or 0}  settled #{boolText(follower\hasReached!)}", WHITE }
+		table.insert lines, { "follower reached #{follower.reachedSequence or 0}/#{follower.targetSequence or 0}  settled #{boolText(follower.settled)}", WHITE }
 
 	table.insert lines, { "presentation active #{boolText(debug and debug.presentation)}  result #{boolText(debug and debug.result)}  solver #{boolText(debug and debug.solving)}", DIM }
 	table.insert lines, { "sound #{debug and debug.sound or "-"}", DIM }

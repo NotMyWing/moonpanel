@@ -9,6 +9,7 @@ Sound = function(path) return path end
 isstring = function(value) return type(value) == 'string' end
 isnumber = function(value) return type(value) == 'number' end
 istable = function(value) return type(value) == 'table' end
+IsValid = function(value) return value ~= nil end
 math.Round = math.Round or function(value)
   return value >= 0 and math.floor(value + 0.5) or math.ceil(value - 0.5)
 end
@@ -39,6 +40,9 @@ vectorMeta.__mul = function(a, b)
   return Vector(a.x * b.x, a.y * b.y, a.z * b.z)
 end
 vectorMeta.__div = function(a, b) return Vector(a.x / b, a.y / b, a.z / b) end
+vectorMeta.Length = function(value)
+  return math.sqrt(value.x * value.x + value.y * value.y + value.z * value.z)
+end
 function Vector(x, y, z)
   if type(x) == 'table' then return setmetatable({x = x.x, y = x.y, z = x.z}, vectorMeta) end
   return setmetatable({x = x or 0, y = y or 0, z = z or 0}, vectorMeta)
@@ -52,10 +56,7 @@ function Matrix()
   }, { __mul = function() return Matrix() end })
 end
 
-Moonpanel.Color = {
-  Black = 1, White = 2, Cyan = 3, Magenta = 4, Yellow = 5,
-  Red = 6, Green = 7, Blue = 8, Orange = 9,
-}
+dofile('dest/lua/moonpanel/sh_colors.lua')
 Moonpanel.Rect = function(x, y, width, height)
   return { x = x, y = y, width = width, height = height }
 end
@@ -191,22 +192,12 @@ end)
 
 test.test('replacing canvas data rebuilds topology and clears old runtime state', function()
   local canvas = Moonpanel.Canvas.Canvas()
-  local first = table.Copy(Moonpanel.Canvas.SampleData)
-  first.Meta.Width = 1
-  first.Meta.Height = 1
-  first.Meta.Continuous = false
-  first.Entities = {}
-  canvas:ImportData(first)
+  canvas:ImportData({ Meta = { Width = 1, Height = 1 }, Entities = {} })
 
   local oldPathfinder = assert(canvas:GetPillarTraceEngine(), 'first import did not build a pathfinder')
   canvas:SetPlayData({ startTime = 1, controller = {}, touchingExit = true })
 
-  local replacement = table.Copy(Moonpanel.Canvas.SampleData)
-  replacement.Meta.Width = 2
-  replacement.Meta.Height = 1
-  replacement.Meta.Continuous = false
-  replacement.Entities = {}
-  canvas:ImportData(replacement)
+  canvas:ImportData({ Meta = { Width = 2, Height = 1 }, Entities = {} })
 
   local rebuilt = assert(canvas:GetPillarTraceEngine(), 'replacement did not build a pathfinder')
   local exported = assert(canvas:ExportData(), 'replacement data was not retained')
@@ -217,6 +208,134 @@ test.test('replacing canvas data rebuilds topology and clears old runtime state'
     'replacement did not rebuild the larger socket graph')
   assert(next(canvas:GetPlayDataSnapshot()) == nil and canvas:GetLastRuleReport() == nil,
     'replacement retained runtime state from the old document')
+end)
+
+test.test('canvas rejects suspicious imports without mutating live state', function()
+  local canvas = Moonpanel.Canvas.Canvas()
+  assert(canvas:ImportData(fixture('pillartest')))
+  local revision = canvas:GetTraceRevision()
+  assert(not canvas:ImportData('not a panel'), 'non-table import was accepted')
+  local hostile = {
+    Meta = setmetatable({}, {
+      __index = function() error('hostile payload') end,
+    }),
+  }
+  assert(not canvas:ImportData(hostile), 'throwing payload was accepted')
+  assert(canvas:GetTraceRevision() == revision and canvas:IsContinuous(),
+    'failed import mutated the live panel')
+end)
+
+test.test('invisible intersections and paths are topology cuts', function()
+  local canvas = Moonpanel.Canvas.Canvas()
+  canvas:ImportData(fixture('core clue family coverage'))
+  local engine = assert(canvas:GetPillarTraceEngine())
+  local invisible
+  for _, node in ipairs(canvas:GetPathNodes()) do
+    if node.invisible then invisible = node break end
+  end
+  assert(invisible, 'core clues invisible intersection was not imported')
+  assert(#invisible.neighbors == 0, 'invisible intersection retained adjacency')
+  for _, node in ipairs(canvas:GetPathNodes()) do
+    for _, neighbor in ipairs(node.neighbors) do
+      assert(neighbor ~= invisible,
+        'invisible intersection left stale inbound adjacency')
+    end
+  end
+  assert(engine.topology.nodeIds[invisible] == nil,
+    'invisible intersection remained in trace topology')
+  for _, node in ipairs(engine.topology.nodes) do
+    assert(not node.invisible, 'trace topology retained an invisible node')
+  end
+  local redundantPath = table.Copy(fixture('core clue family coverage'))
+  redundantPath.Entities[16] = {}
+  local redundantCanvas = Moonpanel.Canvas.Canvas()
+  redundantCanvas:ImportData(redundantPath)
+  assert(redundantCanvas:GetTraceRevision() == engine:GetRevision(),
+    'path marker beside an invisible intersection changed topology')
+
+  local pathData = {
+    Meta = { Width = 1, Height = 1 },
+    Entities = {
+      { Type = 'Start' }, { Type = 'Invisible' }, { Type = 'End' },
+    },
+  }
+  local pathCanvas = Moonpanel.Canvas.Canvas()
+  pathCanvas:ImportData(pathData)
+  local pathTopology = pathCanvas:GetPillarTraceEngine().topology
+  assert(not pathTopology:getEdge(1, 2) and not pathTopology:getEdge(2, 1),
+    'invisible path created a topology edge')
+end)
+
+test.test('transient sound scheduler keeps exactly one deferred timer', function()
+  CHAN_USER_BASE = 136
+  local callbacks, pending, peak, emitted = {}, 0, 0, {}
+  timer = { Simple = function(delay, callback)
+    assert(delay == 0, 'transient sound used a non-zero timer')
+    pending = pending + 1
+    peak = math.max(peak, pending)
+    callbacks[#callbacks + 1] = callback
+  end }
+  local canvas = Moonpanel.Canvas.Canvas()
+  local target = { EmitSound = function(_, file)
+    emitted[#emitted + 1] = file
+    if file == 'start.wav' then canvas:PlaySound('Eraser') end
+  end }
+  canvas.__sounds, canvas.__soundEnabled = {}, true
+  canvas.__soundTarget = target
+  canvas.__soundFiles = { Start = 'start.wav', Eraser = 'eraser.wav' }
+  canvas.__soundLevels = { Start = 65, Eraser = 65 }
+  canvas.__soundDurations, canvas.__soundActivity, canvas.__soundQueue = {}, {}, {}
+
+  canvas:PlaySound('Start')
+  assert(#emitted == 0 and pending == 1,
+    'first transient was not exclusively timer-backed')
+  while #callbacks > 0 do
+    local callback = table.remove(callbacks, 1)
+    pending = pending - 1
+    callback()
+  end
+  assert(peak == 1, 'sound scheduler created overlapping timers')
+  assert(emitted[1] == 'start.wav' and emitted[2] == 'eraser.wav',
+    'sound scheduler lost or reordered a reentrant cue')
+end)
+
+test.test('canvas obstruction fanout and refinement preserve visibility fraction', function()
+  local traceLine = function() return { Hit = false, Fraction = 1 } end
+  local canvas = Moonpanel.Canvas.Canvas(nil, function(trace) return traceLine(trace) end)
+  local rays = 0
+  traceLine = function()
+    rays = rays + 1
+    return { Hit = false, Fraction = 1 }
+  end
+  assert(canvas:SampleSegmentVisibility(
+    Vector(0, 0, 10), Vector(0, 0, 0), Vector(10, 0, 0), {}, 8, 0) == 1,
+    'clear segment did not remain completely visible')
+  assert(rays == 9,
+    'clear segment did not perform one start and eight fanout rays: ' .. rays)
+
+  rays = 0
+  traceLine = function(trace)
+    rays = rays + 1
+    return { Hit = trace.endpos.x >= 5, Fraction = trace.endpos.x >= 5 and 0.5 or 1 }
+  end
+
+  local fraction = canvas:SampleSegmentVisibility(
+    Vector(0, 0, 10), Vector(0, 0, 0), Vector(10, 0, 0), {}, 8, 0)
+  assert(math.abs(fraction - 0.5) < 0.001,
+    'binary obstruction refinement changed its convergence point')
+  assert(rays == 15,
+    'obstruction did not perform one start, four fanout, and ten refinement rays')
+
+  rays = 0
+  traceLine = function()
+    rays = rays + 1
+    return { Hit = true, Fraction = 0.25, Entity = { class = 'prop_physics' } }
+  end
+  assert(canvas:SampleSegmentVisibility(
+    Vector(0, 0, 10), Vector(0, 0, 0), Vector(10, 0, 0), {}, 8, 0) == 0,
+    'blocked start ray did not reject the complete segment')
+  assert(rays == 1, 'blocked start ray incorrectly entered fanout/refinement')
+  traceLine = function() return { Hit = false, Fraction = 1 } end
 end)
 
 test.run()

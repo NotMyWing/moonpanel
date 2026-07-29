@@ -1,6 +1,7 @@
 {
   "name": "poly positive",
   "panel": "poly_positive.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

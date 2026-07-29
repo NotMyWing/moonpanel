@@ -1,6 +1,7 @@
 {
   "name": "stress mixed",
   "panel": "stress_mixed.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

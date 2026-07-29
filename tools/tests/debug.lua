@@ -69,7 +69,6 @@ local canvas = {
       power = true, dirty = false, solving = false, presentation = false,
       result = false, sound = 'off' }
   end,
-  GetRuleDefinition = function() return nil end,
   GetObserverFollower = function() return nil end,
   GetGeometry = function() return { barWidth = 12, barLength = 100, margin = 20 } end,
   CanRender = function() return true end,
@@ -130,24 +129,19 @@ test.test('active observer diagnostics cover trace, follower, and occlusion stat
   canvas.GetTraceDiagnostics = function()
     return {
       phase = pathfinder.phase, hash = pathfinder:hash(), canSubmit = pathfinder:canSubmit(),
-      touchingExit = pathfinder.touchingExit, topology = topology,
+      touchingExit = pathfinder.touchingExit,
+      topology = { revision = topology.revision, nodes = #topology.nodes, edges = 2,
+        starts = #topology.starts, exits = #topology.exits, gaps = #topology.gaps },
       stacks = pathfinder.stacks, cursors = pathfinder.cursors, history = pathfinder.history,
       constraints = pathfinder:GetConstraintDecisions(), active = pathfinder.active,
     }
   end
   canvas.GetDebugState = function()
-    return { trace = canvas.GetTraceDiagnostics(), geometry = { barWidth = 4, barLength = 25, margin = 0 },
+    return { trace = canvas.GetTraceDiagnostics(), rule = { revision = 456, clues = 1 },
+      geometry = { barWidth = 4, barLength = 25, margin = 0 },
+      follower = { reachedSequence = 8, targetSequence = 10, settled = false },
       power = true, dirty = false, solving = false, presentation = true,
       result = false, sound = '0/0 playing' }
-  end
-  canvas.GetRuleDefinition = function()
-    return { ruleRevision = 456, clues = { {} } }
-  end
-  canvas.GetObserverFollower = function()
-    return {
-      reachedSequence = 8, targetSequence = 10,
-      hasReached = function() return false end,
-    }
   end
   canvas.IsPresentationActive = function() return true end
   canvas.HasVisualResult = function() return false end

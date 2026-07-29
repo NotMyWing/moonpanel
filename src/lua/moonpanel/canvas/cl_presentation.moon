@@ -61,12 +61,16 @@ class Moonpanel.Canvas.TracePresentation
 
 	setFocusHint: (focused, now = CurTime!) =>
 		focused = focused == true
-		return false if @focusHint == focused
-		@focusHint = focused
+		return false if @focusActive == focused
+		@focusActive = focused
 		if focused
-			@hintStartedAt = now
-			@lastScintCycle = -1
+			unless @focusHintConsumed
+				@focusHint = true
+				@hintStartedAt = now
+				@lastScintCycle = -1
 		else
+			@focusHint = false
+			@focusHintConsumed = false
 			@hintStartedAt = 0
 		true
 
@@ -80,6 +84,8 @@ class Moonpanel.Canvas.TracePresentation
 			}
 
 	reset: (reason = "reset") =>
+		focused = @focusActive == true
+		consumed = @focusHintConsumed == true
 		@attemptKey = nil
 		@startedAt = 0
 		@result = nil
@@ -91,8 +97,10 @@ class Moonpanel.Canvas.TracePresentation
 		@queuedCues = {}
 		@firedCues = {}
 		@lastScintCycle = -1
-		@focusHint = false
-		@hintStartedAt = 0
+		@focusActive = focused
+		@focusHintConsumed = consumed
+		@focusHint = focused and not consumed
+		@hintStartedAt = @focusHint and CurTime! or 0
 		@lastResetReason = reason
 		true
 
@@ -108,6 +116,8 @@ class Moonpanel.Canvas.TracePresentation
 
 	beginAttempt: (attemptKey, now = CurTime!) =>
 		@reset "new-attempt"
+		@focusHintConsumed = @focusActive
+		@focusHint = false
 		@attemptKey = copyAttemptKey attemptKey
 		@startedAt = now
 		@exitChangedAt = now

@@ -14,6 +14,7 @@ if CLIENT
 		nwState = ply\GetNW2Bool "TheMP Focused"
 		if not prediction.acknowledged and RealTime! >= prediction.deadline
 			Moonpanel.__focusPrediction = nil
+			Moonpanel.Net.SyncClickerState!
 
 ------------------------------------------------
 -- Gets whether the player is focused or not. --
@@ -207,8 +208,8 @@ hook.Add "PhysgunPickup", "TheMP Focus Pickup", (ply, ent) ->
 if CLIENT
 	WHITE = Color 255, 255, 255, 255
 
-	SOUND_FOCUS_ON = Sound "moonpanel/focus_on.ogg"
-	SOUND_FOCUS_OFF = Sound "moonpanel/focus_off.ogg"
+	SOUND_FOCUS_ON = Sound "moonpanel/focus_on.wav"
+	SOUND_FOCUS_OFF = Sound "moonpanel/focus_off.wav"
 	Moonpanel.__focusRenderedStates or= setmetatable {}, __mode: "k"
 
 	Moonpanel.ApplyFocusPresentation = (owner, state) ->
@@ -218,9 +219,9 @@ if CLIENT
 		Moonpanel.__focusRenderedStates[owner] = state
 		if Moonpanel.PillarFocusAngles
 			Moonpanel.PillarFocusAngles[owner] = nil
-		surface.PlaySound state and SOUND_FOCUS_ON or SOUND_FOCUS_OFF
-		if owner == LocalPlayer!
-			Moonpanel.Net.SyncClickerState!
+			surface.PlaySound state and SOUND_FOCUS_ON or SOUND_FOCUS_OFF
+			if owner == LocalPlayer!
+				Moonpanel.Net.SyncClickerState state
 
 	-- Initialize stuff.
 	Moonpanel.InitFocus = =>

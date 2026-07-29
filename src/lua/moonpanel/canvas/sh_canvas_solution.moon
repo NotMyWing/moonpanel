@@ -113,8 +113,6 @@ printVerifierProfile = (report, budget = nil) ->
 		" states=", tostring counters.eraserStatesExplored or 0
 		" pruned=", tostring counters.prunedEraserStates or 0
 		" branches=", tostring counters.eraserBranches or 0
-		" pruned_branches=", tostring counters.prunedEraserBranches or 0
-		" duplicates=", tostring counters.duplicateEraserStates or 0
 		" depth=", tostring counters.maxRecursiveDepth or 0
 		" revalidations=", tostring counters.fullRegionRevalidations or 0
 		" poly_calls=", tostring counters.polyominoSolverCalls or 0
@@ -162,22 +160,6 @@ CANVAS.SolutionCoroutineThink = =>
 	if coroutine.status(@__solutionCoroutine) == "dead"
 		@__solutionCoroutine = nil
 
-CANVAS.BuildSolutionContext = =>
-	return unless @__pathFinder and @__ruleDefinition
-	snapshot = @__pathFinder\snapshot!
-	facts = Moonpanel.Canvas.RuleEngine.BuildFacts @__ruleDefinition, snapshot
-	facts.traceHash = @__pathFinder\hash!
-	facts
-
-CANVAS.ValidateSolution = (context, options = {}) =>
-	return unless context and context.definition
-	options.traceHash or= context.traceHash
-	profile = verifierProfilingEnabled!
-	options.developmentProfile = true if profile and options.developmentProfile == nil
-	report = Moonpanel.Canvas.RuleEngine.Evaluate context.definition, context.snapshot, options
-	printVerifierProfile report if profile
-	report
-
 CANVAS.CreateSolutionCoroutine = =>
 	return if not @__playData or not @__playData.endTime
 	return unless @__pathFinder and @__ruleDefinition
@@ -219,7 +201,6 @@ CANVAS.CreateSolutionCoroutine = =>
 			else
 				print message
 		@__lastRuleReport = report
-		@__solutionData = Moonpanel.Canvas.RuleEngine.BuildFacts @__ruleDefinition, snapshot
 
 		feedback = Moonpanel.Canvas.RuleEngine.FeedbackManifest report
 
@@ -229,14 +210,3 @@ CANVAS.CreateSolutionCoroutine = =>
 			:feedback
 			ruleReport: report
 		}
-
-CANVAS.IsTraced = (socket) =>
-	return unless @__solutionData and socket
-	index = socket\GetDataIndex!
-	index and @__solutionData.traced[index]
-
-CANVAS.GetAreaNum = (socket) =>
-	return unless @__solutionData and socket
-	index = socket\GetDataIndex!
-	faceId = @__ruleDefinition and @__ruleDefinition.faceBySocket[index]
-	faceId and @__solutionData.regionByFace[faceId]

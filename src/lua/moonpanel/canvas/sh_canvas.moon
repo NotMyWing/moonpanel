@@ -109,35 +109,19 @@ Moonpanel.Canvas.GetMonitorModels = =>
 		models[#models + 1] = model
 	models
 
--- Resolve screen info for an entity and model name.
--- Returns the model-specific offset table or a fallback computed from bounding box.
-Moonpanel.Canvas.ResolveScreenInfo = (ent, modelName) ->
+Moonpanel.Canvas.BuildScreenMatrix = (ent, modelName) ->
     info = monitorOffsets[modelName]
-    if info
-        return info
+    unless info
+        mins, maxs = ent\OBBMins!, ent\OBBMaxs!
+        size = maxs - mins
+        size.x, size.y = size.y, size.x if size.x > size.y
+        info = {
+            RS: size.y / Moonpanel.Canvas.Resolution
+            RatioX: size.y / size.x
+            offset: ent.OBBCenter(ent) + Vector(0, 0, maxs.z - 0.24)
+            rot: Angle(0, 90, 180)
+        }
 
-    -- Fallback: compute from entity bounding box
-    -- Use explicit dot-call form to avoid MoonScript compiler bug
-    -- that turns `ent:Method()` into `{ent = Method()}` table literal
-    mins = ent\OBBMins!
-    maxs = ent\OBBMaxs!
-    size = maxs - mins
-
-    if size.x > size.y
-        aux = size.y
-        size.y = size.x
-        size.x = aux
-
-    return {
-        RS: size.y / Moonpanel.Canvas.Resolution
-        RatioX: size.y / size.x
-        offset: ent.OBBCenter(ent) + Vector(0, 0, maxs.z - 0.24)
-        rot: Angle(0, 90, 180)
-    }
-
--- Build screen matrix from resolved info.
--- Called by both client and server for parity.
-Moonpanel.Canvas.BuildScreenMatrix = (info) ->
     res = Moonpanel.Canvas.Resolution
     rotation, translation, translation2, scale = Matrix!, Matrix!, Matrix!, Matrix!
     scalefactor = 512 / res
@@ -147,7 +131,7 @@ Moonpanel.Canvas.BuildScreenMatrix = (info) ->
     translation2\SetTranslation Vector -(res * 0.5) / info.RatioX, -(res * 0.5), 0
     scale\SetScale              scalefactor * Vector info.RS, info.RS, info.RS
 
-    return translation * rotation * scale * translation2
+    translation * rotation * scale * translation2, info
 
 AddCSLuaFile!
 AddCSLuaFile "cl_dcanvas.lua"
@@ -157,10 +141,9 @@ AddCSLuaFile "cl_presentation.lua"
 AddCSLuaFile "sh_dlx.lua"
 AddCSLuaFile "sh_polyomino.lua"
 AddCSLuaFile "sh_rule_engine.lua"
-AddCSLuaFile "sh_canvas_fixtures.lua"
 AddCSLuaFile "sh_surface.lua"
 AddCSLuaFile "sh_continuous_topology.lua"
-AddCSLuaFile "editor/sh_document.lua"
+AddCSLuaFile "editor/cl_document.lua"
 AddCSLuaFile "editor/cl_store.lua"
 AddCSLuaFile "editor/cl_editor.lua"
 
@@ -173,9 +156,9 @@ include "sh_pathfinder.lua"
 include "sh_entities.lua"
 include "sh_entitysocket.lua"
 include "sh_continuous_topology.lua"
-Moonpanel.EditorDocument = include "editor/sh_document.lua"
 
 if CLIENT
+	Moonpanel.EditorDocument = include "editor/cl_document.lua"
 	include "cl_dcanvas.lua"
 	include "cl_rtpool.lua"
 	include "cl_presentation.lua"
@@ -184,57 +167,42 @@ if CLIENT
 else
 	resource.AddFile "materials/moonpanel/circle.png"
 
-ST = { Type: "Start" }
-EN = { Type: "End" }
-CL = { Type: "Color" }
-
-Moonpanel.Canvas.SampleData = {
-	Meta: {
-		Width: 3
-		Height: 3
-		Symmetry: 0
-	}
-
-	Dim: {
-		BarLength: 25
-		BarWidth: 4
-		AutoBarWidth: true
-	}
-
-	Entities: {
-		{}, {}, {}, {}, {}, {}, EN,
-		{}, {}, {}, {}, {}, CL, {},
-		{}, {}, {}, {}, {}, {}, {},
-		{}, {}, {}, {}, {}, {}, {},
-		{}, {}, {}, {}, {}, {}, {},
-		{}, CL, {}, {}, {}, {}, {},
-		ST, {}, {}, ST, {}, {}, {}
-	}
-}
-
 PANEL_SOUNDS = {
-	Scint: {"panel_scint.ogg", nil, false, "panel_scint_endpoint.ogg"}
-	StartScint: {"panel_scint_startpoint.ogg", nil, false, "panel_scint_startpoint.ogg"}
-	Start: {"panel_start_tracing.ogg", nil, false, "panel_start_tracing.ogg"}
+	Scint: {"panel_scint.wav", nil, false, "panel_scint_endpoint.wav"}
+	StartScint: {"panel_scint_startpoint.wav", nil, false, "panel_scint_startpoint.wav"}
+	Start: {"panel_start_tracing.wav", nil, false, "panel_start_tracing.wav"}
 	PathCompleteLoop: {"panel_path_complete_loop.wav", 45}
 	SolvingLoop: {"panel_solving_loop.wav", 40}
 	PresenceLoop: {"panel_presence_loop.wav", 40}
-	FinishTracing: {"panel_finish_tracing.ogg", nil, false, "panel_finish_tracing.ogg"}
-	AbortFinishTracing: {"panel_abort_finish_tracing.ogg", nil, false, "panel_abort_finish_tracing.ogg"}
-	PowerOn: {"powered_on.ogg", nil, true}
-	PowerOff: {"powered_off.ogg", nil, true}
-	Failure: {"panel_failure.ogg", nil, true, "panel_failure.ogg"}
-	PotentialFailure: {"panel_potential_failure.ogg", nil, true, "panel_potential_failure.ogg"}
-	Success: {"panel_success.ogg", nil, true, "panel_success.ogg"}
-	Eraser: {"eraser_apply.ogg", nil, true}
-	Abort: {"panel_abort_tracing.ogg", nil, true, "panel_abort_tracing.ogg"}
+	FinishTracing: {"panel_finish_tracing.wav", nil, false, "panel_finish_tracing.wav"}
+	AbortFinishTracing: {"panel_abort_finish_tracing.wav", nil, false, "panel_abort_finish_tracing.wav"}
+	PowerOn: {"powered_on.wav", nil, true}
+	PowerOff: {"powered_off.wav", nil, true}
+	Failure: {"panel_failure.wav", nil, true, "panel_failure.wav"}
+	PotentialFailure: {"panel_potential_failure.wav", nil, true, "panel_potential_failure.wav"}
+	Success: {"panel_success.wav", nil, true, "panel_success.wav"}
+	Eraser: {"eraser_apply.wav", nil, true}
+	Abort: {"panel_abort_tracing.wav", nil, true, "panel_abort_tracing.wav"}
 }
 PRESENTATION_SOUND_CUES = {Start: true, StartScint: true, Scint: true,
 	FinishTracing: true, AbortFinishTracing: true, PotentialFailure: true,
 	Success: true, Failure: true, Eraser: true, Abort: true}
+LOOP_SOUNDS = {PathCompleteLoop: true, SolvingLoop: true, PresenceLoop: true}
+SOUND_CHANNELS = {
+	Scint: 0, StartScint: 1, Start: 2, FinishTracing: 3,
+	AbortFinishTracing: 4, PowerOn: 5, PowerOff: 6, Failure: 7,
+	PotentialFailure: 8, Success: 9, Eraser: 10, Abort: 11
+}
+soundPresetName = (data) ->
+	name = data and data.Sounds and data.Sounds.Preset
+	Moonpanel.Canvas.SoundPresets[name] and name or Moonpanel.Canvas.DefaultSoundPreset
+makeObserverFollower = (topology, snapshot, sequence = 0) ->
+	follower = Moonpanel.Canvas.ObserverTraceFollower topology
+	follower\reset snapshot, true, sequence
+	follower
 
 class Canvas
-	new: (data) =>
+	new: (data, @__traceOcclusion = util.TraceLine) =>
 		@__playData = {}
 		@__surface = Moonpanel.Canvas.MakeSurfaceSpec!
 		@__soundEnabled = true
@@ -243,7 +211,7 @@ class Canvas
 
 	ResetSolver: =>
 		Moonpanel.Canvas.ReleaseVerifier @ if @__solutionCoroutine and Moonpanel.Canvas.ReleaseVerifier
-		@__solutionCoroutine, @__solutionData, @__lastRuleReport = nil, nil, nil
+		@__solutionCoroutine, @__lastRuleReport = nil, nil
 		@__predictedVisual = nil
 
 	ResetTraceEngine: =>
@@ -257,7 +225,6 @@ class Canvas
 
 	ClearAttempt: =>
 		@ResetSolver!
-		@ClearPresentationState!
 		@__playData = {}
 
 	SetSurfaceSpec: (surfaceSpec) =>
@@ -326,7 +293,8 @@ class Canvas
 		@__occlusionTrace or= { output: {} }
 		trace = @__occlusionTrace
 		trace.start, trace.endpos, trace.filter = startPos, endPos, filter
-		result = util.TraceLine trace
+		traceOcclusion = @__traceOcclusion
+		result = traceOcclusion trace
 		if CLIENT and Moonpanel.Debug and Moonpanel.Debug.RecordOcclusionRay
 			Moonpanel.Debug\RecordOcclusionRay @__worldEntity, stage, index,
 				startPos, endPos, result
@@ -400,13 +368,12 @@ class Canvas
 		if not @__pathFinder
 			return
 		if @__worldEntity and IsValid(@__worldEntity)
-			@__pathFinder.occlusionConstraint = @__occlusionCheck or (
-				(ply, primaryEdge, oldProgress, candidateProgress) ->
-					fraction = math.Clamp(@CheckOcclusion(
-						ply, primaryEdge, oldProgress, candidateProgress) or 1, 0, 1)
-					math.floor(oldProgress +
-						(candidateProgress - oldProgress) * fraction)
-			)
+			@__pathFinder.occlusionConstraint = (ply, primaryEdge, oldProgress,
+				candidateProgress) ->
+				fraction = math.Clamp(@CheckOcclusion(
+					ply, primaryEdge, oldProgress, candidateProgress) or 1, 0, 1)
+				math.floor oldProgress +
+					(candidateProgress - oldProgress) * fraction
 		else
 			@__pathFinder.occlusionConstraint = nil
 
@@ -425,11 +392,6 @@ class Canvas
 		@__soundEnabled = enabled
 		@SetupSounds! if enabled and not @__sounds
 		changed
-
-	GetSoundPreset: =>
-		name = @__data and @__data.Sounds and @__data.Sounds.Preset
-		Moonpanel.Canvas.SoundPresets[name] and name or
-			Moonpanel.Canvas.DefaultSoundPreset
 
 	SetSoundSuppressed: (soundName, suppressed) =>
 		return false unless isstring soundName
@@ -458,22 +420,36 @@ class Canvas
 
 		return if not target
 		@__sounds = {}
-		preset = Moonpanel.Canvas.ResolveSoundPreset @GetSoundPreset!
+		@__soundFiles = {}
+		@__soundLevels = {}
+		@__soundTarget = target
+		@__soundActivity = {}
+		@__soundDurations = {}
+		@__soundQueue = {}
+		preset = Moonpanel.Canvas.ResolveSoundPreset soundPresetName @__data
 		for name, definition in pairs PANEL_SOUNDS
 			continue if definition[3] and not CLIENT
 			file = definition[1]
 			file = "#{preset.Directory}/#{definition[4]}" if definition[4] and preset and preset.Directory ~= ""
-			sound = CreateSound target, "moonpanel/#{file}"
-			sound\SetSoundLevel definition[2] or 65
-			@__sounds[name] = sound
+			file = "moonpanel/#{file}"
+			@__soundFiles[name] = file
+			@__soundLevels[name] = definition[2] or 65
+			@__soundDurations[name] = SoundDuration(file) or 0
+			if LOOP_SOUNDS[name]
+				sound = CreateSound target, file
+				sound\SetSoundLevel @__soundLevels[name]
+				@__sounds[name] = sound
 
 	StopSound: (sound) =>
 		return if not @__sounds
 
-		sound = @__sounds[sound] if "string" == type sound
-		return if not sound
-
-		sound\Stop!
+		name = sound if "string" == type sound
+		sound = @__sounds[sound] if name
+		if sound
+			sound\Stop!
+		elseif name and IsValid(@__soundTarget) and @__soundFiles[name]
+			@__soundTarget\StopSound @__soundFiles[name]
+		@__soundActivity[name] = nil if name and @__soundActivity
 
 	StopPathCompleteLoop: =>
 		@__pathCompleteLoopActive = false
@@ -482,43 +458,55 @@ class Canvas
 	StopSounds: =>
 		return if not @__sounds
 
-		for _, sound in pairs @__sounds
-		    sound\Stop!
+		@__soundQueue = {}
+		@StopSound name for name in pairs @__soundFiles
+		@__soundActivity = {}
 
-	PlaySound: (sound, volume = 1, pitch = 100) =>
+	PlaySound: (name, volume = 1, pitch = 100) =>
 		return unless @__soundEnabled and @__sounds
+		return unless isstring(name) and not @IsSoundSuppressed(name) and
+			IsValid(@__soundTarget) and @__soundFiles[name]
+		table.insert @__soundQueue, {name, volume, pitch}
+		return if @__soundQueued
+		@__soundQueued = true
+		canvas = @
+		timer.Simple 0, -> canvas\PlayQueuedSound!
 
-		if "string" == type sound
-			return if @IsSoundSuppressed sound
-			sound = @__sounds[sound]
-		return if not sound
-
-		sound\Stop! if sound\IsPlaying!
-		sound\PlayEx volume, pitch
+	PlayQueuedSound: =>
+		request = @__soundQueue and table.remove @__soundQueue, 1
+		unless request
+			@__soundQueued = nil
+			return
+		name, volume, pitch = request[1], request[2], request[3]
+		if @__soundEnabled and not @IsSoundSuppressed(name) and
+				IsValid(@__soundTarget) and @__soundFiles[name]
+			@__soundTarget\EmitSound @__soundFiles[name],
+				@__soundLevels[name], pitch, volume,
+				CHAN_USER_BASE + SOUND_CHANNELS[name]
+			duration = @__soundDurations and @__soundDurations[name] or 0
+			@__soundActivity[name] = CurTime! +
+				duration * 100 / math.max(pitch, 1) if duration > 0
+		if #@__soundQueue > 0
+			canvas = @
+			timer.Simple 0, -> canvas\PlayQueuedSound!
+		else
+			@__soundQueued = nil
 
 	SetLoop: (sound, volume = 1, fade = 0.1, startVolume = nil) =>
 		return unless @__soundEnabled and @__sounds
-		if "string" == type sound
-			return if @IsSoundSuppressed sound
-			sound = @__sounds[sound]
+		name = sound if "string" == type sound
+		if name
+			return if @IsSoundSuppressed name
+			sound = @__sounds[name]
 		return unless sound
 		wasPlaying = sound\IsPlaying!
 		unless wasPlaying
 			sound\PlayEx startVolume ~= nil and startVolume or volume, 100
 		if wasPlaying or startVolume ~= nil
 			sound\ChangeVolume volume, fade
-
-	SetSymmetryType: (type) =>
-		return if not @__data
-
-		@__data.Meta.Symmetry = type
-
-		@RebuildPathFinderCache!
-
-	GetSymmetryType: =>
-		return if not @__data
-
-		@__data.Meta.Symmetry
+		if name and @__soundActivity
+			@__soundActivity[name] = volume > 0 or
+				fade > 0 and CurTime! + fade or nil
 
 	GetPathNodes: => @__nodes
 
@@ -563,11 +551,18 @@ class Canvas
 	-- Imports data from given table. --
 	------------------------------------
 	ImportData: (data) =>
+		sanitized = nil
+		if data ~= nil
+			return false unless istable data
+			local ok
+			ok, sanitized = pcall Moonpanel.Canvas.SanitizeData, data
+			return false unless ok and sanitized
+
 		@ClearAttempt!
 
-		previousSoundPreset = @GetSoundPreset!
-		@__data = data and Moonpanel.Canvas.SanitizeData data
-		if @__data and previousSoundPreset ~= @GetSoundPreset! and @__sounds
+		previousSoundPreset = soundPresetName @__data
+		@__data = sanitized
+		if @__data and previousSoundPreset ~= soundPresetName(@__data) and @__sounds
 			@StopSounds!
 			@__sounds = nil
 			@SetupSounds!
@@ -607,7 +602,7 @@ class Canvas
 			@__sockets = nil
 			@__nodes = nil
 			@__nodeMap = nil
-			return
+			return true
 
 		ents = @__data.Entities or {}
 		numCols = @__data.Meta.Width  * 2 + 1
@@ -691,6 +686,7 @@ class Canvas
 
 		@RecalculateClient! if CLIENT
 		@InitPathFinder!
+		true
 
 	RebuildPathFinderCache: =>
 		return unless @__data
@@ -806,7 +802,8 @@ class Canvas
 					sessionId: visualResult.sessionId
 					revision: visualResult.revision
 				}, true
-				@ApplyVisualResult visualResult, @__playData.visualElapsed or 0, true
+				@ApplyVisualResult visualResult, @__playData.visualElapsed or 0,
+					true, @__playData.solved == true
 			elseif @__playData.startTime and not @__playData.endTime
 				@BeginPresentation {
 					sessionId: @__playData.sessionId or 0
@@ -896,11 +893,21 @@ class Canvas
 	GetDebugState: =>
 		p = @__pathFinder
 		trace = p and p\GetDebugState!
+		definition = @__ruleDefinition
+		geometry = @__geometry
+		follower = @__observerFollower
 		{
 			trace: trace
-			geometry: @__geometry
+			rule: definition and {revision: definition.ruleRevision, clues: #(definition.clues or {})}
+			geometry: geometry and {barWidth: geometry.barWidth,
+				barLength: geometry.barLength, margin: geometry.margin}
+			follower: follower and {reachedSequence: follower.reachedSequence or 0,
+				targetSequence: follower.targetSequence or 0,
+				settled: follower\hasReached!}
 			power: @__powerState == true
-			dirty: @__rtDirty == true
+			dirty: @__rtDirty == true or @__rtWasDirty == true
+			drawRate: @__rtDrawRate or 0
+			frameRate: @__rtFrameRate or 0
 			solving: @__solutionCoroutine ~= nil
 			presentation: @__presentation and @__presentation\isActive! or false
 			result: @__presentation and @__presentation.result ~= nil or false
@@ -919,14 +926,14 @@ class Canvas
 	RestoreTraceSnapshot: (snapshot) =>
 		return false unless @__pathFinder and snapshot
 		@__pathFinder\restore snapshot
+		@__rtDirty = true if CLIENT
 		true
 	ApplyObserverSnapshot: (snapshot, sequence = 0) =>
 		return false unless CLIENT and @RestoreTraceSnapshot snapshot
 		follower = @__observerFollower
 		unless follower
-			follower = Moonpanel.Canvas.ObserverTraceFollower @__pathFinder.topology
-			follower\reset snapshot, true, sequence
-			@SetObserverFollower follower
+			@SetObserverFollower makeObserverFollower(
+				@__pathFinder.topology, snapshot, sequence)
 		else
 			follower\setTarget snapshot, sequence
 		true
@@ -936,9 +943,14 @@ class Canvas
 		return "off" unless @__soundEnabled
 		return "enabled/uninitialized" unless @__sounds
 		total, playing = 0, 0
-		for _, sound in pairs @__sounds
+		now = CurTime!
+		for name in pairs @__soundFiles
 			total += 1
-			playing += 1 if sound and sound.IsPlaying and sound\IsPlaying!
+			active = @__soundActivity and @__soundActivity[name]
+			if active == true or isnumber(active) and active > now
+				playing += 1
+			elseif active
+				@__soundActivity[name] = nil
 		"#{playing}/#{total} playing"
 
 	FindStartNode: (x, y, radius = 32) =>
@@ -1012,13 +1024,9 @@ class Canvas
 		@__playData.visualResult = table.Copy result
 		@__rtDirty = true if CLIENT
 		true
-	MarkRenderDirty: =>
-		@__rtDirty = true
-		true
-
 	IsBulkImporting: => @__bulkImporting == true
 
-	GetRuleDefinition: => @__ruleDefinition
+	GetRuleRevision: => @__ruleDefinition and @__ruleDefinition.ruleRevision
 
 	BeginPresentation: (attemptKey, silent = false, elapsed = 0) =>
 		return false unless CLIENT and @__presentation
@@ -1089,7 +1097,8 @@ class Canvas
 		@__observerFollower = follower
 		@__rtDirty = true
 
-	GetObserverFollower: => @__observerFollower
+	HasObserverReached: (sequence) =>
+		@__observerFollower and @__observerFollower\hasReached sequence or false
 
 	GetTraceRenderState: =>
 		return unless CLIENT and @__pathFinder
@@ -1111,12 +1120,12 @@ class Canvas
 		Moonpanel.Canvas.BuildTraceRenderState topology, snapshot,
 			sequence
 
-	ApplyVisualResult: (result, elapsed = 0, silent = false) =>
+	ApplyVisualResult: (result, elapsed = 0, silent = false, restored = false) =>
 		return false unless CLIENT and @__presentation and result
 		@__terminalSnapshot = table.Copy result.snapshot if result.snapshot
-		-- Silent results are imported terminal state.  A normal completion must
-		-- retain the live settlement animation even though it also has a snapshot.
-		@__terminalSnapshotRestored = silent == true
+		-- Cue suppression and historical restoration are separate: live server
+		-- repairs suppress duplicate sounds but must retain settlement animation.
+		@__terminalSnapshotRestored = restored == true
 		@__playData or= {}
 		@__playData.endTime = CurTime! - math.max(0, elapsed or 0)
 		@__playData.finalSequence = result.finalSequence or 0
@@ -1251,9 +1260,8 @@ class Canvas
 			pathfinder\NeedsExitNudge!
 		partialTraceSnapshot = pathfinder\snapshot! if nudgeExitAnimation
 		if nudgeExitAnimation
-			follower = Moonpanel.Canvas.ObserverTraceFollower pathfinder.topology
-			follower\reset partialTraceSnapshot, true, 0
-			@SetObserverFollower follower
+			@SetObserverFollower makeObserverFollower(
+				pathfinder.topology, partialTraceSnapshot)
 			@SetPresentationExit true
 
 		@__playData.endTime = CurTime!
@@ -1356,6 +1364,5 @@ else
 	AddCSLuaFile "sh_canvas_solution.lua"
 
 include "sh_canvas_solution.lua"
-include "sh_canvas_fixtures.lua"
 
 Moonpanel.Canvas.RT

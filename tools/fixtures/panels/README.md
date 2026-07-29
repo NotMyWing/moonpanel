@@ -5,6 +5,9 @@ The export uses the same JSON format written to Garry's Mod's
 `data/moonpanel` directory. A manifest owns a `tests` array so one panel can be
 checked against several accepted and rejected routes without duplicating its
 serialized data.
+Each manifest explicitly sets `legacy`: legacy exports are converted before
+evaluation, while canonical exports are sanitized without changing the source
+fixture file.
 
 Coordinates in each test's `traces` are zero-based panel intersections:
 `[0, 0]` is the top-left corner and `[width, height]` is the bottom-right

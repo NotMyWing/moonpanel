@@ -1,8 +1,7 @@
 include "shared.lua"
 
 ENT.InitializeSided = () =>
-    info = Moonpanel.Canvas.ResolveScreenInfo @, @GetModel!
-    @ScreenMatrix = Moonpanel.Canvas.BuildScreenMatrix info
+    @ScreenMatrix, info = Moonpanel.Canvas.BuildScreenMatrix @, @GetModel!
     @Aspect = info.RatioX
     @Scale = info.RS
     @Origin = info.offset

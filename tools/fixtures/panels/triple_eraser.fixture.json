@@ -1,6 +1,7 @@
 {
   "name": "triple_eraser",
   "panel": "triple_eraser.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

@@ -1,6 +1,7 @@
 {
   "name": "testcase",
   "panel": "testcase.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

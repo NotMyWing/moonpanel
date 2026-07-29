@@ -65,26 +65,8 @@ local UINT32 = 4294967296
 local CRC_MASK = 4294967295
 local CRC_POLYNOMIAL = 3988292384
 
-local function fallbackXor(left, right)
-    left = left % UINT32
-    right = right % UINT32
-    local result, place = 0, 1
-    for _ = 1, 32 do
-        if left % 2 ~= right % 2 then result = result + place end
-        left = math.floor(left / 2)
-        right = math.floor(right / 2)
-        place = place * 2
-    end
-    return result
-end
-
-local bxor
-if bit and bit.bxor then
-    bxor = function(a, b) return bit.bxor(a, b) % UINT32 end
-elseif bit32 and bit32.bxor then
-    bxor = function(a, b) return bit32.bxor(a, b) % UINT32 end
-else
-    bxor = fallbackXor
+local function bxor(a, b)
+    return bit.bxor(a, b) % UINT32
 end
 
 local CRC_TABLE = {}
@@ -837,19 +819,29 @@ local function evaluateActiveSet(facts, active, options, onlyRegion)
             end
 
             if #polyominoes > 0 then
-                profileCount(profile, "polyominoSolverCalls")
-                profileCount(profile, "polyominoCacheMisses")
                 local regionCells = {}
                 for _, faceId in ipairs(region.faces) do
                     local face = definition.faces[faceId]
                     regionCells[#regionCells + 1] = { id = face.id, x = face.x, y = face.y }
                 end
-                local solve = Moonpanel.Canvas.PolyominoSolver.Solve({
-                    cells = regionCells,
-                    wrapWidth = definition.continuous and definition.width or nil,
-                }, polyominoes, {
-                    checkpoint = options and options.checkpoint,
-                })
+                local keyParts = {}
+                for _, piece in ipairs(polyominoes) do keyParts[#keyParts + 1] = piece.id end
+                local cache = options and options.__polyominoCache
+                local cacheKey = region.id .. ":" .. table.concat(keyParts, ",")
+                local solve = cache and cache[cacheKey]
+                if solve then
+                    profileCount(profile, "polyominoCacheHits")
+                else
+                    profileCount(profile, "polyominoSolverCalls")
+                    profileCount(profile, "polyominoCacheMisses")
+                    solve = Moonpanel.Canvas.PolyominoSolver.Solve({
+                        cells = regionCells,
+                        wrapWidth = definition.continuous and definition.width or nil,
+                    }, polyominoes, {
+                        checkpoint = options and options.checkpoint,
+                    })
+                    if cache then cache[cacheKey] = solve end
+                end
                 if solve.status == "complexity" then
                     report.status = "complexity"
                     report.complexity = { kind = "polyomino", regionId = region.id, steps = solve.steps }
@@ -921,21 +913,12 @@ local function mapping(erasers, targets)
     return output
 end
 
-local function lexLess(a, b)
-    if not b then return true end
-    for index = 1, math.max(#a, #b) do
-        local av, bv = a[index] or -1, b[index] or -1
-        if av ~= bv then return av < bv end
-    end
-    return false
-end
-
 local function evaluateRegionWithRemoved(facts, baseActive, regionId, usedErasers, targets, options)
     local active = {}
     for key, value in pairs(baseActive) do active[key] = value end
     for _, id in ipairs(usedErasers) do active[id] = nil end
     for _, id in ipairs(targets) do active[id] = nil end
-    return evaluateActiveSet(facts, active, options, regionId), active
+    return evaluateActiveSet(facts, active, options, regionId)
 end
 
 local function sliceRegionReport(report, regionId)
@@ -960,282 +943,15 @@ local function sliceRegionReport(report, regionId)
     }
 end
 
-local function buildRegionScorer(facts, baseActive, region, options)
-    local definition = facts.definition
-    local profile = options and options.__profile
-    local dots = {}
-    local triangles = {}
-    local squaresByColor = {}
-    local starsByColor = {}
-    local coloredCellsByColor = {}
-    local polyominoes = {}
-    local regionCells = {}
-    local polyominoCache = {}
-    local mandatoryTargets = 0
-    local mandatoryById = {}
-
-    local function addByColor(groups, color, clue)
-        local group = groups[color] or {}
-        group[#group + 1] = clue
-        groups[color] = group
-    end
-
-    for _, faceId in ipairs(region.faces) do
-        local face = definition.faces[faceId]
-        regionCells[#regionCells + 1] = { id = face.id, x = face.x, y = face.y }
-    end
-
-    for _, clueId in ipairs(region.clues) do
-        local clue = definition.clueById[clueId]
-        if baseActive[clueId] then
-            if clue.socketKind == "cell" and clue.ruleColor then
-                addByColor(coloredCellsByColor, clue.ruleColor, clue)
-            end
-            if clue.kind == "dot" then
-                local satisfied = dotSatisfied(clue, facts.traced[clue.socketIndex])
-                dots[#dots + 1] = {
-                    id = clue.id,
-                    satisfied = satisfied,
-                }
-                if not satisfied then
-                    mandatoryTargets = mandatoryTargets + 1
-                    mandatoryById[clue.id] = true
-                end
-            elseif clue.kind == "triangle" then
-                local faceId = definition.faceBySocket[clue.socketIndex]
-                local face = faceId and definition.faces[faceId]
-                local count = 0
-                for _, boundary in ipairs(face and face.boundaries or {}) do
-                    if facts.traced[boundary] then count = count + 1 end
-                end
-                triangles[#triangles + 1] = {
-                    id = clue.id,
-                    satisfied = count == clue.count,
-                }
-                if count ~= clue.count then
-                    mandatoryTargets = mandatoryTargets + 1
-                    mandatoryById[clue.id] = true
-                end
-            elseif clue.kind == "square" then
-                addByColor(squaresByColor, clue.ruleColor, clue)
-            elseif clue.kind == "star" then
-                addByColor(starsByColor, clue.ruleColor, clue)
-            elseif clue.kind == "polyomino" then
-                polyominoes[#polyominoes + 1] = clue
-            end
-        end
-    end
-
-    local squareColors = sortedKeys(squaresByColor)
-    local starColors = sortedKeys(starsByColor)
-
-    local function score(removed)
-        local started = profile and profileNow()
-        local violations = 0
-
-        for _, clue in ipairs(dots) do
-            if not removed[clue.id] and not clue.satisfied then
-                violations = violations + 1
-            end
-        end
-        for _, clue in ipairs(triangles) do
-            if not removed[clue.id] and not clue.satisfied then
-                violations = violations + 1
-            end
-        end
-
-        local activeSquareColors = 0
-        local activeSquares = 0
-        for _, color in ipairs(squareColors) do
-            local count = 0
-            for _, clue in ipairs(squaresByColor[color]) do
-                if not removed[clue.id] then count = count + 1 end
-            end
-            if count > 0 then
-                activeSquareColors = activeSquareColors + 1
-                activeSquares = activeSquares + count
-            end
-        end
-        if activeSquareColors > 1 then violations = violations + activeSquares end
-
-        for _, color in ipairs(starColors) do
-            local starCount = 0
-            for _, clue in ipairs(starsByColor[color]) do
-                if not removed[clue.id] then starCount = starCount + 1 end
-            end
-            if starCount > 0 then
-                local coloredCount = 0
-                for _, clue in ipairs(coloredCellsByColor[color] or {}) do
-                    if not removed[clue.id] then coloredCount = coloredCount + 1 end
-                end
-                if coloredCount ~= 2 then violations = violations + starCount end
-            end
-        end
-
-        if #polyominoes > 0 then
-            local pieces = {}
-            local keyParts = {}
-            for _, clue in ipairs(polyominoes) do
-                if not removed[clue.id] then
-                    pieces[#pieces + 1] = {
-                        id = clue.id,
-                        shape = clue.shape,
-                        rotatable = clue.rotatable,
-                        negative = clue.negative,
-                    }
-                    keyParts[#keyParts + 1] = clue.id
-                end
-            end
-            if #pieces > 0 then
-                local key = table.concat(keyParts, ",")
-                local solve = polyominoCache[key]
-                if solve then
-                    profileCount(profile, "polyominoCacheHits")
-                else
-                    profileCount(profile, "polyominoSolverCalls")
-                    profileCount(profile, "polyominoCacheMisses")
-                    solve = Moonpanel.Canvas.PolyominoSolver.Solve({
-                        cells = regionCells,
-                        wrapWidth = definition.continuous and definition.width or nil,
-                    }, pieces, {
-                        checkpoint = options and options.checkpoint,
-                    })
-                    polyominoCache[key] = solve
-                end
-                if solve.status == "complexity" then
-                    if profile then profileAddTime(profile, "eraserScoring", started) end
-                    return nil, "complexity"
-                elseif solve.status ~= "solved" then
-                    violations = violations + #pieces
-                end
-            end
-        end
-
-        if profile then profileAddTime(profile, "eraserScoring", started) end
-        return violations
-    end
-
-    local function lowerBound(removed, slots)
-        local components = {}
-        local starColorSet = {}
-
-        for _, color in ipairs(starColors) do
-            starColorSet[color] = true
-            local activeStars = 0
-            for _, clue in ipairs(starsByColor[color]) do
-                if not removed[clue.id] then activeStars = activeStars + 1 end
-            end
-            local activeColored = 0
-            local removableOther = 0
-            local mandatoryOther = 0
-            for _, clue in ipairs(coloredCellsByColor[color] or {}) do
-                if not removed[clue.id] then
-                    activeColored = activeColored + 1
-                    if clue.kind ~= "eraser" and clue.kind ~= "star" then
-                        removableOther = removableOther + 1
-                        if mandatoryById[clue.id] then
-                            mandatoryOther = mandatoryOther + 1
-                        end
-                    end
-                end
-            end
-
-            local curve = {}
-            local maximum = math.min(slots, activeStars + removableOther)
-            for used = 0, maximum do
-                local best
-                local minimumStars = math.max(0, used - removableOther)
-                local maximumStars = math.min(activeStars, used)
-                for removedStars = minimumStars, maximumStars do
-                    local removedOther = used - removedStars
-                    local stars = activeStars - removedStars
-                    local colored = activeColored - used
-                    local starScore = stars
-                    if stars == 0 or colored == 2 then starScore = 0 end
-                    local score = mandatoryOther -
-                        math.min(removedOther, mandatoryOther) + starScore
-                    if best == nil or score < best then best = score end
-                end
-                curve[used] = best
-            end
-            components[#components + 1] = curve
-        end
-
-        local neutralTargets = 0
-        local neutralMandatory = 0
-        for _, clueId in ipairs(region.clues) do
-            local clue = definition.clueById[clueId]
-            if baseActive[clueId] and not removed[clueId] and clue.kind ~= "eraser" then
-                local belongsToStarColor = clue.socketKind == "cell" and
-                    clue.ruleColor and starColorSet[clue.ruleColor]
-                if not belongsToStarColor then
-                    neutralTargets = neutralTargets + 1
-                    if mandatoryById[clueId] then
-                        neutralMandatory = neutralMandatory + 1
-                    end
-                end
-            end
-        end
-        local neutralCurve = {}
-        for used = 0, math.min(slots, neutralTargets) do
-            neutralCurve[used] = neutralMandatory - math.min(used, neutralMandatory)
-        end
-        components[#components + 1] = neutralCurve
-
-        local totals = { [0] = 0 }
-        for _, curve in ipairs(components) do
-            local nextTotals = {}
-            for previousUsed, previousScore in pairs(totals) do
-                for used, score in pairs(curve) do
-                    local totalUsed = previousUsed + used
-                    if totalUsed <= slots then
-                        local totalScore = previousScore + score
-                        if nextTotals[totalUsed] == nil or
-                                totalScore < nextTotals[totalUsed] then
-                            nextTotals[totalUsed] = totalScore
-                        end
-                    end
-                end
-            end
-            totals = nextTotals
-        end
-        local minimum = totals[slots] or 0
-
-        local squareTotal = 0
-        local largestSquareColor = 0
-        for _, color in ipairs(squareColors) do
-            local count = 0
-            for _, clue in ipairs(squaresByColor[color]) do
-                if not removed[clue.id] then count = count + 1 end
-            end
-            squareTotal = squareTotal + count
-            largestSquareColor = math.max(largestSquareColor, count)
-        end
-        if squareTotal - largestSquareColor > slots then
-            minimum = minimum + math.max(0, squareTotal - slots)
-        end
-
-        return minimum
-    end
-    return score, mandatoryTargets, lowerBound
-end
-
 local function solveEraserRegion(facts, baseActive, region, erasers, targets, options, baseline)
-    baseline = baseline or evaluateActiveSet(facts, baseActive, options, region.id)
     if baseline.status ~= "complete" then return { status = baseline.status, report = baseline } end
 
-    local minimumValid
     local fullValid
     local bestFull
     local bestFullScore
     local bestFullTargets
     local profile = options and options.__profile
     local regionProfile = profileRegion(profile, region.id)
-    local scoreRegion, mandatoryTargets, regionLowerBound =
-        buildRegionScorer(facts, baseActive, region, options)
-    if profile then
-        profileCount(profile, "mandatoryEraserTargets", mandatoryTargets)
-    end
     local pendingSearchWork = 0
     local searchCheckpoints = 0
     local function checkpointSearch(force)
@@ -1286,7 +1002,9 @@ local function solveEraserRegion(facts, baseActive, region, erasers, targets, op
         local solution
         for targetCount = 1, #targets do
             local failedStatus
-            forEachCombination(targets, targetCount, nil, function(targetSet)
+            local _, reason = forEachCombination(
+                targets, targetCount, function() return checkpointSearch(false) end,
+                function(targetSet)
                 local candidate = evaluateRegionWithRemoved(
                     facts, baseActive, region.id, erasers, targetSet, options)
                 if candidate.status ~= "complete" then
@@ -1299,6 +1017,7 @@ local function solveEraserRegion(facts, baseActive, region, erasers, targets, op
                 end
                 return true
             end, profile, 0, false)
+            if reason == "complexity" then return { status = "complexity" } end
             if failedStatus then
                 return { status = failedStatus.status, report = failedStatus }
             end
@@ -1344,8 +1063,7 @@ local function solveEraserRegion(facts, baseActive, region, erasers, targets, op
     -- valid state reached with only a subset does not make the remaining
     -- Erasers optional; the complete assignment is the puzzle state that must
     -- be validated.
-    local firstUsedCount = #erasers
-    if profile and firstUsedCount > 0 then
+    if profile and #erasers > 0 then
         local function combinations(count, selected)
             if selected < 0 or selected > count then return 0 end
             selected = math.min(selected, count - selected)
@@ -1356,103 +1074,51 @@ local function solveEraserRegion(facts, baseActive, region, erasers, targets, op
             return result
         end
         local pruned = 0
-        for usedCount = 0, firstUsedCount - 1 do
+        for usedCount = 0, #erasers - 1 do
             pruned = pruned + combinations(#erasers, usedCount) *
                 combinations(#targets, usedCount)
         end
         profileCount(profile, "prunedEraserStates", pruned)
     end
-    for usedCount = firstUsedCount, #erasers do
-        local foundAtThisCount = false
-        local failedStatus
-        local complete, reason = forEachCombination(
-            erasers, usedCount, nil, function(eraserSet)
-            local removed = {}
-            for _, id in ipairs(eraserSet) do removed[id] = true end
-            local scoreFloor = regionLowerBound(removed, usedCount)
-            local floorReached = false
-            local function targetBranch(targetSet, depth)
-                if not checkpointSearch(false) then
-                    failedStatus = { status = "complexity" }
-                    return "stop"
-                end
-                profileCount(profile, "eraserBranches")
-                if options and options.__disableEraserLowerBound then return true end
-                if usedCount ~= #erasers or bestFullScore == nil then return true end
-                for index = 1, depth do
-                    removed[targetSet[index]] = true
-                end
-                local bound = regionLowerBound(removed, usedCount - depth)
-                for index = 1, depth do
-                    removed[targetSet[index]] = nil
-                end
-                if bound >= bestFullScore then
-                    profileCount(profile, "prunedEraserBranches")
-                    return false
-                end
-                return true
-            end
-            local targetComplete, targetReason = forEachCombination(
-                targets, usedCount, nil, function(targetSet)
-                if not checkpointSearch(false) then
-                    failedStatus = { status = "complexity" }
-                    return false
-                end
+    local usedCount = #erasers
+    local failedStatus
+    local function targetBranch()
+        profileCount(profile, "eraserBranches")
+        return true
+    end
+    local _, targetReason = forEachCombination(
+                targets, usedCount, function() return checkpointSearch(false) end,
+                function(targetSet)
                 profileCount(profile, "eraserStatesExplored")
                 if regionProfile then
                     regionProfile.eraserStates = regionProfile.eraserStates + 1
                 end
-                for _, id in ipairs(targetSet) do removed[id] = true end
-                local score, scoreStatus = scoreRegion(removed)
-                for _, id in ipairs(targetSet) do removed[id] = nil end
-                if scoreStatus == "complexity" then
-                    failedStatus = { status = "complexity" }
+                local scoreStarted = profile and profileNow()
+                local candidate = evaluateRegionWithRemoved(
+                    facts, baseActive, region.id, erasers, targetSet, options)
+                if profile then profileAddTime(profile, "eraserScoring", scoreStarted) end
+                if candidate.status ~= "complete" then
+                    failedStatus = { status = candidate.status, report = candidate }
                     return false
                 end
-                if usedCount == #erasers then
-                    if bestFullScore == nil or score < bestFullScore or
-                            (score == bestFullScore and lexLess(targetSet, bestFullTargets)) then
-                        bestFullScore = score
-                        bestFullTargets = arrayCopy(targetSet)
-                    end
+                local score = #(candidate.violations or {})
+                if bestFullScore == nil or score < bestFullScore or
+                        score == bestFullScore and not bestFullTargets then
+                    bestFullScore = score
+                    bestFullTargets = arrayCopy(targetSet)
                 end
                 if score == 0 then
-                    local candidate = evaluateRegionWithRemoved(
-                        facts, baseActive, region.id, eraserSet, targetSet, options)
-                    if candidate.status ~= "complete" then
-                        failedStatus = { status = candidate.status, report = candidate }
-                        return false
-                    end
-                    if usedCount == #erasers and not fullValid then
+                    if not fullValid then
                         fullValid = { report = candidate, targets = arrayCopy(targetSet) }
                     end
-                    minimumValid = usedCount
-                    foundAtThisCount = true
-                    return false
-                end
-                if usedCount == #erasers and score == scoreFloor and
-                        not (options and options.__disableEraserLowerBound) then
-                    floorReached = true
                     return false
                 end
                 return true
             end, profile, usedCount, false, targetBranch)
-            if targetReason == "complexity" then
-                failedStatus = { status = "complexity" }
-            end
-            if floorReached then return false end
-            if failedStatus or foundAtThisCount then return false end
-            return targetComplete
-        end, profile, 0, false)
-        if reason == "complexity" then
-            return {
-                status = "complexity",
-                complexity = { kind = "eraser", regionId = region.id },
-            }
-        end
-        if failedStatus then return failedStatus end
-        if foundAtThisCount then break end
+    if targetReason == "complexity" then
+        failedStatus = { status = "complexity" }
     end
+    if failedStatus then return failedStatus end
 
     if pendingSearchWork > 0 and not checkpointSearch(true) then
         return {
@@ -1477,7 +1143,7 @@ local function solveEraserRegion(facts, baseActive, region, erasers, targets, op
             baseline = baseline,
             selected = fullValid.report,
             erasures = mapping(erasers, fullValid.targets),
-            proof = { minimumUsed = minimumValid, targets = fullValid.targets },
+            proof = { minimumUsed = usedCount, targets = fullValid.targets },
         }
     end
 
@@ -1562,6 +1228,7 @@ function RuleEngine.Evaluate(definition, traceSnapshot, options)
         runtimeOptions.__profile = profile
         options = runtimeOptions
     end
+    options.__polyominoCache = {}
     local facts = RuleEngine.BuildFacts(definition, traceSnapshot, profile)
     if options.traceHash then facts.traceHash = options.traceHash end
     local dataErrors = {}

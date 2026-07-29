@@ -1,6 +1,7 @@
 {
   "name": "eraser_pair",
   "panel": "eraser_pair.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

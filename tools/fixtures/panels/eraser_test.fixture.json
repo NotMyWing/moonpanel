@@ -1,6 +1,7 @@
 {
   "name": "eraser_test",
   "panel": "eraser_test.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

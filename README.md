@@ -57,14 +57,11 @@ TBA.
 
 ## License
 
-Moonpanel source code is licensed under the Apache License, Version 2.0, as
-declared in `package.json`. Redistributions and derivatives must retain the
-copyright, license, and attribution notices, and modified files must identify
-their changes. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+Moonpanel's code is Apache 2.0. See [`LICENSE`](LICENSE).
 
-All The Witness-derived visual assets, audio assets, and other original game
-content are strictly credited to Thekla, Inc. They remain the property of
-Thekla, Inc. and are not relicensed under the Apache License.
+Some code and assets came from elsewhere. [`NOTICE`](NOTICE) and
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) say what came from where.
+The Witness assets still belong to Thekla.
 
 ## Acknowledgments
 
@@ -73,6 +70,7 @@ Thekla, Inc. and are not relicensed under the Apache License.
 * [Tyler Schrock](https://github.com/Tschrock) - *The Windmill importer.*
 * [Soojin Nam](https://github.com/sjnam/lua-dancing-links) - *Lua Dancing Links*
 * [thegrb93 and contributors](https://github.com/thegrb93/StarfallEx/) - *StarfallEX and the panel rendering codebase*
+* [WireMod contributors](https://github.com/wiremod/wire) - *Editor-presence animation*
 * [BytewaveMLP](https://github.com/BytewaveMLP) - *Buildscript*
 
 ## WireMod and Expression 2

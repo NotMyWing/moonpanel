@@ -51,6 +51,8 @@ const compiledChecks = {
 	],
 	'dest/lua/moonpanel/canvas/cl_canvas.lua': [
 		{ pattern: /\blocal barWidth = self:GetBarWidth\(\)/, message: 'RecalculateClient must scope barWidth locally' },
+		{ pattern: /if node\["break"\] or node\.invisible or self:IsHiddenContinuousSocket\(node\.socket\) then/,
+			message: 'invisible and gap nodes are not excluded from visible render nodes' },
 		{ all: [
 			/if data\.powered ~= nil then\s+powered = data\.powered == true/,
 			/self:SetPowerState\(powered\)/,
@@ -63,12 +65,32 @@ const compiledChecks = {
 			/local dataChanged = self\.__dataRevision ~= nil and self\.__dataRevision ~= dataRevision/,
 			/Moonpanel\.Net\.TraceSessions\[panel\] = nil/,
 		], message: 'panel edits do not invalidate stale client trace sessions by data generation' },
+		{ all: [
+			/local ruleRevision = self:GetRuleRevision\(\)/,
+			/self:ApplyVisualResult\(visualResult, data\.visualElapsed or 0, true, data\.solved == true\)/,
+		], message: 'failed terminal sync is incorrectly restored as a static solved presentation' },
+	],
+	'dest/lua/moonpanel/canvas/sh_canvas.lua': [
+		{ all: [
+			/if LOOP_SOUNDS\[name\] then[\s\S]*?CreateSound\(target, file\)/,
+			/PlaySound = function\(self, name, volume, pitch\)[\s\S]*?timer\.Simple\(0,[\s\S]*?PlayQueuedSound = function\(self\)[\s\S]*?self\.__soundTarget:EmitSound\([\s\S]*?CHAN_USER_BASE \+ SOUND_CHANNELS\[name\]\)/,
+		], message: 'transient cues still share persistent loop sound patches' },
+	],
+	'dest/lua/moonpanel/canvas/editor/cl_tooltip.lua': [
+		{ all: [
+			/local C = Editor\.C/,
+			/Editor\.TooltipPanel = panel\s+return panel/,
+			/surface_GetTextSize/,
+			/panel\.PlaceOn = info\.placeOn/,
+		], message: 'custom tooltip does not retain its palette or return its panel' },
 	],
 	'dest/lua/moonpanel/cl_net.lua': [
 		{ pattern: /local geometryMatches\s+if localHash == result\.finalHash then\s+geometryMatches = true/, message: 'visual-result geometryMatches escaped its local scope' },
-		{ pattern: /net\.WriteInt\(sample\.xQ, 16\)\s+net\.WriteInt\(sample\.yQ, 16\)\s+net\.WriteBool\(sample\.boost\)\s+net\.WriteUInt\(sample\.commandNumber or 0, 32\)\s+net\.WriteUInt\(#sample\.constraints, 2\)/, message: 'trace samples do not serialize constraint decisions after movement' },
+		{ pattern: /Moonpanel\.Net\.WriteTraceSamples\(session\.unsent, count\)/, message: 'trace input bypasses the shared sample codec' },
 		{ pattern: /(?:canvas:ApplyTraceSample\(sample\.xQ, sample\.yQ, sample\.boost, nil, sample\.constraints\)|applyTraceSamples\(canvas, samples, nil\))/, message: 'observers do not replay authoritative constraint decisions' },
 		{ pattern: /local snapshot = net\.ReadTable\(\)\s+local orbitSeed = net\.ReadBool\(\) and net\.ReadTable\(\) or nil/, message: 'control grants do not read the pillar orbit seed after the trace snapshot' },
+		{ pattern: /canvas:ApplyVisualResult\(result, 0, localReport ~= nil or predicted ~= nil, false\)/,
+			message: 'live result repair is incorrectly treated as restored presentation state' },
 		{ all: [
 			/Moonpanel\.Net\.MaintainPanelDataRequests = function/,
 			/canvas:ImportNetworkState\(panel, data\)/,
@@ -85,6 +107,8 @@ const compiledChecks = {
 			/if not \(Moonpanel:IsServerAuthoritativeTrace\(\)\) then/,
 			/panel:GetCanvas\(\):End\(action ~= 1\)/,
 		], message: 'server-authoritative mode does not suppress local prediction and terminal gameplay' },
+		{ pattern: /if not \(session and session\.id == result\.sessionId[\s\S]*?return[\s\S]*?canvas:SetSolvedState\(result\.solved == true\)/,
+			message: 'stale visual results can mutate solved state before session validation' },
 		{ not: /MaintainPanelDataRequests = function[\s\S]*?ents_GetAll\(\)/, message: 'retry maintenance scans every entity instead of pending panels' },
 	],
 	'dest/lua/moonpanel/cl_init.lua': [
@@ -109,6 +133,10 @@ const compiledChecks = {
 			/Moonpanel\.IsFocused = function\(self, ply\)[\s\S]*?if not \(IsValid\(ply\)\) then[\s\S]*?return false/,
 			/Moonpanel\.Net\.SyncClickerState\(\)/,
 		], message: 'focus access or its NW2 proxy is unsafe during LocalPlayer teardown' },
+		{ all: [
+			/Moonpanel\.Net\.SyncClickerState\(state\)/,
+			/Moonpanel\.__focusPrediction = nil\s+(?:return )?Moonpanel\.Net\.SyncClickerState\(\)/,
+		], message: 'focus transitions or prediction expiry do not synchronize the clicker' },
 		{ pattern: /PillarController\.ProcessCommand\(ply, cmd, use, originalButtons\)/, message: 'StartCommand does not delegate pillar input to the isolated controller' },
 	],
 	'dest/lua/moonpanel/sh_control.lua': [
@@ -121,7 +149,6 @@ const compiledChecks = {
 	'dest/lua/entities/moonpanel/init.lua': [
 		{ pattern: /powered = self:GetPowered\(\),\s+solved = self:GetSolvedState\(\)/, message: 'panel synchronization does not carry authoritative power and solved state together' },
 		{ pattern: /self:SetSolvedState\(solved, visualResult\)[\s\S]*?self:ExecutePendingSyncs\(\)/, message: 'restored solved state is not applied before pending clients synchronize' },
-		{ pattern: /self:EndTraceSession\(true\)[\s\S]*?canvas:ImportData\(data\)/, message: 'panel edits can import replacement data before evicting the active solver' },
 	],
 	'dest/lua/weapons/gmod_tool/stools/moonpanel.lua': [
 		{ pattern: /sf:SetData\(tileData, solved, visualResult\)/, message: 'duplicator restoration does not atomically import panel and solved state' },
@@ -132,9 +159,15 @@ const compiledChecks = {
 	],
 	'dest/lua/entities/moonpanel/cl_init.lua': [
 		{ not: /hook\.Add\("Think"/, message: 'panel installs a redundant per-entity global Think hook' },
+		{ pattern: /local info\s+self\.ScreenMatrix, info = Moonpanel\.Canvas\.BuildScreenMatrix/,
+			message: 'client screen metadata escaped its initialization scope' },
 	],
-	'dest/lua/moonpanel/canvas/sh_net.lua': [
+	'dest/lua/moonpanel/sh_net.lua': [
 		{ pattern: /for k, v in ipairs\(flowTypes\)/, message: 'flow IDs are not derived in stable array order' },
+		{ all: [
+			/net\.WriteInt\(sample\.xQ, 16\)\s+net\.WriteInt\(sample\.yQ, 16\)\s+net\.WriteBool\(sample\.boost\)\s+net\.WriteUInt\(sample\.commandNumber or 0, 32\)\s+net\.WriteUInt\(#sample\.constraints, 2\)/,
+			/local xQ, yQ = net\.ReadInt\(16\), net\.ReadInt\(16\)[\s\S]*?local boost, commandNumber = net\.ReadBool\(\), net\.ReadUInt\(32\)[\s\S]*?local constraintCount = net\.ReadUInt\(2\)/,
+		], message: 'shared trace codec field order diverged' },
 	],
 };
 
@@ -175,17 +208,8 @@ function runPathChecks(source, file, failures) {
 
 function runServerNetworkChecks(source, file, failures) {
 	const inputBatch = source.match(/receive\(flowTypes\.TraceInputBatch[\s\S]*?receive\(flowTypes\.TraceAction/);
-	const fields = inputBatch && [
-		'local xQ = net.ReadInt(16)',
-		'local yQ = net.ReadInt(16)',
-		'local boost = net.ReadBool()',
-		'local commandNumber = net.ReadUInt(32)',
-		'local constraintCount = net.ReadUInt(2)',
-	].map((field) => inputBatch[0].indexOf(field));
-	if (!fields || fields.some((position) => position < 0) ||
-		fields.some((position, index) => index > 0 && position <= fields[index - 1])) {
-		addFailure(failures, file, 'trace samples do not deserialize constraint decisions in writer order');
-	}
+	if (!inputBatch || !/Moonpanel\.Net\.ReadTraceSamples\(\)/.test(inputBatch[0]))
+		addFailure(failures, file, 'trace input bypasses the shared sample codec');
 	requireAll(failures, file, source, [
 		/net\.WriteTable\(panel:GetCanvas\(\):GetTraceSnapshot\(\)\)\s+local hasOrbitSeed/,
 		/Moonpanel\.Net\.PillarProofTimeout = 1\.5/,
@@ -201,7 +225,7 @@ function runServerNetworkChecks(source, file, failures) {
 		/batch\.predictedHash ~= 0 and serverHash ~= batch\.predictedHash/,
 	], 'server-authoritative trace updates are not broadcast or hash-gated correctly');
 	const observerAdvance = source.match(/Moonpanel\.Net\.BroadcastObserverAdvance = function[\s\S]*?Moonpanel\.Net\.BroadcastTraceResult = function/);
-	if (!observerAdvance || !/net\.WriteUInt\(#sample\.constraints, 2\)/.test(observerAdvance[0]) || /net\.WriteTable/.test(observerAdvance[0])) {
+	if (!observerAdvance || !/Moonpanel\.Net\.WriteTraceSamples\(samples\)/.test(observerAdvance[0]) || /net\.WriteTable/.test(observerAdvance[0])) {
 		addFailure(failures, file, 'observer advance must stream constrained samples, not per-batch snapshots');
 	}
 }
@@ -258,8 +282,9 @@ function compilePanelFixtures() {
 	const fixtures = manifestNames.map((manifestName) => {
 		const manifestPath = path.join(panelFixtureRoot, manifestName);
 		const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-		if (!manifest.name || !manifest.panel || !Array.isArray(manifest.tests) || !manifest.tests.length) {
-			throw new Error(`${manifestName}: name, panel, and a non-empty tests array are required`);
+		if (!manifest.name || !manifest.panel || typeof manifest.legacy !== 'boolean' ||
+			!Array.isArray(manifest.tests) || !manifest.tests.length) {
+			throw new Error(`${manifestName}: name, panel, legacy, and a non-empty tests array are required`);
 		}
 		for (const [index, testCase] of manifest.tests.entries()) {
 			if (!testCase.name || !testCase.expected || !Array.isArray(testCase.traces)) {
@@ -282,22 +307,23 @@ function compilePanelFixtures() {
 	return path.relative(projectRoot, generatedPanelFixtures);
 }
 
-const luaTests = [
-	['tools/tests/surface.lua'],
-	['tools/tests/canvas_runtime.lua'],
-	['tools/tests/pillar_controller.lua'],
-	['tools/tests/pathfinder.lua'],
-	['tools/tests/determinism.lua', '25000', '79225'],
-	['tools/tests/determinism.lua', '25000', '19088743'],
-	['tools/tests/presentation.lua'],
-	['tools/tests/solution.lua'],
-	['tools/tests/panel_fixtures.lua'],
-	['tools/tests/paneldata.lua'],
-	['tools/tests/debug.lua'],
-	['tools/tests/editor_document.lua'],
-	['tools/tests/editor_store.lua'],
-	['tools/tests/panel_sync.lua'],
+const contractTests = [
+	['rendering', 'tools/tests/surface.lua'],
+	['lifecycle', 'tools/tests/canvas_runtime.lua'],
+	['lifecycle', 'tools/tests/pillar_controller.lua'],
+	['trace', 'tools/tests/pathfinder.lua'],
+	['trace', 'tools/tests/determinism.lua', '25000', '79225'],
+	['trace', 'tools/tests/determinism.lua', '25000', '19088743'],
+	['rendering', 'tools/tests/presentation.lua'],
+	['solver', 'tools/tests/solution.lua'],
+	['solver', 'tools/tests/panel_fixtures.lua'],
+	['persistence', 'tools/tests/paneldata.lua'],
+	['diagnostics', 'tools/tests/debug.lua'],
+	['persistence', 'tools/tests/editor_document.lua'],
+	['persistence', 'tools/tests/editor_store.lua'],
+	['wire/lifecycle', 'tools/tests/panel_sync.lua'],
 ];
+const luaTests = contractTests.map(([, ...test]) => test);
 
 const luaJitTests = luaTests.filter((test) => !(
 	test[0] === 'tools/tests/determinism.lua' || test[0] === 'tools/tests/canvas_runtime.lua'

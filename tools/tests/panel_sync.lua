@@ -166,4 +166,40 @@ test.test('terminal eraser delay latches errored after feedback', function()
     'failed terminal result did not latch errored after the delay')
 end)
 
+test.test('Wire terminal result derives one path update from lifecycle state', function()
+  local outputs = {}
+  WireLib = {
+    TriggerOutput = function(_, name, value)
+      outputs[#outputs + 1] = { name = name, value = value }
+    end,
+  }
+  dofile('dest/lua/moonpanel/sv_wire.lua')
+  local panelEntity = panel()
+  panelEntity.WireOutputs = {}
+  panelEntity.powered, panelEntity.solved, panelEntity.errored = true, false, true
+  panelEntity.GetPowered = function(self) return self.powered end
+  panelEntity.GetSolvedState = function(self) return self.solved end
+  panelEntity.GetErrored = function(self) return self.errored end
+  panelEntity.GetCanvas = function()
+    return {
+      GetTracePath = function() return 'R R U' end,
+      GetSocketAtDataIndex = function() return nil end,
+    }
+  end
+
+  SERVER = true
+  Moonpanel.Wire.HandleResult(panelEntity, {
+    success = false, feedback = { erasures = {} }, snapshot = {},
+  })
+  SERVER = nil
+  local paths = 0
+  for _, output in ipairs(outputs) do
+    if output.name == 'Path' then
+      paths = paths + 1
+      assert(output.value == 'R R U', 'Wire path did not use terminal trace state')
+    end
+  end
+  assert(paths == 1, 'Wire terminal handling assigned Path more than once')
+end)
+
 test.run()

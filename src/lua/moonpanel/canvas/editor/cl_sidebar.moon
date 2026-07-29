@@ -3,36 +3,15 @@ return unless CLIENT
 Moonpanel.Editor or= {}
 Editor = Moonpanel.Editor
 
-C = Editor.C or {
-	window: Color 20, 23, 29
-	panel: Color 28, 32, 40
-	raised: Color 36, 41, 51
-	inset: Color 22, 26, 33
-	border: Color 56, 64, 78
-	text: Color 232, 238, 244
-	muted: Color 145, 156, 170
-	accent: Color 71, 192, 235
-	accentDim: Color 40, 107, 132
-	hover: Color 48, 56, 68
-	danger: Color 229, 85, 91
-	warning: Color 242, 181, 70
-	success: Color 91, 209, 142
-}
-
-MATERIALS = Editor.MATERIALS or {}
+C = Editor.C
+MATERIALS = Editor.MATERIALS
 
 Helpers = Moonpanel.Helpers
 deepCopy = Helpers.deepCopy
 clearChildren = Helpers.clearChildren
 colorValue = Helpers.colorValue
 
-COLORS = {
-	{ "Black", Moonpanel.Color.Black }, { "White", Moonpanel.Color.White }
-	{ "Cyan", Moonpanel.Color.Cyan }, { "Magenta", Moonpanel.Color.Magenta }
-	{ "Yellow", Moonpanel.Color.Yellow }, { "Red", Moonpanel.Color.Red }
-	{ "Green", Moonpanel.Color.Green }, { "Blue", Moonpanel.Color.Blue }
-	{ "Orange", Moonpanel.Color.Orange }
-}
+COLORS = [{ definition.Name, id } for id, definition in ipairs Moonpanel.ColorDefinitions]
 
 SYMMETRIES = {
 	{ "None", Moonpanel.Canvas.Symmetry.None, "symmetry_none" }
@@ -53,7 +32,7 @@ GROUPS = {
 		entries: {
 			{ "Color", "Square", "cell" }, { "Sun", "Star", "cell" }, { "Eraser", "Eraser", "cell" }
 			{ "Triangle", "Triangle", "cell" }, { "Polyomino", "Polyomino", "cell" }
-			{ "Invisible", "Invisible cell", "cell" }
+			{ "Invisible", "Cell hole", "cell" }
 		}
 	}
 	{
@@ -61,7 +40,7 @@ GROUPS = {
 		entries: {
 			{ "Start", "Start", "route" }, { "End", "Exit", "route" }
 			{ "Hexagon", "Dot", "route" }, { "Disjoint", "Gap", "route" }
-			{ "Invisible", "Invisible path", "route" }
+			{ "Invisible", "Route break", "route" }
 		}
 	}
 }
@@ -104,12 +83,17 @@ setAppearanceColor = (data, role, color) ->
 		return
 	data.Colors[role] = color
 
-getColorPresetNames = ->
+sortedKeys = (source, first) ->
 	names = {}
-	for name in pairs Moonpanel.Canvas.ColorPresets
+	for name in pairs source
 		table.insert names, name
-	table.sort names
+	table.sort names, (a, b) ->
+		return true if a == first
+		return false if b == first
+		a < b
 	names
+
+getColorPresetNames = -> sortedKeys Moonpanel.Canvas.ColorPresets
 
 getActiveColorPreset = (colors, names) ->
 	for presetName in *names
@@ -117,11 +101,7 @@ getActiveColorPreset = (colors, names) ->
 	"Custom"
 
 getSoundPresetNames = ->
-	names = {}
-	for name in pairs Moonpanel.Canvas.SoundPresets
-		table.insert names, name
-	table.sort names
-	names
+	sortedKeys Moonpanel.Canvas.SoundPresets, Moonpanel.Canvas.DefaultSoundPreset
 
 getActiveSoundPreset = (data, names) ->
 	name = data.Sounds and data.Sounds.Preset
@@ -143,51 +123,51 @@ addSection = (parent, text, topMargin = 12) ->
 		\DockMargin 10, topMargin, 10, 3
 
 makePresetPicker = (parent, names, current, tooltip, apply, paintOption = nil) ->
-	container = parent\Add "DPanel"
-	container\Dock TOP
-	container\DockMargin 10, 2, 10, 5
-	container\SetTall 34
-	container\SetPaintBackgroundEnabled false
-	container.Paint = (_, w, h) ->
-		draw.RoundedBox 0, 0, 0, w, h, C.panel
+	container = with parent\Add "DPanel"
+		\Dock TOP
+		\DockMargin 10, 2, 10, 5
+		\SetTall 34
+		\SetPaintBackgroundEnabled false
+		.Paint = (_, w, h) ->
+			draw.RoundedBox 0, 0, 0, w, h, C.panel
 
-	select = container\Add "DButton"
-	select\Dock TOP
-	select\SetTall 34
-	select\SetText ""
-	select\SetTooltip tooltip
+	select = with container\Add "DButton"
+		\Dock TOP
+		\SetTall 34
+		\SetText ""
+	Editor\AttachTextTooltip select, tooltip
 
-	options = container\Add "DPanel"
-	options\Dock TOP
-	options\SetVisible false
-	options\SetTall 0
-	options\SetPaintBackgroundEnabled false
-	options.Paint = (_, w, h) ->
-		draw.RoundedBox 0, 0, 0, w, h, C.panel
+	options = with container\Add "DPanel"
+		\Dock TOP
+		\SetVisible false
+		\SetTall 0
+		\SetPaintBackgroundEnabled false
+		.Paint = (_, w, h) ->
+			draw.RoundedBox 0, 0, 0, w, h, C.panel
 
 	for presetName in *names
-		option = options\Add "DButton"
-		option.PresetName = presetName
-		option\Dock TOP
-		option\SetTall if paintOption then 42 else 30
-		option\SetText ""
-		option\SetTooltip "Apply #{presetName}"
-		option.DoClick = (_) ->
-			apply _.PresetName
-			options\SetVisible false
-			options\SetTall 0
-			container\SetTall 34
-			container\InvalidateLayout true
-		option.Paint = (_, w, h) ->
-			selected = current! == _.PresetName
-			background = if selected then C.accentDim elseif _.Hovered then C.hover else C.raised
-			draw.RoundedBox 0, 0, 0, w, h, background
-			if selected
-				draw.RoundedBox 0, 0, 0, 2, h, C.accent
-			if paintOption
-				paintOption _.PresetName, w, h
-			else
-				draw.SimpleText _.PresetName, "MoonpanelEditorBody", 10, h / 2, C.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER
+		option = with options\Add "DButton"
+			.PresetName = presetName
+			\Dock TOP
+			\SetTall if paintOption then 42 else 30
+			\SetText ""
+			.DoClick = (_) ->
+				apply _.PresetName
+				options\SetVisible false
+				options\SetTall 0
+				container\SetTall 34
+				container\InvalidateLayout true
+			.Paint = (_, w, h) ->
+				selected = current! == _.PresetName
+				background = if selected then C.accentDim elseif _.Hovered then C.hover else C.raised
+				draw.RoundedBox 0, 0, 0, w, h, background
+				if selected
+					draw.RoundedBox 0, 0, 0, 2, h, C.accent
+				if paintOption
+					paintOption _.PresetName, w, h
+				else
+					draw.SimpleText _.PresetName, "MoonpanelEditorBody", 10, h / 2, C.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER
+		Editor\AttachTextTooltip option, "Apply #{presetName}"
 
 	select.DoClick = (_) ->
 		open = not options\IsVisible!
@@ -208,7 +188,7 @@ makePresetPicker = (parent, names, current, tooltip, apply, paintOption = nil) -
 		option\InvalidateLayout true for option in *options\GetChildren!
 	container
 
-makeColorGrid = (parent, selected, callback) ->
+makeColorGrid = (parent, selected, callback, tooltipKey) ->
 	layout = with parent\Add "DIconLayout"
 		\Dock TOP
 		\DockMargin 10, 2, 10, 5
@@ -218,17 +198,20 @@ makeColorGrid = (parent, selected, callback) ->
 	for choice in *COLORS
 		name = choice[1]
 		id = choice[2]
-		button = layout\Add "DButton"
-		button.ColorId = id
-		button\SetText ""
-		button\SetSize 20, 20
-		button\SetTooltip name
-		button.DoClick = (_) -> callback _.ColorId
-		button.Paint = (_, w, h) ->
-			isSelected = _.ColorId == selected
-			border = if isSelected then C.accent elseif _.Hovered then C.text else C.border
-			draw.RoundedBox 4, 0, 0, w, h, border
-			draw.RoundedBox 3, 3, 3, w - 6, h - 6, colorValue _.ColorId
+		button = with layout\Add "DButton"
+			.ColorId = id
+			\SetText ""
+			\SetSize 20, 20
+			.DoClick = (_) -> callback _.ColorId
+			.Paint = (_, w, h) ->
+				isSelected = _.ColorId == selected
+				border = if isSelected then C.accent elseif _.Hovered then C.text else C.border
+				draw.RoundedBox 4, 0, 0, w, h, border
+				draw.RoundedBox 3, 3, 3, w - 6, h - 6, colorValue _.ColorId
+		if tooltipKey
+			Editor\AttachControlTooltip button, tooltipKey, name
+		else
+			Editor\AttachTextTooltip button, name
 	layout
 
 makeCheck = (parent, text, checked, callback, tooltipKey) ->
@@ -254,59 +237,58 @@ makeSegmented = (parent, choices, selected, callback) ->
 		label = choice[1]
 		value = choice[2]
 		tooltipKey = choice[3]
-		button = row\Add "DButton"
-		button.Value = value
-		button.Label = label
-		button\Dock LEFT
-		button\DockMargin 0, 0, 4, 0
-		button\SetWide math.floor((236 - (#choices - 1) * 4) / #choices)
-		button\SetText ""
-		button.DoClick = (_) -> callback _.Value
-		button.Paint = (_, w, h) ->
-			background = if _.Value == selected then C.accentDim elseif _.Hovered then C.hover else C.raised
-			draw.RoundedBox 4, 0, 0, w, h, background
-			draw.SimpleText _.Label, "MoonpanelEditorSmall", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
+		button = with row\Add "DButton"
+			.Value = value
+			.Label = label
+			\Dock LEFT
+			\DockMargin 0, 0, 4, 0
+			\SetWide math.floor((236 - (#choices - 1) * 4) / #choices)
+			\SetText ""
+			.DoClick = (_) -> callback _.Value
+			.Paint = (_, w, h) ->
+				background = if _.Value == selected then C.accentDim elseif _.Hovered then C.hover else C.raised
+				draw.RoundedBox 4, 0, 0, w, h, background
+				draw.SimpleText _.Label, "MoonpanelEditorSmall", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
 		Editor\AttachControlTooltip button, tooltipKey if tooltipKey and Editor.AttachControlTooltip
 	row
 
 styledSmallButton = (parent, text, callback, width = 72) ->
-	button = parent\Add "DButton"
-	button\SetText ""
-	button\SetWide width
-	button\SetTall 28
-	button.DoClick = callback
-	button.Paint = (_, w, h) ->
-		background = if _.Depressed then C.accentDim elseif _.Hovered then C.hover else C.raised
-		draw.RoundedBox 4, 0, 0, w, h, background
-		draw.SimpleText text, "MoonpanelEditorSmall", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
-	button
+	with parent\Add "DButton"
+		\SetText ""
+		\SetWide width
+		\SetTall 28
+		.DoClick = callback
+		.Paint = (_, w, h) ->
+			background = if _.Depressed then C.accentDim elseif _.Hovered then C.hover else C.raised
+			draw.RoundedBox 4, 0, 0, w, h, background
+			draw.SimpleText text, "MoonpanelEditorSmall", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
 
 ----
 -- Clue tools
 ----
 
 Editor.BuildToolModeBar = (parent) =>
-	addSection parent, "TOOLS", 8
-	row = with parent\Add "DPanel"
-		\Dock TOP
-		\DockMargin 8, 2, 8, 6
-		\SetTall 32
-		.Paint = nil
-	for entry in *{ { "place", "Place" }, { "erase", "Erase" }, { "recolor", "Recolor" } }
+	parent.Paint = (_, w, h) ->
+		surface.SetDrawColor C.border
+		surface.DrawRect 6, 0, w - 12, 1
+	for index, entry in ipairs { { "place", "Place" }, { "erase", "Erase" }, { "recolor", "Recolor" } }
 		mode = entry[1]
 		label = entry[2]
-		button = row\Add "DButton"
-		button.Mode = mode
-		button.Label = label
-		button\Dock LEFT
-		button\DockMargin 0, 0, 4, 0
-		button\SetWide 72
-		button\SetText ""
-		button.DoClick = (_) -> Editor\SetActiveMode _.Mode
-		button.Paint = (_, w, h) ->
-			background = if Editor.activeMode == _.Mode then C.accentDim elseif _.Hovered then C.hover else C.raised
-			draw.RoundedBox 4, 0, 0, w, h, background
-			draw.SimpleText _.Label, "MoonpanelEditorSmall", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
+		with parent\Add "DButton"
+			.Mode = mode
+			.Label = label
+			\Dock LEFT
+			\DockMargin index == 1 and 6 or 0, 6, 4, 4
+			\SetWide 75
+			\SetText ""
+			.DoClick = (_) -> Editor\SetActiveMode _.Mode
+			.Paint = (_, w, h) ->
+				active = Editor.activeMode == _.Mode
+				draw.RoundedBox 4, 0, 0, w, h,
+					_.Hovered and C.hover or C.raised
+				draw.RoundedBox 1, 5, h - 3, w - 10, 2, C.accent if active
+				draw.SimpleText _.Label, "MoonpanelEditorSmall", w / 2, h / 2,
+					C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
 
 Editor.BuildClueCatalogue = (parent) =>
 	for group in *GROUPS
@@ -315,14 +297,14 @@ Editor.BuildClueCatalogue = (parent) =>
 			typeName = entry[1]
 			displayName = entry[2]
 			family = entry[3] or Editor.GetClueFamily(typeName) or "cell"
-			button = parent\Add "DButton"
-			button.EntityType = typeName
-			button.DisplayName = displayName
-			button.Family = family
-			button\Dock TOP
-			button\DockMargin 8, 2, 8, 2
-			button\SetTall 38
-			button\SetText ""
+			button = with parent\Add "DButton"
+				.EntityType = typeName
+				.DisplayName = displayName
+				.Family = family
+				\Dock TOP
+				\DockMargin 8, 2, 8, 2
+				\SetTall 38
+				\SetText ""
 			button.DoClick = (_) -> Editor\FocusClue _.EntityType, _.Family
 			button.Paint = (_, w, h) ->
 				cellBrush = Editor.cellBrush
@@ -542,11 +524,9 @@ Editor.BuildStickySettings = (parent) =>
 			data.RuleColor or Moonpanel.Color.Black,
 			(id) ->
 				Editor\UpdateFocusedBrushData (nextData) ->
-					nextData.RuleColor = id
+					nextData.RuleColor = id,
+			"rule_color"
 		)
-
-		if Editor.AttachControlTooltip
-			Editor\AttachControlTooltip ruleGrid, "rule_color"
 
 	if supportsTint
 		addSection(
@@ -586,11 +566,9 @@ Editor.BuildStickySettings = (parent) =>
 				(id) ->
 					Editor\UpdateFocusedBrushData (nextData) ->
 						nextData.TintColor = id
-						nextData.Color = nil
+						nextData.Color = nil,
+				"tint_override"
 			)
-
-			if Editor.AttachControlTooltip
-				Editor\AttachControlTooltip tintGrid, "tint_override"
 
 	----
 	-- Bottom spacing
@@ -656,11 +634,11 @@ Editor.BuildPolyominoEditor = (parent, brush) =>
 			cellY = y
 			cellX = x
 
-			button = grid\Add "DButton"
-			button.CellX = cellX
-			button.CellY = cellY
-			button\SetText ""
-			button\SetSize 26, 26
+			button = with grid\Add "DButton"
+				.CellX = cellX
+				.CellY = cellY
+				\SetText ""
+				\SetSize 26, 26
 
 			button.DoClick = (_) ->
 				oldValue = draft[_.CellY][_.CellX]
@@ -905,30 +883,22 @@ Editor.BuildPanelSettings = (parent) =>
 	heightInput.OnEnter = applyResize
 
 	addSection parent, "SYMMETRY"
-	symmetryGrid = with parent\Add "DIconLayout"
-		\Dock TOP
-		\DockMargin 10, 2, 10, 6
-		\SetTall 66
-		\SetSpaceX 5
-		\SetSpaceY 5
+	symmetryNames, symmetryValues = {}, {}
 	for entry in *SYMMETRIES
-		label = entry[1]
-		value = entry[2]
-		tooltipKey = entry[3]
-		button = symmetryGrid\Add "DButton"
-		button.Value = value
-		button.Label = label
-		button\SetSize 112, 30
-		button\SetText ""
-		button.DoClick = (_) ->
-			nextData = Editor.Document\GetData!
-			nextData.Meta.Symmetry = _.Value
-			Editor\CommitData "Change symmetry", nextData
-		button.Paint = (_, w, h) ->
-			background = if data.Meta.Symmetry == _.Value then C.accentDim elseif _.Hovered then C.hover else C.raised
-			draw.RoundedBox 4, 0, 0, w, h, background
-			draw.SimpleText _.Label, "MoonpanelEditorSmall", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
-		Editor\AttachControlTooltip button, tooltipKey if Editor.AttachControlTooltip
+		table.insert symmetryNames, entry[1]
+		symmetryValues[entry[1]] = entry[2]
+	symmetryCurrent = ->
+		value = Editor.Document\GetData!.Meta.Symmetry
+		for name in *symmetryNames
+			return name if symmetryValues[name] == value
+		"None"
+	applySymmetry = (name) ->
+		return if symmetryCurrent! == name
+		nextData = Editor.Document\GetData!
+		nextData.Meta.Symmetry = symmetryValues[name]
+		Editor\CommitData "Change symmetry", nextData
+	makePresetPicker parent, symmetryNames, symmetryCurrent,
+		"Choose the panel's trace symmetry", applySymmetry
 
 	addSection parent, "TOPOLOGY"
 	onContinuity = (enabled) ->
@@ -952,7 +922,6 @@ Editor.BuildPanelSettings = (parent) =>
 		\Dock TOP
 		\SetTall 34
 		\SetText ""
-		\SetTooltip "Optional geometry controls for line width, cell size, and gaps."
 		.DoClick = ->
 			Editor.AdvancedGeometryExpanded = not Editor.AdvancedGeometryExpanded
 			advanced\InvalidateLayout true
@@ -963,6 +932,8 @@ Editor.BuildPanelSettings = (parent) =>
 			draw.RoundedBox 4, 0, 0, w, h, background
 			draw.SimpleText expanded and "▾" or "▸", "MoonpanelEditorBody", 12, h / 2, C.accent, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
 			draw.SimpleText "Advanced geometry", "MoonpanelEditorBody", 28, h / 2 - 1, C.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER
+	Editor\AttachTextTooltip advancedHeader,
+		"Optional geometry controls for line width, cell size, and gaps."
 
 	geometry = with advanced\Add "DPanel"
 		\SetTall 190
@@ -989,23 +960,23 @@ Editor.BuildPanelSettings = (parent) =>
 		minimum = setting[3]
 		maximum = setting[4]
 		scale = setting[5]
-		slider = geometry\Add "DNumSlider"
-		slider.SettingKey = key
-		slider.SettingLabel = label
-		slider.SettingScale = scale
-		slider\Dock TOP
-		slider\DockMargin 8, 2, 8, 2
-		slider\SetText label
-		slider\SetMin minimum
-		slider\SetMax maximum
-		slider\SetDecimals 0
-		slider\SetValue (data.Dim[key] or minimum) * scale
-		slider\SetEnabled false if key == "BarWidth" and autoBarWidth
-		slider.OnValueChanged = (_, value) ->
-			nextData = Editor.Document\GetData!
-			nextData.Dim[_.SettingKey] = value / _.SettingScale
-			Editor\CommitData "Change #{string.lower _.SettingLabel}", nextData, "panel-#{_.SettingKey}", false
-			Editor\RefreshCompatibility nextData
+		with geometry\Add "DNumSlider"
+			.SettingKey = key
+			.SettingLabel = label
+			.SettingScale = scale
+			\Dock TOP
+			\DockMargin 8, 2, 8, 2
+			\SetText label
+			\SetMin minimum
+			\SetMax maximum
+			\SetDecimals 0
+			\SetValue (data.Dim[key] or minimum) * scale
+			\SetEnabled false if key == "BarWidth" and autoBarWidth
+			.OnValueChanged = (_, value) ->
+				nextData = Editor.Document\GetData!
+				nextData.Dim[_.SettingKey] = value / _.SettingScale
+				Editor\CommitData "Change #{string.lower _.SettingLabel}", nextData, "panel-#{_.SettingKey}", false
+				Editor\RefreshCompatibility nextData
 
 ----
 -- Appearance
@@ -1050,7 +1021,7 @@ Editor.BuildAppearanceSettings = (parent) =>
 		if colorCurrent! == presetName
 			Editor\SetStatus "#{presetName} is already active.", C.muted
 			return
-		nextData = deepCopy Editor.Document\GetData!
+		nextData = Editor.Document\GetData!
 		nextData.Colors = deepCopy Moonpanel.Canvas.ResolveColorPreset presetName
 		Editor\CommitData "Apply color preset", nextData, "appearance-preset", false
 		Editor\RefreshAppearanceControls!
@@ -1078,7 +1049,7 @@ Editor.BuildAppearanceSettings = (parent) =>
 		if soundCurrent! == presetName
 			Editor\SetStatus "#{presetName} is already active.", C.muted
 			return
-		nextData = deepCopy Editor.Document\GetData!
+		nextData = Editor.Document\GetData!
 		nextData.Sounds = { Preset: presetName }
 		Editor\CommitData "Apply sound preset", nextData, "sound-preset", false
 		Editor\RefreshAppearanceControls!
@@ -1092,21 +1063,20 @@ Editor.BuildAppearanceSettings = (parent) =>
 		for entry in *entries
 			name = entry[1]
 			key = entry[2]
-			button = parent\Add "DButton"
-			button.RoleKey = key
-			button.RoleName = name
-			button\Dock TOP
-			button\DockMargin 10, 2, 10, 2
-			button\SetTall 32
-			button\SetText ""
-			button.DoClick = (_) ->
-				Editor\SelectAppearanceRole _.RoleKey
-			button.Paint = (_, w, h) ->
-				background = if _.RoleKey == Editor.appearanceRole then C.accentDim elseif _.Hovered then C.hover else C.raised
-				draw.RoundedBox 4, 0, 0, w, h, background
-				value = getAppearanceColor Editor.Document\GetData!, _.RoleKey
-				draw.RoundedBox 3, 8, 7, 18, 18, Color(value.r, value.g, value.b, value.a or 255)
-				draw.SimpleText _.RoleName, "MoonpanelEditorBody", 34, h / 2, C.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER
+			with parent\Add "DButton"
+				.RoleKey = key
+				.RoleName = name
+				\Dock TOP
+				\DockMargin 10, 2, 10, 2
+				\SetTall 32
+				\SetText ""
+				.DoClick = (_) -> Editor\SelectAppearanceRole _.RoleKey
+				.Paint = (_, w, h) ->
+					background = if _.RoleKey == Editor.appearanceRole then C.accentDim elseif _.Hovered then C.hover else C.raised
+					draw.RoundedBox 4, 0, 0, w, h, background
+					value = getAppearanceColor Editor.Document\GetData!, _.RoleKey
+					draw.RoundedBox 3, 8, 7, 18, 18, Color(value.r, value.g, value.b, value.a or 255)
+					draw.SimpleText _.RoleName, "MoonpanelEditorBody", 34, h / 2, C.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER
 
 	addAppearanceButtons "COLOR ROLE", APPEARANCE
 	addAppearanceButtons "TRACE COLORS", TRACE_APPEARANCE
@@ -1142,8 +1112,15 @@ Editor.RebuildSidebar = =>
 	clearChildren @SidebarContent
 
 	tab = @sidebarTab or "clues"
+	@ToolModeBar = nil
 
 	if tab == "clues"
+		@ToolModeBar = with @SidebarContent\Add "DPanel"
+			\Dock TOP
+			\DockMargin 2, 0, 2, 6
+			\SetTall 38
+		@BuildToolModeBar @ToolModeBar
+
 		@StickySettings = with @SidebarContent\Add "DPanel"
 			\Dock BOTTOM
 
@@ -1161,8 +1138,6 @@ Editor.RebuildSidebar = =>
 		@ClueCatalogue = with @SidebarContent\Add "DScrollPanel"
 			\Dock FILL
 			\SetPaintBackgroundEnabled false
-
-		@BuildToolModeBar @ClueCatalogue
 
 		hint = addLabel(
 			@ClueCatalogue,
@@ -1210,19 +1185,19 @@ Editor.BuildSidebar = (parent) =>
 		tab = entry[1]
 		label = entry[2]
 		width = entry[3]
-		button = tabs\Add "DButton"
-		button.TabName = tab
-		button.Label = label
-		button\Dock LEFT
-		button\DockMargin 0, 0, 4, 0
-		button\SetWide width
-		button\SetText ""
-		button.DoClick = (_) -> Editor\SwitchSidebarTab _.TabName
-		button.Paint = (_, w, h) ->
-			selected = (Editor.sidebarTab or "clues") == _.TabName
-			background = if selected then C.accentDim elseif _.Hovered then C.hover else C.raised
-			draw.RoundedBox 4, 0, 0, w, h, background
-			draw.SimpleText _.Label, "MoonpanelEditorSmall", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
+		with tabs\Add "DButton"
+			.TabName = tab
+			.Label = label
+			\Dock LEFT
+			\DockMargin 0, 0, 4, 0
+			\SetWide width
+			\SetText ""
+			.DoClick = (_) -> Editor\SwitchSidebarTab _.TabName
+			.Paint = (_, w, h) ->
+				selected = (Editor.sidebarTab or "clues") == _.TabName
+				background = if selected then C.accentDim elseif _.Hovered then C.hover else C.raised
+				draw.RoundedBox 4, 0, 0, w, h, background
+				draw.SimpleText _.Label, "MoonpanelEditorSmall", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
 
 	@SidebarContent = with parent\Add "DPanel"
 		\Dock FILL

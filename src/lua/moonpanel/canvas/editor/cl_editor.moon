@@ -42,6 +42,56 @@ MATERIALS = {
 }
 Editor.MATERIALS = MATERIALS
 
+-- Adapted from WireMod's Expression 2 "in editor" animation by the WireMod
+-- contributors (Apache-2.0). Moonpanel substitutes randomized clue particles.
+activeEditors = {}
+clueMaterials = {
+	MATERIALS.Color, MATERIALS.Sun, MATERIALS.Eraser,
+	MATERIALS.Triangle, MATERIALS.Polyomino, MATERIALS.Hexagon
+}
+clueSprites = {}
+
+Editor.SetPresence = (_, ply, open) ->
+	return unless IsValid ply
+	activeEditors[ply] = open == true or nil
+
+hook.Add "EntityRemoved", "Moonpanel Editor Presence", (entity) ->
+	activeEditors[entity] = nil
+
+timer.Create "Moonpanel Editor Presence", 0.65, 0, ->
+	for ply in pairs activeEditors
+		continue unless IsValid ply
+		bone = ply\LookupBone("ValveBiped.Bip01_Head1") or
+			ply\LookupBone("ValveBiped.HC_Head_Bone") or 0
+		position = ply\GetBonePosition bone
+		continue unless position
+		table.insert clueSprites, {
+			material: clueMaterials[math.random #clueMaterials]
+			position: position + Vector(math.random(-7, 7), math.random(-7, 7), 15)
+			color: Moonpanel.Canvas.ColorValues[math.random 2, 9]
+			born: CurTime!
+			rotation: math.random 0, 359
+			spin: math.random(-90, 90)
+		}
+
+hook.Add "PostDrawTranslucentRenderables", "Moonpanel Editor Presence",
+	(_, skybox) ->
+		return if skybox
+		now = CurTime!
+		for index = #clueSprites, 1, -1
+			sprite = clueSprites[index]
+			life = (now - sprite.born) / 2.2
+			if life >= 1
+				table.remove clueSprites, index
+				continue
+			color = sprite.color
+			render.SetMaterial sprite.material
+			position = sprite.position + Vector(0, 0, life * 40)
+			size = Lerp life, 9, 13
+			render.DrawQuadEasy position, (EyePos! - position)\GetNormalized!,
+				size, size, Color(color.r, color.g, color.b, (1 - life) * 230),
+				sprite.rotation + (now - sprite.born) * sprite.spin
+
 Helpers = Moonpanel.Helpers
 deepCopy = Helpers.deepCopy
 clearChildren = Helpers.clearChildren
@@ -99,28 +149,29 @@ Editor.UpdateTitle = =>
 	@RedoButton\SetEnabled @Document\CanRedo! if IsValid @RedoButton
 
 Editor.ScheduleRecovery = =>
+	return unless @Document and @Document\IsDirty!
 	timer.Create "Moonpanel Editor Recovery", 1, 1, ->
-		if Editor.Document
-			ok, reason = Editor.Document\WriteRecovery!
-			Editor\SetStatus reason, C.danger unless ok
+		return unless Editor.Document and Editor.Document\IsDirty!
+		ok, reason = Editor.Document\WriteRecovery!
+		Editor\SetStatus reason, C.danger unless ok
 
 ----
 -- Document / canvas sync
 ----
 
 Editor.GetEffectiveSurfaceSpec = (data) =>
-	data or= @Document and @Document\GetData! or @CurrentData or Moonpanel.Canvas.SampleData
+	data or= @Document and @Document\GetData! or Moonpanel.EditorDocument.FreshPanel!
 	kind = @SurfaceSpec and @SurfaceSpec.kind or Moonpanel.Canvas.SurfaceKind.Flat
 	continuous = data and data.Meta and data.Meta.Continuous == true
 	Moonpanel.Canvas.MakeSurfaceSpec kind, continuous
 
 Editor.SyncCanvas = (rebuild = true) =>
-	@CurrentData = @Document\GetData!
+	data = @Document\GetData!
 	@OpenedFile = @Document\GetPath!
 	@RefreshBrushValidity! if @RefreshBrushValidity
 	if IsValid @FrameCanvas
-		@FrameCanvas\GetCanvas!\SetSurfaceSpec @GetEffectiveSurfaceSpec(@CurrentData)
-		@FrameCanvas\ImportData @CurrentData
+		@FrameCanvas\GetCanvas!\SetSurfaceSpec @GetEffectiveSurfaceSpec(data)
+		@FrameCanvas\ImportData data
 		@FrameCanvas\SetSelectedSocketIndex nil
 	@UpdateTitle!
 	@RebuildSidebar! if rebuild
@@ -205,11 +256,10 @@ Editor.CanvasRelease = =>
 	@GestureDragged = false
 	return unless @GestureActive
 
-	if @_gestureCanvasExport
-		@Document\CommitEdit @FrameCanvas\ExportData!
+	if @_gestureCanvasExport and @Document\CommitEdit @FrameCanvas\ExportData!
 		@SyncCanvas (@sidebarTab == "panel")
 		@ScheduleRecovery!
-	else
+	elseif not @_gestureCanvasExport
 		@Document\CancelEdit!
 	@GestureActive = false
 	@_gestureCanvasExport = false
@@ -292,7 +342,7 @@ Editor.Save = (path, callback) =>
 	ok, reason = @Document\Save path
 	if ok
 		@OpenedFile = path
-		@Document\WriteRecovery!
+		@Document\WriteRecovery true
 		@AddRecent path
 		@UpdateTitle!
 		@SetStatus "Saved #{path}", C.success
@@ -323,10 +373,10 @@ Editor.WithDirtyGuard = (action) =>
 Editor.NewPanel = =>
 	@ExitTestMode! if @TestMode
 	@WithDirtyGuard ->
-		Editor.Document\Replace Moonpanel.Canvas.SampleData, resetHistory: true, markSaved: true, clearPath: true
+		Editor.Document\Replace Moonpanel.EditorDocument.FreshPanel!,
+			resetHistory: true, markSaved: true, clearPath: true
 		Editor\RefreshBrushValidity!
 		Editor\SyncCanvas!
-		Editor\ScheduleRecovery!
 		Editor\SetStatus "New panel", C.text
 
 Editor.OpenFile = (path) =>
@@ -342,7 +392,6 @@ Editor.OpenFile = (path) =>
 		Editor\RefreshBrushValidity!
 		Editor\AddRecent path
 		Editor\SyncCanvas!
-		Editor.Document\WriteRecovery!
 		Editor\SetStatus "Opened #{path}", C.success
 
 Editor.ImportJsonDialog = =>
@@ -353,7 +402,7 @@ Editor.ImportJsonDialog = =>
 			Editor\SetStatus "Invalid JSON", C.danger
 			return
 		Editor\WithDirtyGuard ->
-			Editor.Document\Replace Moonpanel.Canvas.SanitizeData(raw), resetHistory: true, clearPath: true
+			Editor.Document\Replace raw, resetHistory: true, clearPath: true
 			Editor\RefreshBrushValidity!
 			Editor\SyncCanvas!
 			Editor\ScheduleRecovery!
@@ -661,8 +710,8 @@ Editor.Open = (surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) =>
 		return @Frame
 
 	document = @EnsureDocument!
-	data, loaded, metadata = document\LoadOnDemand!
-	@StoredDataLoaded, @CurrentData, @OpenedFile = true, data, document\GetPath!
+	_, loaded, metadata = document\LoadOnDemand!
+	@OpenedFile = document\GetPath!
 
 	@InitBrushes!
 
@@ -687,6 +736,7 @@ Editor.Open = (surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) =>
 		.OnKeyCodePressed = (_, code) -> Editor\HandleKey code
 		.OnSizeChanged = -> timer.Create "Moonpanel Editor Layout Save", 0.4, 1, -> Editor\SaveLayoutCookies!
 		.OnClose = =>
+			Moonpanel.Net.SendEditorClosed!
 			Editor\ExitTestMode! if Editor.TestMode
 			Editor\CanvasRelease!
 			Editor\ScheduleRecovery! if Editor.Document and Editor.Document\IsDirty!
@@ -726,4 +776,4 @@ Editor.BeginGesture = (label) =>
 	@Document\BeginEdit label
 	@GestureActive = true
 
-concommand.Add "moonpanel_editor", -> Moonpanel.Editor\Open!
+concommand.Add "moonpanel_editor", -> Moonpanel.Net.RequestEditorOpen!

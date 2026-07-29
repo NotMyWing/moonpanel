@@ -1,6 +1,7 @@
 {
   "name": "core clue family coverage",
   "panel": "core_clues.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

@@ -1,16 +1,5 @@
 local test = dofile('tools/tests/harness.lua')
 
-Moonpanel.Color = {
-  Black = 1,
-  White = 2,
-  Cyan = 3,
-  Magenta = 4,
-  Yellow = 5,
-  Red = 6,
-  Green = 7,
-  Blue = 8,
-  Orange = 9,
-}
 Moonpanel.Canvas.SocketType = {
   Intersection = 1,
   Cell = 2,
@@ -28,93 +17,18 @@ util = util or {
   TableToJSON = function() return '' end,
 }
 
+dofile('dest/lua/moonpanel/sh_colors.lua')
 dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 dofile('dest/lua/moonpanel/canvas/sh_paneldata.lua')
 Moonpanel.Canvas.DLX = dofile('dest/lua/moonpanel/canvas/sh_dlx.lua')
 dofile('dest/lua/moonpanel/canvas/sh_polyomino.lua')
 local RuleEngine = dofile('dest/lua/moonpanel/canvas/sh_rule_engine.lua')
+local GridTopology = dofile('tools/grid_topology.lua')
 
 local fixtureModule = assert(arg[1], 'generated panel fixture module path is required')
 local fixtures = dofile(fixtureModule)
-
-local function flatIndex(width, gridX, gridY)
-  return 1 + (gridX - 1) + (gridY - 1) * (width * 2 + 1)
-end
-
-local function intersectionIndex(width, x, y)
-  return flatIndex(width, x * 2 + 1, y * 2 + 1)
-end
-
-local function hpathIndex(width, x, y)
-  return flatIndex(width, x * 2 + 2, y * 2 + 1)
-end
-
-local function vpathIndex(width, x, y)
-  return flatIndex(width, x * 2 + 1, y * 2 + 2)
-end
-
-local function pointKey(x, y)
-  return tostring(x) .. ':' .. tostring(y)
-end
-
-local function entityType(data, socketIndex)
-  local entity = data.Entities and data.Entities[socketIndex]
-  return type(entity) == 'table' and entity.Type or nil
-end
-
--- This adapter deliberately models canonical rule geometry, not input or
--- presentation behavior. Saved-panel fixtures describe terminal routes by
--- zero-based intersections, while the shared rule engine consumes stable node
--- and edge IDs enriched with their authored socket indices.
-local function buildGridTopology(data, revision)
-  local width = assert(data.Meta and data.Meta.Width, 'panel width is missing')
-  local height = assert(data.Meta and data.Meta.Height, 'panel height is missing')
-  local topology = { revision = revision, nodes = {}, edges = {} }
-  local nodeAt = {}
-
-  for y = 0, height do
-    for x = 0, width do
-      local socketIndex = intersectionIndex(width, x, y)
-      local node = {
-        id = #topology.nodes + 1,
-        x = x,
-        y = y,
-        socketIndex = socketIndex,
-        invisible = entityType(data, socketIndex) == 'Invisible',
-      }
-      topology.nodes[node.id] = node
-      topology.edges[node.id] = {}
-      nodeAt[pointKey(x, y)] = node.id
-    end
-  end
-
-  local function connect(fromId, toId, socketIndex)
-    if topology.nodes[fromId].invisible or topology.nodes[toId].invisible then return end
-    local kind = entityType(data, socketIndex)
-    if kind == 'Disjoint' or kind == 'Invisible' then return end
-    topology.edges[fromId][toId] = { socketIndex = socketIndex, lengthQ = 4096 }
-    topology.edges[toId][fromId] = { socketIndex = socketIndex, lengthQ = 4096 }
-  end
-
-  for y = 0, height do
-    for x = 0, width - 1 do
-      connect(nodeAt[pointKey(x, y)], nodeAt[pointKey(x + 1, y)],
-        hpathIndex(width, x, y))
-    end
-  end
-  for y = 0, height - 1 do
-    for x = 0, width do
-      connect(nodeAt[pointKey(x, y)], nodeAt[pointKey(x, y + 1)],
-        vpathIndex(width, x, y))
-    end
-  end
-
-  function topology:getEdge(fromId, toId)
-    return self.edges[fromId] and self.edges[fromId][toId]
-  end
-
-  return topology, nodeAt
-end
+local pointKey = GridTopology.key
+local buildGridTopology = GridTopology.build
 
 local function traceStacks(testCase, nodeAt, source, panel)
   local stacks = {}

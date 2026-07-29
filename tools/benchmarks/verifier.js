@@ -35,6 +35,7 @@ dofile('tools/tests/harness.lua')
 dofile('dest/lua/moonpanel/canvas/sh_dlx.lua')
 dofile('dest/lua/moonpanel/canvas/sh_polyomino.lua')
 local RuleEngine = dofile('dest/lua/moonpanel/canvas/sh_rule_engine.lua')
+local GridTopology = dofile('tools/grid_topology.lua')
 SysTime = os.clock
 
 local function flatIndex(width, gridX, gridY)
@@ -43,18 +44,6 @@ end
 
 local function cellIndex(width, x, y)
   return flatIndex(width, x * 2, y * 2)
-end
-
-local function intersectionIndex(width, x, y)
-  return flatIndex(width, x * 2 + 1, y * 2 + 1)
-end
-
-local function hpathIndex(width, x, y)
-  return flatIndex(width, x * 2 + 2, y * 2 + 1)
-end
-
-local function vpathIndex(width, x, y)
-  return flatIndex(width, x * 2 + 1, y * 2 + 2)
 end
 
 local function panel(width, height)
@@ -79,61 +68,6 @@ local function setCell(data, x, typeName, clueData)
     Type = typeName,
     Data = clueData,
   }
-end
-
-local function pointKey(x, y)
-  return tostring(x) .. ':' .. tostring(y)
-end
-
-local function entityType(data, socketIndex)
-  local entity = data.Entities and data.Entities[socketIndex]
-  return type(entity) == 'table' and entity.Type or nil
-end
-
-local function topology(data)
-  local width = data.Meta.Width
-  local height = data.Meta.Height
-  local value = {revision = 9001, nodes = {}, edges = {}}
-  local nodeAt = {}
-
-  for y = 0, height do
-    for x = 0, width do
-      local node = {
-        id = #value.nodes + 1,
-        x = x,
-        y = y,
-        socketIndex = intersectionIndex(width, x, y),
-      }
-      value.nodes[node.id] = node
-      value.edges[node.id] = {}
-      nodeAt[pointKey(x, y)] = node.id
-    end
-  end
-
-  local function connect(fromId, toId, socketIndex)
-    local kind = entityType(data, socketIndex)
-    if kind == 'Disjoint' or kind == 'Invisible' then return end
-    value.edges[fromId][toId] = {socketIndex = socketIndex, lengthQ = 4096}
-    value.edges[toId][fromId] = {socketIndex = socketIndex, lengthQ = 4096}
-  end
-
-  for y = 0, height do
-    for x = 0, width - 1 do
-      connect(nodeAt[pointKey(x, y)], nodeAt[pointKey(x + 1, y)],
-        hpathIndex(width, x, y))
-    end
-  end
-  for y = 0, height - 1 do
-    for x = 0, width do
-      connect(nodeAt[pointKey(x, y)], nodeAt[pointKey(x, y + 1)],
-        vpathIndex(width, x, y))
-    end
-  end
-
-  function value:getEdge(fromId, toId)
-    return self.edges[fromId] and self.edges[fromId][toId]
-  end
-  return value, nodeAt
 end
 
 local oneEraser = panel(4, 1)
@@ -186,18 +120,17 @@ local function number(value)
 end
 
 print(table.concat({
-  'case', 'seconds', 'region_seconds', 'states', 'pruned', 'branches',
-  'pruned_branches', 'duplicates', 'depth', 'revalidations',
-  'mandatory', 'best_score', 'poly_calls', 'poly_hits', 'poly_misses', 'work',
+  'case', 'seconds', 'region_seconds', 'states', 'branches',
+  'depth', 'revalidations', 'best_score', 'poly_calls', 'poly_hits', 'poly_misses', 'work',
   'remaining', 'status', 'success', 'hash',
 }, '\\t'))
 
 for _, fixture in ipairs(cases) do
   if fixture.name == ${luaString(caseName)} then
-  local topo, nodeAt = topology(fixture.data)
+  local topo, nodeAt = GridTopology.build(fixture.data, 9001)
   local stack = {}
   for index, point in ipairs(fixture.trace or {}) do
-    stack[index] = assert(nodeAt[pointKey(point[1], point[2])])
+    stack[index] = assert(nodeAt[GridTopology.key(point[1], point[2])])
   end
   local definition = RuleEngine.Compile(fixture.data, topo)
   local budget = RuleEngine.NewBudget({slice = ${maximumWork}, maximum = ${maximumWork}})
@@ -220,13 +153,9 @@ for _, fixture in ipairs(cases) do
     number(profile.timings.total),
     number(regionSeconds),
     tostring(counters.eraserStatesExplored or 0),
-    tostring(counters.prunedEraserStates or 0),
     tostring(counters.eraserBranches or 0),
-    tostring(counters.prunedEraserBranches or 0),
-    tostring(counters.duplicateEraserStates or 0),
     tostring(counters.maxRecursiveDepth or 0),
     tostring(counters.fullRegionRevalidations or 0),
-    tostring(counters.mandatoryEraserTargets or 0),
     tostring(counters.bestEraserScore or 0),
     tostring(counters.polyominoSolverCalls or 0),
     tostring(counters.polyominoCacheHits or 0),

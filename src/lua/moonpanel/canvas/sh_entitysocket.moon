@@ -32,15 +32,11 @@ class Moonpanel.Canvas.Sockets.BaseSocket
 
     GetCanvas: => @__canvas
 
-    SetY: (@__y) =>
     GetY: => @__y
 
-    SetX: (@__x) =>
     GetX: => @__x
 
     GetSocketType: => @__class.SocketType
-
-    IsTraced: => @__canvas\IsTraced @
 
 class Moonpanel.Canvas.Sockets.IntersectionSocket extends Moonpanel.Canvas.Sockets.BaseSocket
     @SocketType = Moonpanel.Canvas.SocketType.Intersection
@@ -150,16 +146,6 @@ class Moonpanel.Canvas.Sockets.PathSocket extends Moonpanel.Canvas.Sockets.BaseS
 
         @__cachedRenderOrigin = (nodeA\GetRenderOrigin! + nodeB\GetRenderOrigin!) / 2
         @__cachedRenderOrigin
-
-    GetIntersectionPair: =>
-        if @__horizontal
-            left = @__canvas\GetIntersectionSocketAt @__x, @__y
-            right = @__canvas\GetIntersectionSocketAt @__x + 1, @__y
-            return left, right
-        else
-            top = @__canvas\GetIntersectionSocketAt @__x, @__y
-            bottom = @__canvas\GetIntersectionSocketAt @__x, @__y + 1
-            return top, bottom
 
     GetAbove: =>
         if @__horizontal

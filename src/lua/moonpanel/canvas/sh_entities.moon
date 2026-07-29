@@ -181,7 +181,7 @@ Moonpanel.Canvas.EntityRegistry = {
 	}
 	Invisible: {
 		[Moonpanel.Canvas.SocketType.Intersection]: Moonpanel.Canvas.Entities.IntersectionInvisible
-		[Moonpanel.Canvas.SocketType.Path]: Moonpanel.Canvas.Entities.PathInvisible
+		[Moonpanel.Canvas.SocketType.Path]: Moonpanel.Canvas.Entities.InvisiblePath
 		[Moonpanel.Canvas.SocketType.Cell]: Moonpanel.Canvas.Entities.CellInvisible
 	}
 }

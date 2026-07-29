@@ -1,6 +1,7 @@
 {
   "name": "stress erasers",
   "panel": "stress_erasers.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

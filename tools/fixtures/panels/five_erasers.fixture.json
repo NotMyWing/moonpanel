@@ -1,6 +1,7 @@
 {
   "name": "five_erasers",
   "panel": "five_erasers.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

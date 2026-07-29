@@ -86,17 +86,11 @@ Canvas.EntityTypeMap = {
 	[10]: "Invisible"
 }
 
-Canvas.ColorValues = {
-	[Moonpanel.Color.Black]:   { r: 0,   g: 0,   b: 0   }
-	[Moonpanel.Color.White]:   { r: 255, g: 255, b: 255 }
-	[Moonpanel.Color.Cyan]:    { r: 0,   g: 210, b: 255 }
-	[Moonpanel.Color.Magenta]: { r: 255, g: 0,   b: 210 }
-	[Moonpanel.Color.Yellow]:  { r: 255, g: 230, b: 0   }
-	[Moonpanel.Color.Red]:     { r: 255, g: 64,  b: 64  }
-	[Moonpanel.Color.Green]:   { r: 72,  g: 220, b: 72  }
-	[Moonpanel.Color.Blue]:    { r: 64,  g: 96,  b: 255 }
-	[Moonpanel.Color.Orange]:  { r: 255, g: 140, b: 32  }
-}
+Canvas.ColorValues = [{
+	r: definition.r
+	g: definition.g
+	b: definition.b
+} for definition in *Moonpanel.ColorDefinitions]
 
 -- These are the canonical panel-wide appearance defaults. Keep them as plain
 -- tables so shared data can be serialized without depending on Color userdata.
@@ -136,22 +130,6 @@ Canvas.ColorPresets = {
 	}
 }
 
--- Sound presets deliberately contain only their family-specific overrides.
--- The ordinary Moonpanel sounds remain the default set, and a preset may
--- inherit any cue it does not provide. This keeps shared donor cues shared
--- instead of multiplying identical files across every preset directory.
-Canvas.SoundCueRoles = {
-	"Start"
-	"StartScint"
-	"Scint"
-	"FinishTracing"
-	"AbortFinishTracing"
-	"Failure"
-	"PotentialFailure"
-	"Success"
-	"Abort"
-}
-
 Canvas.DefaultSoundPreset = "Default"
 Canvas.SoundPresets = {
 	Default: {}
@@ -173,7 +151,7 @@ Canvas.ResolveSoundPreset = (name) ->
 	}
 	output
 
-Canvas.WindmillEntityTypeMap = {
+windmillEntityTypes = {
 	[3]: "Start"
 	[4]: "End"
 	[5]: "Disjoint"
@@ -185,7 +163,7 @@ Canvas.WindmillEntityTypeMap = {
 	[11]: "Triangle"
 }
 
-Canvas.WindmillDefaultEntityColors = {
+windmillDefaultColors = {
 	Color: Moonpanel.Color.Black
 	Hexagon: Moonpanel.Color.Black
 	Triangle: Moonpanel.Color.Orange
@@ -463,7 +441,7 @@ Canvas.WindmillToCanvasData = (storage) ->
 
 	colorFor = (entry, typeName, forceWhite = false) ->
 		return Moonpanel.Color.White if forceWhite
-		math.floor tonumber(entry.color) or Canvas.WindmillDefaultEntityColors[typeName] or Moonpanel.Color.Black
+		math.floor tonumber(entry.color) or windmillDefaultColors[typeName] or Moonpanel.Color.Black
 
 	entityData = (entry, typeName, forceWhite = false) ->
 		color = colorFor entry, typeName, forceWhite
@@ -506,7 +484,7 @@ Canvas.WindmillToCanvasData = (storage) ->
 	output = nil
 	put = (entry, gridX, gridY, forceWhite = false) ->
 		entry = tableOrEmpty entry
-		typeName = Canvas.WindmillEntityTypeMap[tonumber entry.type]
+		typeName = windmillEntityTypes[tonumber entry.type]
 		return unless typeName
 		data = entityData entry, typeName, forceWhite and typeName == "Hexagon"
 		return if data == nil
@@ -618,10 +596,12 @@ Canvas.SanitizeData = (data) ->
 	entities = tableOrEmpty input.Entities
 	output.Entities = {}
 	output.Extensions = {}
-	for key, value in pairs tableOrEmpty input.Extensions
-		extensionName = tostring key
-		continue if extensionName == "HollowDot"
-		output.Extensions[extensionName] = value == true
+	extensions = tableOrEmpty input.Extensions
+	for extensionName in *{
+			"FourTriangle", "MidpointTerminals", "VoidTopology",
+			"InvisibleDot", "NegativeDot"
+		}
+		output.Extensions[extensionName] = true if extensions[extensionName] == true
 
 	count = (output.Meta.Width * 2 + 1) * (output.Meta.Height * 2 + 1)
 	for i = 1, count

@@ -22,6 +22,7 @@ Moonpanel.Net.FlowTypes = {
 	"PanelRequestControl"
 	"TraceVisualResult"
 	"EditorOpen"
+	"EditorStatus"
 }
 
 -- Determine the smallest packet required to fit the flowtypes enum.
@@ -55,6 +56,33 @@ Moonpanel.Net.Receive = (flowType, callback) ->
 Moonpanel.Net.StartFlow = (flowType) ->
 	net.Start "TheMP Flow"
 	net.WriteUInt flowType, Moonpanel.Net.FlowSize
+
+Moonpanel.Net.TraceBatchMax = 12
+Moonpanel.Net.TraceConstraintMax = 2
+
+Moonpanel.Net.WriteTraceSamples = (samples, count = #samples) ->
+	net.WriteUInt count, 4
+	for index = 1, count
+		sample = samples[index]
+		net.WriteInt sample.xQ, 16
+		net.WriteInt sample.yQ, 16
+		net.WriteBool sample.boost
+		net.WriteUInt sample.commandNumber or 0, 32
+		net.WriteUInt #sample.constraints, 2
+		net.WriteUInt decision, 32 for decision in *sample.constraints
+
+Moonpanel.Net.ReadTraceSamples = ->
+	count = net.ReadUInt 4
+	samples, malformed = {}, count < 1 or count > Moonpanel.Net.TraceBatchMax
+	for index = 1, count
+		xQ, yQ = net.ReadInt(16), net.ReadInt(16)
+		malformed = true if xQ == -32768 or yQ == -32768
+		boost, commandNumber = net.ReadBool!, net.ReadUInt(32)
+		constraintCount = net.ReadUInt 2
+		malformed = true if constraintCount > Moonpanel.Net.TraceConstraintMax
+		constraints = [net.ReadUInt(32) for _ = 1, constraintCount]
+		samples[index] = { :xQ, :yQ, :boost, :commandNumber, :constraints }
+	samples, count, malformed
 
 include if SERVER
 	"sv_net.lua"

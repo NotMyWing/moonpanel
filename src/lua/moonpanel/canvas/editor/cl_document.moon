@@ -1,4 +1,4 @@
--- Pure editor document state. It deliberately has no Derma, realm, timing,
+-- Pure client editor document state. It deliberately has no Derma, timing,
 -- or file-system dependencies; adapters provide those operations.
 
 Document = {}
@@ -52,6 +52,15 @@ Document.New = (data, options = {}) ->
 	self.dirty = false
 	self
 
+Document.FreshPanel = (sanitize = Moonpanel.Canvas.SanitizeData) ->
+	sanitize {
+		Meta: { Width: 3, Height: 3 }
+		Entities: {
+			[7]: { Type: "End" }
+			[43]: { Type: "Start" }
+		}
+	}
+
 Document._sanitize = (data) =>
 	sanitize = @options.sanitize or (value) -> deepCopy value or {}
 	deepCopy sanitize deepCopy data
@@ -64,8 +73,10 @@ Document._refreshDirty = =>
 	@dirty = @_signature(@data) ~= @savedBaseline
 	@dirty
 
+Document._persistPath = =>
+	@options.writeSession @currentPath if @options.writeSession
+
 Document.GetData = => deepCopy @data
-Document.GetMutableData = => @data
 Document.GetPath = => @currentPath
 Document.IsEditing = => @transaction ~= nil
 Document.SetActiveTool = (tool) => @activeTool = tool
@@ -120,31 +131,19 @@ Document.CommitEdit = (data) =>
 	@_refreshDirty!
 	true
 
-Document.BreakMerge = =>
-	previous = @history[@historyCursor]
-	previous.mergeKey = nil if previous
-
-Document.ResetHistory = =>
-	@history = {}
-	@historyCursor = 0
-
-Document.Undo = =>
-	@CancelEdit! if @transaction
-	return false unless @CanUndo!
-	entry = @history[@historyCursor]
-	@data = deepCopy entry.before
-	@historyCursor -= 1
-	@_refreshDirty!
+stepHistory = (document, direction) ->
+	document\CancelEdit! if document.transaction
+	nextCursor = document.historyCursor + direction
+	return false if nextCursor < 0 or nextCursor > #document.history
+	entry = document.history[direction < 0 and document.historyCursor or nextCursor]
+	document.data = deepCopy(
+		direction < 0 and entry.before or entry.after)
+	document.historyCursor = nextCursor
+	document\_refreshDirty!
 	true, entry.label
 
-Document.Redo = =>
-	@CancelEdit! if @transaction
-	return false unless @CanRedo!
-	@historyCursor += 1
-	entry = @history[@historyCursor]
-	@data = deepCopy entry.after
-	@_refreshDirty!
-	true, entry.label
+Document.Undo = => stepHistory @, -1
+Document.Redo = => stepHistory @, 1
 
 Document.Replace = (data, options = {}) =>
 	@transaction = nil
@@ -157,13 +156,8 @@ Document.Replace = (data, options = {}) =>
 	elseif options.path ~= nil then @currentPath = options.path
 	@savedBaseline = @_signature(@data) if options.markSaved
 	@_refreshDirty!
+	@_persistPath! if options.clearPath or options.path ~= nil
 	@GetData!
-
-Document.MarkSaved = (path) =>
-	@currentPath = path if path ~= nil
-	@BreakMerge!
-	@savedBaseline = @_signature @data
-	@_refreshDirty!
 
 Document.Save = (path = @currentPath) =>
 	return false, "path required" unless path
@@ -173,10 +167,16 @@ Document.Save = (path = @currentPath) =>
 		@lastError = reason or "save failed"
 		return false, @lastError
 	@lastError = nil
-	@MarkSaved path
+	@currentPath = path
+	previous = @history[@historyCursor]
+	previous.mergeKey = nil if previous
+	@savedBaseline = @_signature @data
+	@_refreshDirty!
+	@_persistPath!
 	true
 
-Document.WriteRecovery = =>
+Document.WriteRecovery = (force = false) =>
+	return false, "document is clean" unless force or @dirty
 	return false, "no recovery adapter" unless @options.writeRecovery
 	ok, timestamp = @options.writeRecovery @GetData!, {
 		path: @currentPath
@@ -209,36 +209,6 @@ Document.SetSelection = (index) =>
 
 Document.SetPlacementPreset = (preset) => @placementPreset = deepCopy preset or {}
 Document.GetPlacementPreset = => deepCopy @placementPreset
-
-Document.CalculateDockLayout = (width, options = {}) ->
-	width = math.max 1, math.floor(width or 1)
-	handle = options.handleWidth or 5
-	minimumCanvas = options.minimumCanvas or 480
-	drawerWidth = options.drawerVisible and (options.drawerWidth or 260) or 0
-	available = math.max 1, width - drawerWidth
-	libraryWidth = math.max 0, options.libraryWidth or 220
-	inspectorWidth = math.max 0, options.inspectorWidth or 300
-	inspectorMinimum = options.inspectorMinimum or 260
-	inspectorVisible = options.inspectorVisible ~= false
-	inspectorVisible = false if inspectorVisible and available < minimumCanvas + inspectorMinimum + handle
-	if inspectorVisible
-		inspectorWidth = math.min inspectorWidth, available - minimumCanvas - handle
-	else inspectorWidth = 0
-	libraryVisible = options.libraryVisible ~= false and
-		available >= minimumCanvas + libraryWidth + handle +
-			(inspectorVisible and inspectorWidth + handle or 0)
-	libraryWidth = 0 unless libraryVisible
-	canvasWidth = available - libraryWidth - inspectorWidth -
-		(libraryVisible and handle or 0) - (inspectorVisible and handle or 0)
-	{
-		:drawerWidth
-		:libraryVisible
-		:libraryWidth
-		:inspectorVisible
-		:inspectorWidth
-		canvasWidth: math.max 1, canvasWidth
-		handleWidth: handle
-	}
 
 -- Normalize clue data for semantic comparison. Unknown fields are retained so
 -- right-click sampling and exact-match removal remain faithful as the clue
@@ -296,10 +266,5 @@ Document.SemanticEqual = (a, b) ->
 	right = stableEncode(normalizeForEquality(b.Type, b.Data))
 	left == right
 
-Document.DeepCopy = deepCopy
-Document.StableEncode = stableEncode
-Document.NormalizeForEquality = normalizeForEquality
-
-Moonpanel or= {}
 Moonpanel.EditorDocument = Document
 return Document

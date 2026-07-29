@@ -75,9 +75,15 @@ function run() {
 		'lua/entities/moonpanel/init.lua',
 		'lua/entities/moonpanel/cl_init.lua',
 		'materials/moonpanel/common/color.png',
-		'sound/moonpanel/presets/default/panel_scint_endpoint.ogg',
+		'sound/moonpanel/presets/default/panel_scint_endpoint.wav',
 	];
 	for (const file of required) assert(paths.has(file), `Package is missing required runtime file: ${file}`);
+	for (const name of ['path_complete', 'presence', 'solving']) {
+		const file = files.find((entry) =>
+			entry.path === `sound/moonpanel/panel_${name}_loop.wav`);
+		assert(file && file.contents.includes(Buffer.from('smpl')),
+			`Looping sound is missing WAV loop points: ${name}`);
+	}
 	for (const file of paths) {
 		assert(!file.startsWith('test/'), `Generated test data leaked into the addon package: ${file}`);
 		assert(!file.endsWith('.moon'), `MoonScript source leaked into the addon package: ${file}`);

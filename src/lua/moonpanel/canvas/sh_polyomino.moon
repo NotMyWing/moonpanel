@@ -5,13 +5,6 @@ Canvas = Moonpanel.Canvas
 shapeSize = (shape) ->
 	#shape, #(shape[1] or {})
 
-shapeCount = (shape) ->
-	count = 0
-	for y = 1, #shape
-		for x = 1, #(shape[y] or {})
-			count += 1 if shape[y][x] == 1
-	count
-
 trimShape = (shape) ->
 	rows, cols = shapeSize shape
 	return { { 1 } } if rows == 0 or cols == 0
@@ -81,9 +74,6 @@ Canvas.GetPolyominoRotations = (shape, rotational = false) ->
 		current = rotateShape current
 
 	rotations
-
-Canvas.TrimPolyominoShape = trimShape
-Canvas.CountShapeCells = shapeCount
 
 cellKey = (x, y) -> "#{x}:#{y}"
 

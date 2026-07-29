@@ -1,6 +1,7 @@
 {
   "name": "quadruple_eraser",
   "panel": "quadruple_eraser.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

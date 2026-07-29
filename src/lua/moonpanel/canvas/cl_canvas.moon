@@ -64,7 +64,7 @@ getLocalFocusTarget = ->
 	return unless Moonpanel.IsFocused!
 
 	controlled = Moonpanel\GetPredictedControl!
-	if IsValid controlled
+	if IsValid(controlled) and controlled.Moonpanel
 		focusTargetEntity = controlled
 		return focusTargetEntity
 
@@ -78,13 +78,16 @@ getLocalFocusTarget = ->
 		focusTargetEntity = trace.Entity if trace.Entity.Moonpanel
 	focusTargetEntity
 
-clearRT = (rt) ->
-	with render.PushRenderTarget rt
-		cam.Start2D!
-		render.Clear 0, 0, 0, 255, true, false
-		cam.End2D!
-
+drawToRT = (rt, callback, context) ->
+	render.PushRenderTarget rt
+	cam.Start2D!
+	ok, err = xpcall (-> callback context), debug.traceback
+	cam.End2D!
 	render.PopRenderTarget!
+	error err, 0 unless ok
+
+clearRT = (rt) ->
+	drawToRT rt, -> render.Clear 0, 0, 0, 255, true, false
 
 drawLine = (x1, y1, x2, y2, width) ->
 	dX = x2 - x1
@@ -193,7 +196,8 @@ CANVAS.RecalculateClient = =>
 	-- A node needs a visible dot only at a branch, endpoint, gap, or start.
 	@__clientData.visibleNodes = {}
 	for node in *@__nodes
-		continue if @IsHiddenContinuousSocket node.socket or node.break or node.invisible
+		continue if node.break or node.invisible or
+			@IsHiddenContinuousSocket node.socket
 		if node.clickable or table.Count(node.neighbors) < 4
 			table.insert @__clientData.visibleNodes, node
 ----------------------------
@@ -386,7 +390,18 @@ CANVAS.Paint = (w, h) =>
 CANVAS.RenderRT = =>
 	return if not @CanRender!
 
+	now = RealTime!
+	@__rtRateStartedAt or= now
+	elapsed = now - @__rtRateStartedAt
+	if elapsed >= 1
+		@__rtDrawRate = (@__rtDrawCount or 0) / elapsed
+		@__rtFrameRate = (@__rtFrameCount or 0) / elapsed
+		@__rtDrawCount, @__rtFrameCount = 0, 0
+		@__rtRateStartedAt = now
+	@__rtFrameCount = (@__rtFrameCount or 0) + 1
+	@__rtWasDirty = @__rtDirty == true
 	if @__rtDirty
+		@__rtDrawCount = (@__rtDrawCount or 0) + 1
 		w = Moonpanel.Canvas.Resolution
 		h = w
 
@@ -408,19 +423,14 @@ CANVAS.RenderRT = =>
 			-- Presentation alpha belongs to the whole trace image, never to
 			-- individual segments.
 			auxrt = Moonpanel.Canvas\GetAuxiliaryRT!
-			with render.PushRenderTarget auxrt.texture
-				cam.Start2D!
+			drawToRT auxrt.texture, (=>
 				render.Clear 0, 0, 0, 0, true, false
-				@PaintTrace w, h
-				cam.End2D!
-
-			render.PopRenderTarget!
+				@PaintTrace w, h), @
 
 		-- Draw the rest of the panel in a dedicated rendertarget.
 		-- "How do we get one?", you might ask. The answer is...
 		-- out of this function scope.
-		with render.PushRenderTarget @__rtAlloc.rt.texture
-			cam.Start2D!
+		drawToRT @__rtAlloc.rt.texture, (=>
 			render.Clear 0, 0, 0, 0, true, false
 			colors = @GetColors!
 			visible = (item) -> not @IsHiddenContinuousSocket item\GetSocket!
@@ -480,11 +490,7 @@ CANVAS.RenderRT = =>
 			vignette = colors.Vignette
 			surface.SetMaterial MAT_VIGNETTE
 			surface.SetDrawColor vignette.r, vignette.g, vignette.b, vignette.a or 80
-			surface.DrawTexturedRect 0, 0, w, h
-
-			cam.End2D!
-
-		render.PopRenderTarget!
+			surface.DrawTexturedRect 0, 0, w, h), @
 		@__renderTraceState = nil
 
 CANVAS.AddRenderable = (entity) =>
@@ -524,7 +530,12 @@ CANVAS.ImportTraceSession = (controller, sessionId, revision, snapshot,
 	lastSequence, lateJoin = false, observer = false, importedPlay = {},
 	startPresentation = true) =>
 	return false unless @__pathFinder and snapshot
-	return false unless @RestoreTraceSnapshot snapshot
+	if observer
+		@SetObserverFollower nil
+		return false unless @ApplyObserverSnapshot snapshot, lastSequence
+	else
+		return false unless @RestoreTraceSnapshot snapshot
+		@SetObserverFollower nil
 	playData = table.Copy importedPlay
 	playData.startTime = CurTime! unless lateJoin and playData.startTime
 	playData.endTime = nil unless lateJoin
@@ -535,12 +546,6 @@ CANVAS.ImportTraceSession = (controller, sessionId, revision, snapshot,
 	if startPresentation
 		@BeginPresentation {sessionId: sessionId, revision: revision}, lateJoin
 	@SetPresentationExit @IsExitPath!, lateJoin
-	if observer
-		follower = Moonpanel.Canvas.ObserverTraceFollower @__pathFinder.topology
-		follower\reset snapshot, true, lastSequence
-		@SetObserverFollower follower
-	else
-		@SetObserverFollower nil
 	true
 
 CANVAS.ImportNetworkState = (panel, data = {}) =>
@@ -559,31 +564,32 @@ CANVAS.ImportNetworkState = (panel, data = {}) =>
 			panel\SetController game.GetWorld! if IsValid panel
 			gui.EnableScreenClicker true if Moonpanel\IsFocused!
 	@ImportData data.panelData
-	definition = @GetRuleDefinition!
 	pathfinder = @__pathFinder
 	if session = Moonpanel.Net.TraceSessions and Moonpanel.Net.TraceSessions[panel]
 		if not pathfinder or session.revision ~= @GetTraceRevision! or
-				not definition or session.ruleRevision ~= definition.ruleRevision
+				session.ruleRevision ~= @GetRuleRevision!
 			Moonpanel.Net.TraceSessions[panel] = nil
 	@ImportPlayData data.playData
 	@SetSolvedState data.solved == true
 	visualResult = data.visualResult
-	revisionMatches = visualResult and pathfinder and definition and
+	ruleRevision = @GetRuleRevision!
+	revisionMatches = visualResult and pathfinder and ruleRevision and
 		visualResult.revision == @GetTraceRevision! and
-		visualResult.ruleRevision == definition.ruleRevision
+		visualResult.ruleRevision == ruleRevision
 	restoredSolvedSnapshot = data.solved == true and visualResult and
-		istable(visualResult.snapshot) and pathfinder and definition
+		istable(visualResult.snapshot) and pathfinder and ruleRevision
 	if revisionMatches or restoredSolvedSnapshot
 		if restoredSolvedSnapshot and not revisionMatches
 			visualResult = table.Copy visualResult
 			visualResult.revision = @GetTraceRevision!
-			visualResult.ruleRevision = definition.ruleRevision
+			visualResult.ruleRevision = ruleRevision
 		@__lastVisualSerial = visualResult.eventSerial or @__lastVisualSerial
 		@BeginPresentation {
 			sessionId: visualResult.sessionId
 			revision: visualResult.revision
 		}, true
-		@ApplyVisualResult visualResult, data.visualElapsed or 0, true
+		@ApplyVisualResult visualResult, data.visualElapsed or 0, true,
+			data.solved == true
 	elseif data.solved ~= true and not resetRequested
 		@ResetPresentation "network-state"
 	powered = if data.powered ~= nil
@@ -595,5 +601,3 @@ CANVAS.ImportNetworkState = (panel, data = {}) =>
 	@SetPowerState powered
 	@BeginResetPresentation resetSnapshot, resetSerial, true if resetRequested and
 		resetSnapshot and @BeginResetPresentation
-
-CANVAS.GetPowerStateBuffer = => @__powerStateBuffer or 1

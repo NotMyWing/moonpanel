@@ -382,6 +382,21 @@ test.test('late terminal seeking is silent and samples elapsed state', function(
   assert(#cues == 0, 'late join replayed historical sounds')
   assert(frame.traceAlpha == 0, 'late join did not seek the failure fade')
   assert(frame.entityStyles[3] ~= nil, 'late join omitted active error styling')
+
+  local eraser = Moonpanel.Canvas.TracePresentation()
+  eraser:beginAttempt({ sessionId = 100, revision = 7 }, 100)
+  eraser:applyResult({
+    success = false,
+    feedback = {
+      violations = { 3, 4 }, remaining = { 4 },
+      erasures = { { eraserIndex = 2, targetIndex = 3 } },
+    },
+  }, 101, 1.2, true)
+  local eraserFrame, eraserCues = eraser:sample(101)
+  assert(#eraserCues == 0, 'late eraser result replayed historical sounds')
+  assert(eraserFrame.traceAlpha < 1, 'late failed eraser trace did not fade')
+  assert(eraserFrame.entityStyles[4] and eraserFrame.entityStyles[4].error > 0,
+    'late failed eraser result did not blink its remaining error')
 end)
 
 test.test('settled observer follower reports no visual changes', function()
@@ -451,6 +466,21 @@ test.test('focus hint scinting targets starts before tracing and exits during tr
   local active = presentation:sample(1)
   assert(not active.scintStarts and active.scintAlpha > 0,
     'active trace still scinted start points')
+end)
+
+test.test('start scint rearms only after focus is left and re-entered', function()
+  local presentation = Moonpanel.Canvas.TracePresentation()
+  presentation:setFocusHint(true, 0)
+  presentation:beginAttempt({ id = 1, revision = 1 }, 0)
+  presentation:reset('clean-attempt')
+  local consumed = presentation:sample(CurTime() + 1)
+  assert(not consumed.scintStarts and consumed.scintAlpha == 0,
+    'completed focus session restarted its start-point scint')
+  presentation:setFocusHint(false, CurTime() + 2)
+  presentation:setFocusHint(true, CurTime() + 3)
+  local restarted = presentation:sample(CurTime() + 4)
+  assert(restarted.scintStarts and restarted.scintAlpha > 0,
+    'new focus session did not restart its start-point scint')
 end)
 
 test.test('branch visibility and colors are carried by visual frames', function()

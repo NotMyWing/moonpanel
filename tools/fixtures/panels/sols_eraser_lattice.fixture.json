@@ -1,6 +1,7 @@
 {
   "name": "Sol's eraser lattice",
   "panel": "sols_eraser_lattice.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

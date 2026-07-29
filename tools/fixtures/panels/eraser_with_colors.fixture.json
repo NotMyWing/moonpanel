@@ -1,6 +1,7 @@
 {
   "name": "eraser_with_colors",
   "panel": "eraser_with_colors.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

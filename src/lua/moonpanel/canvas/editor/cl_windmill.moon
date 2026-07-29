@@ -98,23 +98,23 @@ Editor.ShowWindmillImporter = =>
 		\Dock RIGHT
 		\SetWide 72
 		\SetText ""
-		\SetTooltip "Open this Windmill URL"
 		.DoClick = -> html\OpenURL address\GetValue!
 		.Paint = (_, w, h) ->
 			draw.RoundedBox 4, 0, 0, w, h, _.Hovered and C.hover or C.raised
 			draw.SimpleText "Open", "MoonpanelEditorSmall", w / 2, h / 2, C.text,
 				TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
+	Editor\AttachTextTooltip open, "Open this Windmill URL"
 
 	importButton = with nav\Add "DButton"
 		\Dock RIGHT
 		\SetWide 82
 		\SetText ""
-		\SetTooltip "Import the puzzle at this URL"
 		.DoClick = -> Editor\FetchWindmill address\GetValue!
 		.Paint = (_, w, h) ->
 			draw.RoundedBox 4, 0, 0, w, h, _.Hovered and C.accent or C.accentDim
 			draw.SimpleText "Import", "MoonpanelEditorSmall", w / 2, h / 2, C.text,
 				TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
+	Editor\AttachTextTooltip importButton, "Import the puzzle at this URL"
 
 	hrefCallback = (newHref) -> address\SetText newHref
 	html = with @WindmillFrame\Add "DHTML"

@@ -35,15 +35,31 @@ test.test('partial movement, commit, and backtracking', function()
   assert(engine:restart(start), 'restart failed')
   assert(engine:applyDeltas(25, 0), 'partial movement failed')
   assert(engine.active.primary.toId == finish.id, 'active target was not preserved')
-  assert(#engine.nodeStacks[1] == 1, 'target committed too early')
+  assert(#engine.stacks[1] == 1, 'target committed too early')
   assert(engine:applyDeltas(100, 0), 'commit movement failed')
-  assert(engine.nodeStacks[1][2] == finish, 'target did not commit')
+  assert(engine.stacks[1][2] == finish.id, 'target did not commit')
   engine:applyDeltas(-100, 0)
   assert(engine:applyDeltas(-25, 0), 'backtrack failed')
-  assert(#engine.nodeStacks[1] == 1, 'backtrack did not pop immediately')
+  assert(#engine.stacks[1] == 1, 'backtrack did not pop immediately')
   assert(engine.active.primary.toId == finish.id, 'retracting edge was not retained')
   assert(engine:applyDeltas(-150, 0), 'backtrack cleanup failed')
-  assert(#engine.nodeStacks[1] == 1, 'backtrack did not return to start')
+  assert(#engine.stacks[1] == 1, 'backtrack did not return to start')
+end)
+
+test.test('no-progress intent is hash-neutral', function()
+  local start = { x = 0, y = 0, screenX = 0, screenY = 0,
+    clickable = true, neighbors = {} }
+  local finish = { x = 1, y = 0, screenX = 100, screenY = 0, neighbors = {} }
+  start.neighbors = { finish }
+  finish.neighbors = { start }
+  local engine = movementFixture({
+    nodes = { start, finish }, barWidth = 10, barLength = 100,
+    screenWidth = 100, screenHeight = 100, symmetry = 0,
+  })
+  assert(engine:restart(start) and engine:applyDeltas(100, 0))
+  local before = engine:hash()
+  assert(not engine:applyDeltas(0, 100), 'blocked intent unexpectedly moved the trace')
+  assert(engine:hash() == before, 'blocked intent changed the geometry hash')
 end)
 
 test.test('trace engine exposes a stable query and fork contract', function()
@@ -63,12 +79,14 @@ test.test('trace engine exposes a stable query and fork contract', function()
   assert(engine:applyDeltas(25, 0), 'contract fixture did not move')
   assert(engine:GetActiveAxis() == 'x', 'active-axis query lost direction')
   local debugState = engine:GetDebugState()
-  assert(debugState.phase == engine:GetPhase() and debugState.topology == engine.topology,
-    'debug query did not expose the engine-owned state')
+  assert(debugState.phase == engine:GetPhase() and
+    debugState.topology.revision == engine.topology.revision and
+    debugState.topology.nodes == #engine.topology.nodes,
+    'debug query did not expose the engine state summary')
   local constraint = function() return 1 end
   engine:SetOcclusionConstraint(constraint)
   local fork = engine:Fork()
-  assert(fork:Hash() == engine:Hash(), 'fork did not preserve trace state')
+  assert(fork:hash() == engine:hash(), 'fork did not preserve trace state')
   assert(fork.occlusionConstraint == constraint, 'fork did not preserve obstruction')
 end)
 
@@ -201,7 +219,7 @@ test.test('corner preloading chooses the reachable turn', function()
   assert(engine:applyDeltas(0, 80), 'initial turn movement failed')
   assert(engine.active.primary.toId == lower.id, 'wrong near turn selected')
   assert(engine:applyDeltas(100, 0), 'corner movement failed')
-  assert(engine.nodeStacks[1][3] == right or engine.active.primary.toId == right.id,
+  assert(engine.stacks[1][3] == right.id or engine.active.primary.toId == right.id,
     'corner preload did not turn right')
 end)
 
@@ -211,7 +229,7 @@ test.test('diagonal preload remains responsive', function()
   assert(engine:applyDeltas(80, 40), 'diagonal movement failed')
   assert(engine.active.primary.toId == lower.id, 'diagonal chose wrong turn')
   assert(engine:applyDeltas(100, 0), 'diagonal followup failed')
-  assert(engine.nodeStacks[1][3] == right or engine.active.primary.toId == right.id,
+  assert(engine.stacks[1][3] == right.id or engine.active.primary.toId == right.id,
     'diagonal did not turn right after snapping')
 end)
 

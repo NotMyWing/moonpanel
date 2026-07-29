@@ -279,5 +279,3 @@ class Moonpanel.Canvas.Entities.InvisiblePath extends Moonpanel.Canvas.Entities.
 		x, y, w, h = pathBounds @
 		surface.SetDrawColor 0, 0, 0, 80
 		surface.DrawRect x, y, w, h
-
-Moonpanel.Canvas.Entities.PathInvisible = Moonpanel.Canvas.Entities.InvisiblePath

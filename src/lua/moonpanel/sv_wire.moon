@@ -2,25 +2,46 @@
 -- authoritative panel lifecycle into stable Wire inputs and outputs.
 
 Moonpanel.Wire or= {}
-Moonpanel.Wire.PathMaxLength = 512
+pathMaxLength = 512
 
-Moonpanel.Wire.Trigger = (panel, name, value) ->
+trigger = (panel, name, value) ->
 	return unless SERVER and IsValid(panel) and WireLib and
 		WireLib.TriggerOutput and panel.WireOutputs
 	WireLib.TriggerOutput panel, name, value
 
-Moonpanel.Wire.Pulse = (panel, name) ->
-	Moonpanel.Wire.Trigger panel, name, 1
-	Moonpanel.Wire.Trigger panel, name, 0
+pulse = (panel, name) ->
+	trigger panel, name, 1
+	trigger panel, name, 0
+
+erasedClues = (panel, result) ->
+	values = {}
+	erasures = result.feedback and result.feedback.erasures
+	return values unless istable erasures
+	canvas = panel\GetCanvas!
+	for pair in *erasures
+		index = tonumber pair and pair.targetIndex
+		socket = index and canvas\GetSocketAtDataIndex index
+		continue unless socket
+		typeId = socket\GetSocketType!
+		if typeId == Moonpanel.Canvas.SocketType.Path
+			typeId = socket\IsHorizontal! and 3 or 2
+		elseif typeId == Moonpanel.Canvas.SocketType.Intersection
+			typeId = 4
+		elseif typeId == Moonpanel.Canvas.SocketType.Cell
+			typeId = 1
+		else
+			continue
+		table.insert values, Vector socket\GetX!, socket\GetY!, typeId
+	values
 
 Moonpanel.Wire.UpdateState = (panel) ->
 	return unless SERVER and IsValid(panel) and WireLib and panel.WireOutputs
 	state = panel\GetWireState!
 	return unless state
-	Moonpanel.Wire.Trigger panel, "Powered", state.powered and 1 or 0
-	Moonpanel.Wire.Trigger panel, "Solved", state.solved and 1 or 0
-	Moonpanel.Wire.Trigger panel, "Errored", state.errored and 1 or 0
-	Moonpanel.Wire.Trigger panel, "Path", state.path or ""
+	trigger panel, "Powered", state.powered and 1 or 0
+	trigger panel, "Solved", state.solved and 1 or 0
+	trigger panel, "Errored", state.errored and 1 or 0
+	trigger panel, "Path", state.path or ""
 
 Moonpanel.Wire.Initialize = (panel) ->
 	return unless SERVER and IsValid panel
@@ -42,14 +63,12 @@ Moonpanel.Wire.Initialize = (panel) ->
 
 Moonpanel.Wire.HandleResult = (panel, result) ->
 	return unless SERVER and IsValid(panel) and result
-	event = panel\HandleWireTerminalResult result, Moonpanel.Wire.PathMaxLength
-	return unless event
-	Moonpanel.Wire.Trigger panel, "Path", event.path
-	Moonpanel.Wire.Trigger panel, "Erased", event.erased
-	if event.aborted
-		Moonpanel.Wire.Pulse panel, "AbortedPulse"
-	elseif event.solved
-		Moonpanel.Wire.Pulse panel, "SolvedPulse"
+	panel.__wirePath = panel\GetCanvas!\GetTracePath result.snapshot, pathMaxLength
+	trigger panel, "Erased", erasedClues panel, result
+	if result.aborted == true
+		pulse panel, "AbortedPulse"
+	elseif result.success == true
+		pulse panel, "SolvedPulse"
 	else
-		Moonpanel.Wire.Pulse panel, "FailedPulse"
+		pulse panel, "FailedPulse"
 	Moonpanel.Wire.UpdateState panel

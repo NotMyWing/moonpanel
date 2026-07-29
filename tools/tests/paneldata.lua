@@ -1,16 +1,5 @@
 local test = dofile('tools/tests/harness.lua')
 
-Moonpanel.Color = {
-  Black = 1,
-  White = 2,
-  Cyan = 3,
-  Magenta = 4,
-  Yellow = 5,
-  Red = 6,
-  Green = 7,
-  Blue = 8,
-  Orange = 9,
-}
 Moonpanel.Canvas.SocketType = {
   Intersection = 1,
   Cell = 2,
@@ -29,8 +18,15 @@ util = {
   TableToJSON = function() return '' end,
 }
 
+dofile('dest/lua/moonpanel/sh_colors.lua')
 dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 dofile('dest/lua/moonpanel/canvas/sh_paneldata.lua')
+
+test.test('canonical blue is pure RGB blue', function()
+  local blue = Moonpanel.Canvas.ColorValues[Moonpanel.Color.Blue]
+  assert(blue and blue.r == 0 and blue.g == 0 and blue.b == 255,
+    'canonical Blue is not #0000ff')
+end)
 
 local function flatIndex(width, gx, gy)
   return 1 + (gx - 1) + (gy - 1) * (width * 2 + 1)
@@ -483,6 +479,14 @@ test.test('canonical panels default gaps to forty percent', function()
   })
   assert(math.abs(data.Dim.DisjointLength - 0.25) < 0.0001,
     'explicit authored gap size was overwritten by the default')
+end)
+
+test.test('canonical sanitization retains only supported extension flags', function()
+  local data = Moonpanel.Canvas.SanitizeData({
+    Extensions = { FourTriangle = true, ArbitraryPayload = true },
+  })
+  assert(data.Extensions.FourTriangle and data.Extensions.ArbitraryPayload == nil,
+    'unsupported extension data crossed the Canvas boundary')
 end)
 
 test.run()

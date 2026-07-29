@@ -103,7 +103,7 @@ if SERVER
 
     TOOL.RightClick = (trace) =>
         Moonpanel.Net.SendEditorOpen @GetOwner!
-        return true
+        return false
 
 else
     language.Add "Tool.moonpanel.name", "The Moonpanel"

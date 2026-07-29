@@ -50,6 +50,11 @@ local function finishProfile(report, profile, started)
     return report
 end
 
+local function finishReport(report, profile, started)
+    report.reportHash = RuleEngine.HashReport(report)
+    return finishProfile(report, profile, started)
+end
+
 RuleEngine.DotRole = {
     Any = 0,
     Primary = 1,
@@ -185,16 +190,6 @@ local KIND = {
     Triangle = "triangle",
     Polyomino = "polyomino",
 }
-
-local function copyShape(shape)
-    local output = {}
-    for y, inputRow in ipairs(shape or {{1}}) do
-        local row = {}
-        for x, value in ipairs(inputRow) do row[x] = value == 1 and 1 or 0 end
-        output[y] = row
-    end
-    return output
-end
 
 local function inferDotRole(data, meta)
     local explicit = math.floor(tonumber(data.TraceRole) or -1)
@@ -397,7 +392,13 @@ function RuleEngine.Compile(panelData, topology)
             elseif kind == "triangle" then
                 clue.count = math.floor(tonumber(data.Count) or 1)
             elseif kind == "polyomino" then
-                clue.shape = copyShape(data.Shape)
+                clue.shape = {}
+                for y, inputRow in ipairs(data.Shape or {{1}}) do
+                    clue.shape[y] = {}
+                    for x, value in ipairs(inputRow) do
+                        clue.shape[y][x] = value == 1 and 1 or 0
+                    end
+                end
                 clue.rotatable = data.Rotational == true
                 clue.negative = data.Negative == true
             end
@@ -705,12 +706,6 @@ local function arrayCopy(input)
     return output
 end
 
-local function activeCopy(input)
-    local output = {}
-    for key, value in pairs(input) do output[key] = value end
-    return output
-end
-
 local function sortedSet(set)
     local output = {}
     for value in pairs(set) do output[#output + 1] = value end
@@ -886,8 +881,6 @@ local function evaluateActiveSet(facts, active, options, onlyRegion)
     return report
 end
 
-RuleEngine.EvaluateActiveSet = evaluateActiveSet
-
 local function forEachCombination(values, count, checkpoint, callback, profile,
         depthBase, copyResult, branchCallback)
     local current = {}
@@ -938,7 +931,8 @@ local function lexLess(a, b)
 end
 
 local function evaluateRegionWithRemoved(facts, baseActive, regionId, usedErasers, targets, options)
-    local active = activeCopy(baseActive)
+    local active = {}
+    for key, value in pairs(baseActive) do active[key] = value end
     for _, id in ipairs(usedErasers) do active[id] = nil end
     for _, id in ipairs(targets) do active[id] = nil end
     return evaluateActiveSet(facts, active, options, regionId), active
@@ -1595,8 +1589,7 @@ function RuleEngine.Evaluate(definition, traceSnapshot, options)
             ruleRevision = definition.ruleRevision,
             traceHash = facts.traceHash,
         }
-        report.reportHash = RuleEngine.HashReport(report)
-        return finishProfile(report, profile, evaluationStarted)
+        return finishReport(report, profile, evaluationStarted)
     end
     local baseActive = {}
     for _, clue in ipairs(definition.clues) do baseActive[clue.id] = true end
@@ -1622,8 +1615,7 @@ function RuleEngine.Evaluate(definition, traceSnapshot, options)
             ruleRevision = definition.ruleRevision,
             traceHash = facts.traceHash,
         }
-        report.reportHash = RuleEngine.HashReport(report)
-        return finishProfile(report, profile, evaluationStarted)
+        return finishReport(report, profile, evaluationStarted)
     end
 
     local violationSet, remainingSet = {}, {}
@@ -1694,8 +1686,7 @@ function RuleEngine.Evaluate(definition, traceSnapshot, options)
                 ruleRevision = definition.ruleRevision,
                 traceHash = facts.traceHash,
             }
-            report.reportHash = RuleEngine.HashReport(report)
-            return finishProfile(report, profile, evaluationStarted)
+            return finishReport(report, profile, evaluationStarted)
         end
 
         for _, id in ipairs(solved.unnecessary or {}) do violationSet[id] = true end

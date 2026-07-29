@@ -1077,7 +1077,13 @@ class Moonpanel.Canvas.TraceEngine
 		edge = @active and @active.primary
 		return unless edge
 		math.abs(edge.unitX) > math.abs(edge.unitY) and "x" or "y"
+	NeedsExitNudge: =>
+		@phase == @@Phase.Tracing and @active and @active.primary and
+			@active.primary.isExit and
+			(not @active.secondary or @active.secondary.isExit) and
+			not @touchingExit
 	IsTracing: => @phase == @@Phase.Tracing
+	SetFeedback: => @phase = @@Phase.Feedback
 	SetOcclusionConstraint: (constraint) => @occlusionConstraint = constraint
 	GetDebugState: => {
 		phase: @phase

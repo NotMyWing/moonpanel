@@ -4,40 +4,6 @@ include "shared.lua"
 include "moonpanel/sh_trace_session.lua"
 include "moonpanel/sv_wire.lua"
 
-wireDirection = (fromNode, toNode, width) ->
-	return "?" unless fromNode and toNode
-	dx = (toNode.x or 0) - (fromNode.x or 0)
-	dy = (toNode.y or 0) - (fromNode.y or 0)
-	if width and width > 0
-		half = width * 0.5
-		while dx > half
-			dx -= width
-		while dx < -half
-			dx += width
-	return "R" if math.abs(dx) > math.abs(dy) and dx > 0.000001
-	return "L" if math.abs(dx) > math.abs(dy) and dx < -0.000001
-	return "D" if math.abs(dy) > 0.000001 and dy > 0
-	return "U" if math.abs(dy) > 0.000001 and dy < 0
-	"?"
-
-wirePath = (panel, result, maximum = 512) ->
-	return "" unless result and result.snapshot and
-		istable(result.snapshot.stacks)
-	canvas = panel\GetCanvas!
-	topology = canvas\GetTraceTopology!
-	return "" unless topology and topology.nodes
-	data = canvas\GetData!
-	width = data and data.Meta and tonumber(data.Meta.Width)
-	stack = result.snapshot.stacks[1]
-	return "" unless istable stack
-	characters = {}
-	for index = 2, #stack
-		fromNode = topology.nodes[tonumber stack[index - 1]]
-		toNode = topology.nodes[tonumber stack[index]]
-		table.insert characters, wireDirection fromNode, toNode, width
-		break if #characters >= maximum
-	table.concat characters
-
 wireErased = (panel, result) ->
 	values = {}
 	feedback = result and result.feedback
@@ -74,7 +40,6 @@ ENT.InitializeSided = =>
     -- Server-side screen matrix for occlusion checks.
     info = Moonpanel.Canvas.ResolveScreenInfo @, @GetModel!
     @ScreenMatrix = Moonpanel.Canvas.BuildScreenMatrix info
-    @ScreenInfo = info
 
 ENT.GetWireState = => {
 	powered: @GetPowered!
@@ -102,12 +67,21 @@ ENT.GetVisualEventSerial = => @__visualEventSerial or 0
 ENT.ClearEndingTraceSession = (session) =>
 	Moonpanel.TraceSession.ClearEnding @, session
 
+ENT.ClearTerminalState = (resetWire = false) =>
+	timer.Remove "TheMP_SolvedState_#{@EntIndex!}"
+	@__pendingSolvedResult = nil
+	@__lastVisualResult = nil
+	@__lastVisualResultAt = nil
+	@ResetWireState! if resetWire
+	@SetSolvedState false
+	@SetErrored false
+
 ENT.ResetWireState = =>
 	@__wirePath = ""
 
 ENT.HandleWireTerminalResult = (result, maximum = 512) =>
 	return unless result
-	@__wirePath = wirePath @, result, maximum
+	@__wirePath = @GetCanvas!\GetTracePath result and result.snapshot, maximum
 	{
 		path: @__wirePath
 		erased: wireErased @, result
@@ -121,34 +95,29 @@ ENT.SetData = (data, solved = false, visualResult = nil) =>
     activeSession = @GetTraceSession!
     endingSession = @GetEndingTraceSession!
     controller = activeSession and activeSession.controller
-    controller or= @GetController!
-    @EndTraceSession true if activeSession
-    if IsValid(controller) and controller\IsPlayer!
-        Moonpanel\SetFocused controller, false if Moonpanel\IsFocused controller
-        @SetController game.GetWorld! unless activeSession
-    @GetCanvas!\CancelSolution "panel_edit"
-    timer.Remove "TheMP_SolvedState_#{@EntIndex!}"
-    @__pendingSolvedResult = nil
-    @SetSolvedState false
-    if endingSession
+	controller or= @GetController!
+	@EndTraceSession true if activeSession
+	if IsValid(controller) and controller\IsPlayer!
+		Moonpanel\SetFocused controller, false if Moonpanel\IsFocused controller
+		@SetController game.GetWorld! unless activeSession
+	@GetCanvas!\CancelSolution "panel_edit"
+	if endingSession
 		Moonpanel.Net.BroadcastVisualResult @, {
             aborted: true
             evaluationError: "panel_edit"
-        }
+		}
 		@ClearEndingTraceSession!
-    @__lastVisualResult = nil
-    @__lastVisualResultAt = nil
-    canvas = @GetCanvas!
+	@ClearTerminalState!
+	canvas = @GetCanvas!
     canvas\ImportData data
     importedData = canvas\ExportData!
     return false unless importedData
     @TheMoonpanelTileData = importedData
     @__dataRevision = ((@__dataRevision or 0) + 1) % 4294967295
     @__dataRevision = 1 if @__dataRevision == 0
-    @SetSolvedState solved, visualResult
+	@SetSolvedState solved, visualResult
 
 	@SetPowered true
-	@SetErrored false
 
     @ExecutePendingSyncs!
     true
@@ -219,13 +188,7 @@ ENT.StartTraceSession = (ply, x, y, inputSensitivity = 1,
 	return false, "invalidStart" unless node
 	return false, "invalidStart" unless @SolveStart ply, node.id
 
-	timer.Remove "TheMP_SolvedState_#{@EntIndex!}"
-	@__pendingSolvedResult = nil
-	@ResetWireState!
-	@SetSolvedState false
-	@SetErrored false
-	@__lastVisualResult = nil
-	@__lastVisualResultAt = nil
+	@ClearTerminalState true
 	ruleDefinition = canvas\GetRuleDefinition!
 	session = Moonpanel.TraceSession.Create @, {
 		controller: ply
@@ -333,14 +296,8 @@ ENT.ResetPanel = (restorePower = true) =>
 		Moonpanel.Net.BroadcastPanelResetPresentation @, @__resetSnapshot,
 			@__resetSerial
 	@ClearEndingTraceSession!
-	@__lastVisualResult = nil
-	@__lastVisualResultAt = nil
-	@__pendingSolvedResult = nil
-	@ResetWireState!
-	timer.Remove "TheMP_SolvedState_#{@EntIndex!}"
+	@ClearTerminalState true
 	canvas\ResetRuntime "panel-reset"
-	@SetSolvedState false
-	@SetErrored false
 	@SetPowered true if restorePower
 	@ExecutePendingSyncs!
 	@__resetSnapshot = nil

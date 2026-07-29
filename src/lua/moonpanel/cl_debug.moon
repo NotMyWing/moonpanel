@@ -205,7 +205,8 @@ panelLines = (panel) ->
 			table.insert lines, { "active none", DIM }
 
 	if panel.MoonpanelPillar
-		orbit = Moonpanel.PillarOrbits and Moonpanel.PillarOrbits[LocalPlayer!]
+		orbit = Moonpanel.PillarController and
+			Moonpanel.PillarController\GetState LocalPlayer!
 		if orbit and orbit.panel == panel and trace
 			head = trace.cursors and trace.cursors[1]
 			playerAngle = panel\GetPillarAngle LocalPlayer!\GetPos!

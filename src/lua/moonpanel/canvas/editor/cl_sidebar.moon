@@ -1087,45 +1087,29 @@ Editor.BuildAppearanceSettings = (parent) =>
 		"Choose the panel's cue sound family", applySoundPreset
 	@SoundPresetState = soundPicker
 
-	addSection parent, "COLOR ROLE"
-	for entry in *APPEARANCE
-		name = entry[1]
-		key = entry[2]
-		button = parent\Add "DButton"
-		button.RoleKey = key
-		button.RoleName = name
-		button\Dock TOP
-		button\DockMargin 10, 2, 10, 2
-		button\SetTall 32
-		button\SetText ""
-		button.DoClick = (_) ->
-			Editor\SelectAppearanceRole _.RoleKey
-		button.Paint = (_, w, h) ->
-			background = if _.RoleKey == Editor.appearanceRole then C.accentDim elseif _.Hovered then C.hover else C.raised
-			draw.RoundedBox 4, 0, 0, w, h, background
-			value = getAppearanceColor Editor.Document\GetData!, _.RoleKey
-			draw.RoundedBox 3, 8, 7, 18, 18, Color(value.r, value.g, value.b, value.a or 255)
-			draw.SimpleText _.RoleName, "MoonpanelEditorBody", 34, h / 2, C.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER
+	addAppearanceButtons = (title, entries) ->
+		addSection parent, title
+		for entry in *entries
+			name = entry[1]
+			key = entry[2]
+			button = parent\Add "DButton"
+			button.RoleKey = key
+			button.RoleName = name
+			button\Dock TOP
+			button\DockMargin 10, 2, 10, 2
+			button\SetTall 32
+			button\SetText ""
+			button.DoClick = (_) ->
+				Editor\SelectAppearanceRole _.RoleKey
+			button.Paint = (_, w, h) ->
+				background = if _.RoleKey == Editor.appearanceRole then C.accentDim elseif _.Hovered then C.hover else C.raised
+				draw.RoundedBox 4, 0, 0, w, h, background
+				value = getAppearanceColor Editor.Document\GetData!, _.RoleKey
+				draw.RoundedBox 3, 8, 7, 18, 18, Color(value.r, value.g, value.b, value.a or 255)
+				draw.SimpleText _.RoleName, "MoonpanelEditorBody", 34, h / 2, C.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER
 
-	addSection parent, "TRACE COLORS"
-	for entry in *TRACE_APPEARANCE
-		name = entry[1]
-		key = entry[2]
-		button = parent\Add "DButton"
-		button.RoleKey = key
-		button.RoleName = name
-		button\Dock TOP
-		button\DockMargin 10, 2, 10, 2
-		button\SetTall 32
-		button\SetText ""
-		button.DoClick = (_) ->
-			Editor\SelectAppearanceRole _.RoleKey
-		button.Paint = (_, w, h) ->
-			background = if _.RoleKey == Editor.appearanceRole then C.accentDim elseif _.Hovered then C.hover else C.raised
-			draw.RoundedBox 4, 0, 0, w, h, background
-			value = getAppearanceColor Editor.Document\GetData!, _.RoleKey
-			draw.RoundedBox 3, 8, 7, 18, 18, Color(value.r, value.g, value.b, value.a or 255)
-			draw.SimpleText _.RoleName, "MoonpanelEditorBody", 34, h / 2, C.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER
+	addAppearanceButtons "COLOR ROLE", APPEARANCE
+	addAppearanceButtons "TRACE COLORS", TRACE_APPEARANCE
 
 	@AppearanceEditLabel = addSection parent, "EDIT #{string.upper @appearanceRole}"
 	current = getAppearanceColor data, @appearanceRole

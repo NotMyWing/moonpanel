@@ -88,7 +88,7 @@ Editor.SetStatus = (text, tone = C.muted) =>
 
 Editor.UpdateTitle = =>
 	return unless IsValid @Frame
-	path = @Document.currentPath
+	path = @Document\GetPath!
 	name = path and string.StripExtension(string.GetFileFromFilename(path)) or "Untitled"
 	@Frame\SetTitle "Moonpanel Editor - #{name}#{@Document\IsDirty! and " *" or ""}"
 	if IsValid @FileStateLabel
@@ -116,7 +116,7 @@ Editor.GetEffectiveSurfaceSpec = (data) =>
 
 Editor.SyncCanvas = (rebuild = true) =>
 	@CurrentData = @Document\GetData!
-	@OpenedFile = @Document.currentPath
+	@OpenedFile = @Document\GetPath!
 	@RefreshBrushValidity! if @RefreshBrushValidity
 	if IsValid @FrameCanvas
 		@FrameCanvas\GetCanvas!\SetSurfaceSpec @GetEffectiveSurfaceSpec(@CurrentData)
@@ -126,7 +126,7 @@ Editor.SyncCanvas = (rebuild = true) =>
 	@RebuildSidebar! if rebuild
 
 Editor.CommitData = (label, data, mergeKey, rebuild = true) =>
-	@Document\BeginEdit label, mergeKey unless @Document.transaction
+	@Document\BeginEdit label, mergeKey unless @Document\IsEditing!
 	changed = @Document\CommitEdit data
 	if changed
 		@SyncCanvas rebuild
@@ -287,7 +287,7 @@ Editor.Redo = =>
 ----
 
 Editor.Save = (path, callback) =>
-	path or= @Document.currentPath
+	path or= @Document\GetPath!
 	return @ShowSaveAs callback unless path
 	ok, reason = @Document\Save path
 	if ok
@@ -662,7 +662,7 @@ Editor.Open = (surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) =>
 
 	document = @EnsureDocument!
 	data, loaded, metadata = document\LoadOnDemand!
-	@StoredDataLoaded, @CurrentData, @OpenedFile = true, data, document.currentPath
+	@StoredDataLoaded, @CurrentData, @OpenedFile = true, data, document\GetPath!
 
 	@InitBrushes!
 
@@ -724,6 +724,6 @@ Editor.Open = (surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) =>
 Editor.BeginGesture = (label) =>
 	return if @GestureActive
 	@Document\BeginEdit label
-	@GestureActive, @GestureChanged = true, false
+	@GestureActive = true
 
 concommand.Add "moonpanel_editor", -> Moonpanel.Editor\Open!

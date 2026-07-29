@@ -77,6 +77,24 @@ Moonpanel.Net.ValidateEditorPayload = (value) ->
 	return false unless istable value
 	visit value, 0
 
+readEditorPayload = ->
+	compressedLength = net.ReadUInt 32
+	return unless compressedLength > 0 and
+		compressedLength <= Moonpanel.Net.EditorPayloadMaxCompressed
+	compressed = net.ReadData compressedLength
+	json = compressed and util.Decompress compressed
+	return unless json and #json <= Moonpanel.Net.EditorPayloadMaxDecompressed
+	data = util.JSONToTable json
+	return unless data and Moonpanel.Net.ValidateEditorPayload data
+	data = Moonpanel.Canvas.SanitizeData data
+	return data if data and istable data
+
+Moonpanel.Net.ReadEditorPayload = (ply) ->
+	data = readEditorPayload!
+	return data if data
+	Moonpanel.Net.MarkMalformedPacket ply
+
+
 Moonpanel.Net.SendControlGrant = (recipients, panel, omitController = false) ->
 	session = panel\GetTraceSession! or panel\GetEndingTraceSession!
 	return unless session
@@ -379,6 +397,13 @@ finishTraceAction = (panel, session, action) ->
 	else
 		panel\EndTraceSession true
 
+validTraceSession = (panel, ply, sessionId, revision, ruleRevision) ->
+	return unless IsValid(panel) and panel.Moonpanel
+	session = panel\GetTraceSession!
+	return unless session and session.controller == ply and session.id == sessionId
+	return unless revision == session.revision and ruleRevision == session.ruleRevision
+	session
+
 Moonpanel.Net.ProcessPendingPillarSession = (panel, session) ->
 	return false unless Moonpanel.Net.ProcessPendingPillarBatches panel, session
 	action = session.pendingPillarAction
@@ -422,11 +447,8 @@ receive flowTypes.TraceInputBatch, (len, ply) ->
 		}
 	predictedHash = net.ReadUInt 32
 
-	return unless IsValid(panel) and panel.Moonpanel
-	session = panel\GetTraceSession!
-	return unless session and session.controller == ply and session.id == sessionId
-	return unless revision == session.revision
-	return unless ruleRevision == session.ruleRevision
+	session = validTraceSession panel, ply, sessionId, revision, ruleRevision
+	return unless session
 	return unless count > 0 and count <= 12
 	if invalidSample or invalidConstraints
 		Moonpanel.Net.MarkMalformedPacket ply
@@ -471,10 +493,8 @@ receive flowTypes.TraceAction, (len, ply) ->
 	ruleRevision = net.ReadUInt 32
 	finalSequence = net.ReadUInt 32
 	action = net.ReadUInt 2
-	return unless IsValid(panel) and panel\GetTraceSession!
-	session = panel\GetTraceSession!
-	return unless session.id == sessionId and session.controller == ply
-	return unless revision == session.revision and ruleRevision == session.ruleRevision
+	session = validTraceSession panel, ply, sessionId, revision, ruleRevision
+	return unless session
 	return unless ply\Alive! and Moonpanel\IsFocused(ply) and panel\GetPowered!
 	return unless panel\GetController! == ply
 	return if ply\EyePos!\DistToSqr(panel\GetPos!) > 1024 * 1024
@@ -520,35 +540,7 @@ receive flowTypes.PanelRequestDataFromPlayer, (len, ply) ->
 	if request.deadline and CurTime! > request.deadline
 		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
 		return
-	compressedLength = net.ReadUInt 32
-	if compressedLength <= 0 or
-		compressedLength > Moonpanel.Net.EditorPayloadMaxCompressed
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
-	compressed = net.ReadData compressedLength
-	unless compressed
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
-	json = util.Decompress compressed
-	unless json
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
-	if #json > Moonpanel.Net.EditorPayloadMaxDecompressed
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
-	data = util.JSONToTable json
-	unless data and Moonpanel.Net.ValidateEditorPayload data
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
-	data = Moonpanel.Canvas.SanitizeData data
-	unless data and istable data
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
 	Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
+	data = Moonpanel.Net.ReadEditorPayload ply
+	return unless data
 	request.callback data

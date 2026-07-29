@@ -202,7 +202,7 @@ Editor.BrushMatchesEntity = (brush, socket) =>
 Editor.SetActiveMode = (mode) =>
 	return unless mode == "place" or mode == "erase" or mode == "recolor"
 	@activeMode = mode
-	@Document.activeTool = mode if @Document
+	@Document\SetActiveTool mode if @Document
 	@RefreshBrushUI! if @RefreshBrushUI
 	message = switch mode
 		when "erase" then "Erase clues: click or drag to remove"

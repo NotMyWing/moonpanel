@@ -67,7 +67,7 @@ const compiledChecks = {
 	'dest/lua/moonpanel/cl_net.lua': [
 		{ pattern: /local geometryMatches\s+if localHash == result\.finalHash then\s+geometryMatches = true/, message: 'visual-result geometryMatches escaped its local scope' },
 		{ pattern: /net\.WriteInt\(sample\.xQ, 16\)\s+net\.WriteInt\(sample\.yQ, 16\)\s+net\.WriteBool\(sample\.boost\)\s+net\.WriteUInt\(sample\.commandNumber or 0, 32\)\s+net\.WriteUInt\(#sample\.constraints, 2\)/, message: 'trace samples do not serialize constraint decisions after movement' },
-		{ pattern: /canvas:ApplyTraceSample\(sample\.xQ, sample\.yQ, sample\.boost, nil, sample\.constraints\)/, message: 'observers do not replay authoritative constraint decisions' },
+		{ pattern: /(?:canvas:ApplyTraceSample\(sample\.xQ, sample\.yQ, sample\.boost, nil, sample\.constraints\)|applyTraceSamples\(canvas, samples, nil\))/, message: 'observers do not replay authoritative constraint decisions' },
 		{ pattern: /local snapshot = net\.ReadTable\(\)\s+local orbitSeed = net\.ReadBool\(\) and net\.ReadTable\(\) or nil/, message: 'control grants do not read the pillar orbit seed after the trace snapshot' },
 		{ all: [
 			/Moonpanel\.Net\.MaintainPanelDataRequests = function/,
@@ -78,7 +78,7 @@ const compiledChecks = {
 			/CreateClientConVar\("moonpanel_server_authoritative_trace", "0"/,
 			/serverSequence = lastSequence/,
 			/isLocalController and not Moonpanel:IsServerAuthoritativeTrace\(\)/,
-			/canvas:ApplyTraceSample\(sample\.xQ, sample\.yQ, sample\.boost, nil, sample\.constraints\)/,
+			/(?:canvas:ApplyTraceSample\(sample\.xQ, sample\.yQ, sample\.boost, nil, sample\.constraints\)|applyTraceSamples\(canvas, samples, nil\))/,
 		], message: 'server-authoritative controller mode does not consume the existing server advance stream' },
 		{ all: [
 			/hash = \(function\(\)[\s\S]*?Moonpanel:IsServerAuthoritativeTrace\(\)[\s\S]*?return 0/,

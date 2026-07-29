@@ -9,6 +9,10 @@ Moonpanel.Wire.Trigger = (panel, name, value) ->
 		WireLib.TriggerOutput and panel.WireOutputs
 	WireLib.TriggerOutput panel, name, value
 
+Moonpanel.Wire.Pulse = (panel, name) ->
+	Moonpanel.Wire.Trigger panel, name, 1
+	Moonpanel.Wire.Trigger panel, name, 0
+
 Moonpanel.Wire.UpdateState = (panel) ->
 	return unless SERVER and IsValid(panel) and WireLib and panel.WireOutputs
 	state = panel\GetWireState!
@@ -43,12 +47,9 @@ Moonpanel.Wire.HandleResult = (panel, result) ->
 	Moonpanel.Wire.Trigger panel, "Path", event.path
 	Moonpanel.Wire.Trigger panel, "Erased", event.erased
 	if event.aborted
-		Moonpanel.Wire.Trigger panel, "AbortedPulse", 1
-		Moonpanel.Wire.Trigger panel, "AbortedPulse", 0
+		Moonpanel.Wire.Pulse panel, "AbortedPulse"
 	elseif event.solved
-		Moonpanel.Wire.Trigger panel, "SolvedPulse", 1
-		Moonpanel.Wire.Trigger panel, "SolvedPulse", 0
+		Moonpanel.Wire.Pulse panel, "SolvedPulse"
 	else
-		Moonpanel.Wire.Trigger panel, "FailedPulse", 1
-		Moonpanel.Wire.Trigger panel, "FailedPulse", 0
+		Moonpanel.Wire.Pulse panel, "FailedPulse"
 	Moonpanel.Wire.UpdateState panel

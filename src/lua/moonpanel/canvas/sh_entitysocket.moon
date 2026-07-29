@@ -6,8 +6,6 @@ class Moonpanel.Canvas.Sockets.BaseSocket
     new: (@__canvas, @__id, @__dataIndex) =>
 
     __setCoordinates: (width) =>
-        data = @__canvas\GetData!
-
         @__x = ((@__id - 1) % width) + 1
         @__y = math.floor((@__id - 1) / width) + 1
 
@@ -116,7 +114,6 @@ class Moonpanel.Canvas.Sockets.CellSocket extends Moonpanel.Canvas.Sockets.BaseS
         return @__cachedHitBox if @__cachedHitBox
 
         ro = @GetRenderOrigin!
-        data = @__canvas\GetData!
 
         horizontalLength = @GetCanvas!\GetBarLength!
         verticalLength = @GetCanvas!\GetVerticalBarLength!
@@ -192,7 +189,6 @@ class Moonpanel.Canvas.Sockets.PathSocket extends Moonpanel.Canvas.Sockets.BaseS
         return @__cachedHitBox if @__cachedHitBox
 
         ro = @GetRenderOrigin!
-        data = @__canvas\GetData!
 
         barLength = if @__horizontal
             @GetCanvas!\GetBarLength!

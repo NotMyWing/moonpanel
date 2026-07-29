@@ -285,7 +285,7 @@ CANVAS.PaintTrace = (w, h) =>
 
 CANVAS.GetEntityVisualStyle = (socket) =>
 	return unless socket and @__visualFrame and @__visualFrame.entityStyles
-	index = @GetSocketDataIndex socket
+	index = socket\GetDataIndex!
 	index and @__visualFrame.entityStyles[index] or nil
 
 CANVAS.HasDynamicEntityStyle = (socket) =>
@@ -562,21 +562,21 @@ CANVAS.ImportNetworkState = (panel, data = {}) =>
 	definition = @GetRuleDefinition!
 	pathfinder = @__pathFinder
 	if session = Moonpanel.Net.TraceSessions and Moonpanel.Net.TraceSessions[panel]
-		if not pathfinder or session.revision ~= pathfinder.topology.revision or
+		if not pathfinder or session.revision ~= @GetTraceRevision! or
 				not definition or session.ruleRevision ~= definition.ruleRevision
 			Moonpanel.Net.TraceSessions[panel] = nil
 	@ImportPlayData data.playData
 	@SetSolvedState data.solved == true
 	visualResult = data.visualResult
 	revisionMatches = visualResult and pathfinder and definition and
-		visualResult.revision == pathfinder.topology.revision and
+		visualResult.revision == @GetTraceRevision! and
 		visualResult.ruleRevision == definition.ruleRevision
 	restoredSolvedSnapshot = data.solved == true and visualResult and
 		istable(visualResult.snapshot) and pathfinder and definition
 	if revisionMatches or restoredSolvedSnapshot
 		if restoredSolvedSnapshot and not revisionMatches
 			visualResult = table.Copy visualResult
-			visualResult.revision = pathfinder.topology.revision
+			visualResult.revision = @GetTraceRevision!
 			visualResult.ruleRevision = definition.ruleRevision
 		@__lastVisualSerial = visualResult.eventSerial or @__lastVisualSerial
 		@BeginPresentation {

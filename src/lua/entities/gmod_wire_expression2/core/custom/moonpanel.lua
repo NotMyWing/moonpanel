@@ -13,9 +13,10 @@ local function panelEntity(entity)
     return entity
 end
 
-local function canvasData(entity)
+local function panelDimensions(entity)
     local panel = panelEntity(entity)
-    return panel and panel:GetCanvas():GetData() or nil
+    if not panel then return 0, 0 end
+    return panel:GetCanvas():GetDimensions()
 end
 
 e2function number entity:moonpanelPowered()
@@ -45,13 +46,13 @@ e2function number entity:moonpanelRevision()
 end
 
 e2function number entity:moonpanelWidth()
-    local data = canvasData(this)
-    return data and data.Meta and (tonumber(data.Meta.Width) or 0) or 0
+    local width = panelDimensions(this)
+    return tonumber(width) or 0
 end
 
 e2function number entity:moonpanelHeight()
-    local data = canvasData(this)
-    return data and data.Meta and (tonumber(data.Meta.Height) or 0) or 0
+    local _, height = panelDimensions(this)
+    return tonumber(height) or 0
 end
 
 __e2setcost(5)

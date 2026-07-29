@@ -76,6 +76,8 @@ end
 
 test.test('real canvas import preserves pillartest wrapping sockets', function()
   local canvas = Moonpanel.Canvas.Canvas()
+  assert(canvas.GetTraceTopology == nil,
+    'Canvas still exposes the removed mutable topology accessor')
   canvas:ImportData(fixture('pillartest'))
   assert(canvas:IsContinuous(), 'real canvas discarded continuous topology')
   local pathfinder = assert(canvas:GetPillarTraceEngine(), 'real canvas did not build a pathfinder')

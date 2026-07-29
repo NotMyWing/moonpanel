@@ -15,7 +15,6 @@ Controller.CommandRetention = 512
 
 Moonpanel.PillarController = Controller
 -- Compatibility names are read by the existing debug and focus presentation.
-Moonpanel.PillarOrbits = Controller.States
 Moonpanel.PillarFocusAngles or= {}
 
 sign = (value) -> value > 0 and 1 or value < 0 and -1 or 0

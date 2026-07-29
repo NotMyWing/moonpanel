@@ -10,10 +10,6 @@ TOOL.ClientConVar.SeamYaw = "0"
 TOOL.ClientConVar.FitCells = "0"
 
 if SERVER
-	createPillar = (ply, pos, angle, radius, height, fitCells = false, tileData) ->
-		-- Retained for compatibility with old references; pillar spawning is disabled.
-		false
-
 	TOOL.LeftClick = (trace) =>
 		false
 

@@ -73,4 +73,4 @@ ENT.TransformInputDeltas = (dX = 0, dY = 0) => dX, dY
 
 ENT.GetScreenTransform = => nil
 
-ENT.IsSynchonized = => @GetCanvas!\GetData! ~= nil
+ENT.IsSynchronized = => @GetCanvas!\GetData! ~= nil

@@ -66,6 +66,9 @@ Document._refreshDirty = =>
 
 Document.GetData = => deepCopy @data
 Document.GetMutableData = => @data
+Document.GetPath = => @currentPath
+Document.IsEditing = => @transaction ~= nil
+Document.SetActiveTool = (tool) => @activeTool = tool
 Document.IsDirty = => @dirty
 Document.CanUndo = => @historyCursor > 0
 Document.CanRedo = => @historyCursor < #@history
@@ -120,6 +123,10 @@ Document.CommitEdit = (data) =>
 Document.BreakMerge = =>
 	previous = @history[@historyCursor]
 	previous.mergeKey = nil if previous
+
+Document.ResetHistory = =>
+	@history = {}
+	@historyCursor = 0
 
 Document.Undo = =>
 	@CancelEdit! if @transaction

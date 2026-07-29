@@ -2,6 +2,11 @@ receive = Moonpanel.Net.Receive
 flowTypes = Moonpanel.Net.FlowTypes
 startFlow = Moonpanel.Net.StartFlow
 
+applyTraceSamples = (canvas, samples, controller = nil) ->
+	for sample in *samples
+		canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
+			controller, sample.constraints
+
 Moonpanel.Net.PendingPanelDataRequests or= {}
 -- Predicted sessions never survive addon reload. Keeping this table through
 -- autoreload can make InputMouseApply consume the player's camera forever.
@@ -23,7 +28,12 @@ serverAuthoritativeTrace = CreateClientConVar "moonpanel_server_authoritative_tr
 Moonpanel.IsServerAuthoritativeTrace = => serverAuthoritativeTrace\GetBool!
 
 validPanel = (panel) ->
-	IsValid(panel) and panel.Moonpanel and panel\IsSynchonized!
+	IsValid(panel) and panel.Moonpanel and panel\IsSynchronized!
+
+localSession = (panel) ->
+	session = Moonpanel.Net.TraceSessions[panel]
+	return unless session and session.controller == LocalPlayer!
+	session
 
 releaseSession = (panel) ->
 	session = Moonpanel.Net.TraceSessions[panel]
@@ -165,8 +175,8 @@ Moonpanel.Net.MaintainPanelDataRequests = ->
 
 Moonpanel.Net.QueueTraceSample = (panel, xQ, yQ, boost = false,
 	constraintDecisions = {}, commandNumber = 0) ->
-	session = Moonpanel.Net.TraceSessions[panel]
-	return false unless session and session.controller == LocalPlayer!
+	session = localSession panel
+	return false unless session
 
 	session.nextSequence += 1
 	constraints = {}
@@ -188,8 +198,8 @@ Moonpanel.Net.QueueTraceSample = (panel, xQ, yQ, boost = false,
 	true
 
 Moonpanel.Net.FlushTraceSamples = (panel) ->
-	session = Moonpanel.Net.TraceSessions[panel]
-	return unless session and session.controller == LocalPlayer!
+	session = localSession panel
+	return unless session
 	return if session.provisional
 	return if #session.unsent == 0
 
@@ -219,8 +229,8 @@ Moonpanel.Net.FlushTraceSamples = (panel) ->
 	session.nextFlush = RealTime! + 0.05
 
 Moonpanel.Net.SendTraceAction = (panel, action) ->
-	session = Moonpanel.Net.TraceSessions[panel]
-	return false unless session and session.controller == LocalPlayer!
+	session = localSession panel
+	return false unless session
 	if session.provisional
 		session.pendingAction = action
 		Moonpanel.Net.SyncClickerState!
@@ -291,9 +301,8 @@ receive flowTypes.TraceControlGrant, ->
 	snapshot = net.ReadTable!
 	orbitSeed = net.ReadBool! and net.ReadTable! or nil
 	canvas = panel\GetCanvas!
-	topology = canvas\GetTraceTopology!
 	definition = canvas\GetRuleDefinition!
-	return unless topology and revision == topology.revision
+	return unless revision == canvas\GetTraceRevision!
 	return unless definition and ruleRevision == definition.ruleRevision
 	existing = Moonpanel.Net.TraceSessions[panel]
 	provisional = existing and existing.provisional and existing.controller == LocalPlayer!
@@ -302,14 +311,7 @@ receive flowTypes.TraceControlGrant, ->
 	if existing and existing.id == sessionId
 		if controller ~= LocalPlayer! or Moonpanel\IsServerAuthoritativeTrace!
 			oldExitPath = canvas\IsExitPath!
-			canvas\RestoreTraceSnapshot snapshot
-			follower = canvas\GetObserverFollower!
-			unless follower
-				follower = Moonpanel.Canvas.ObserverTraceFollower topology
-				follower\reset snapshot, true, lastSequence
-				canvas\SetObserverFollower follower
-			else
-				follower\setTarget snapshot, lastSequence
+			canvas\ApplyObserverSnapshot snapshot, lastSequence
 			existing.serverSequence = lastSequence
 			existing.serverHash = canvas\GetTraceHash!
 			if oldExitPath ~= canvas\IsExitPath!
@@ -350,9 +352,7 @@ receive flowTypes.TraceControlGrant, ->
 	panel\SetController controller
 	Moonpanel.Net.SyncClickerState!
 	if provisional
-		for sample in *provisionalSamples
-			canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
-				controller, sample.constraints
+		applyTraceSamples canvas, provisionalSamples, controller
 		sequenceIndex = 1
 		for sample in *Moonpanel.Net.TraceSessions[panel].unsent
 			sample.hash = canvas\GetTraceHash!
@@ -414,9 +414,7 @@ receive flowTypes.TraceObserverAdvance, ->
 
 	canvas = panel\GetCanvas!
 	oldExitPath = canvas\IsExitPath!
-	for sample in *samples
-		canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
-			nil, sample.constraints
+	applyTraceSamples canvas, samples, nil
 	finalSequence = firstSequence + count - 1
 	session.serverSequence = finalSequence
 	session.serverHash = serverHash

@@ -20,104 +20,86 @@ Moonpanel.Canvas.Resolution = 512
 
 -- Shared screen-matrix construction helpers used by both client and server.
 -- The private model map feeds screen-matrix construction and tool selection.
-plateInfo = (name, rs, extent, offsetZ, z) -> {
-    Name: name, RS: rs, RatioX: 1
+plateInfo = (rs, offsetZ) -> {
+    RS: rs, RatioX: 1
     offset: Vector(0, 0, offsetZ), rot: Angle(0, 90, 180)
-    x1: -extent, x2: extent, y1: -extent, y2: extent, z: z
 }
 monitorOffsets = {
     ["models//cheeze/pcb/pcb4.mdl"]: {
-        Name: "pcb4.mdl", RS: 0.0625, RatioX: 1,
+        RS: 0.0625, RatioX: 1,
         offset: Vector(0, 0, 0.5), rot: Angle(0, 0, 180),
-        x1: -16, x2: 16, y1: -16, y2: 16, z: 0.5
     },
     ["models//cheeze/pcb/pcb5.mdl"]: {
-        Name: "pcb5.mdl", RS: 0.0625, RatioX: 0.508,
+        RS: 0.0625, RatioX: 0.508,
         offset: Vector(-0.5, 0, 0.5), rot: Angle(0, 0, 180),
-        x1: -31.5, x2: 31.5, y1: -16, y2: 16, z: 0.5
     },
     ["models//cheeze/pcb/pcb6.mdl"]: {
-        Name: "pcb6.mdl", RS: 0.09375, RatioX: 0.762,
+        RS: 0.09375, RatioX: 0.762,
         offset: Vector(-0.5, -8, 0.5), rot: Angle(0, 0, 180),
-        x1: -31.5, x2: 31.5, y1: -24, y2: 24, z: 0.5
     },
     ["models//cheeze/pcb/pcb7.mdl"]: {
-        Name: "pcb7.mdl", RS: 0.125, RatioX: 1,
+        RS: 0.125, RatioX: 1,
         offset: Vector(0, 0, 0.5), rot: Angle(0, 0, 180),
-        x1: -32, x2: 32, y1: -32, y2: 32, z: 0.5
     },
     ["models//cheeze/pcb/pcb8.mdl"]: {
-        Name: "pcb8.mdl", RS: 0.125, RatioX: 0.668,
+        RS: 0.125, RatioX: 0.668,
         offset: Vector(15.885, 0, 0.5), rot: Angle(0, 0, 180),
-        x1: -47.885, x2: 47.885, y1: -32, y2: 32, z: 0.5
     },
     ["models/cheeze/pcb2/pcb8.mdl"]: {
-        Name: "pcb8.mdl", RS: 0.2475, RatioX: 0.99,
+        RS: 0.2475, RatioX: 0.99,
         offset: Vector(0, 0, 0.3), rot: Angle(0, 0, 180),
-        x1: -64, x2: 64, y1: -63.36, y2: 63.36, z: 0.3
     },
     ["models/blacknecro/tv_plasma_4_3.mdl"]: {
-        Name: "Plasma TV (4:3)", RS: 0.082, RatioX: 0.751,
+        RS: 0.082, RatioX: 0.751,
         offset: Vector(0, -0.1, 0), rot: Angle(0, 0, -90),
-        x1: -27.87, x2: 27.87, y1: -20.93, y2: 20.93, z: 0.1
     },
     ["models/hunter/blocks/cube1x1x1.mdl"]: {
-        Name: "Cube 1x1x1", RS: 0.09, RatioX: 1,
+        RS: 0.09, RatioX: 1,
         offset: Vector(24, 0, 0), rot: Angle(0, 90, -90),
-        x1: -48, x2: 48, y1: -48, y2: 48, z: 24
     },
-    ["models/hunter/plates/plate05x05.mdl"]: plateInfo "Panel 0.5x0.5", 0.045, 48, 1.7, 0
-    ["models/hunter/plates/plate1x1.mdl"]: plateInfo "Panel 1x1", 0.09, 48, 2, 0
-    ["models/hunter/plates/plate2x2.mdl"]: plateInfo "Panel 2x2", 0.182, 48, 2, 0
-    ["models/hunter/plates/plate4x4.mdl"]: plateInfo "plate4x4.mdl", 0.3707, 94.9, 2, 1.7
-    ["models/hunter/plates/plate8x8.mdl"]: plateInfo "plate8x8.mdl", 0.741, 189.8, 2, 1.7
-    ["models/hunter/plates/plate16x16.mdl"]: plateInfo "plate16x16.mdl", 1.482, 379.6, 2, 1.7
-    ["models/hunter/plates/plate24x24.mdl"]: plateInfo "plate24x24.mdl", 2.223, 569.4, 2, 1.7
-    ["models/hunter/plates/plate32x32.mdl"]: plateInfo "plate32x32.mdl", 2.964, 759.2, 2, 1.7
+    ["models/hunter/plates/plate05x05.mdl"]: plateInfo 0.045, 1.7
+    ["models/hunter/plates/plate1x1.mdl"]: plateInfo 0.09, 2
+    ["models/hunter/plates/plate2x2.mdl"]: plateInfo 0.182, 2
+    ["models/hunter/plates/plate4x4.mdl"]: plateInfo 0.3707, 2
+    ["models/hunter/plates/plate8x8.mdl"]: plateInfo 0.741, 2
+    ["models/hunter/plates/plate16x16.mdl"]: plateInfo 1.482, 2
+    ["models/hunter/plates/plate24x24.mdl"]: plateInfo 2.223, 2
+    ["models/hunter/plates/plate32x32.mdl"]: plateInfo 2.964, 2
     ["models/kobilica/wiremonitorbig.mdl"]: {
-        Name: "Monitor Big", RS: 0.045, RatioX: 0.991,
+        RS: 0.045, RatioX: 0.991,
         offset: Vector(0.2, -0.4, 13), rot: Angle(0, 0, -90),
-        x1: -11.5, x2: 11.6, y1: 1.6, y2: 24.5, z: 0.2
     },
     ["models/kobilica/wiremonitorsmall.mdl"]: {
-        Name: "Monitor Small", RS: 0.0175, RatioX: 1,
+        RS: 0.0175, RatioX: 1,
         offset: Vector(0, -0.4, 5), rot: Angle(0, 0, -90),
-        x1: -4.4, x2: 4.5, y1: 0.6, y2: 9.5, z: 0.3
     },
     ["models/props/cs_assault/billboard.mdl"]: {
-        Name: "Billboard", RS: 0.23, RatioX: 0.522,
+        RS: 0.23, RatioX: 0.522,
         offset: Vector(2, 0, 0), rot: Angle(0, 90, -90),
-        x1: -110.512, x2: 110.512, y1: -57.647, y2: 57.647, z: 1
     },
     ["models/props/cs_office/computer_monitor.mdl"]: {
-        Name: "LCD Monitor (4:3)", RS: 0.031, RatioX: 0.767,
+        RS: 0.031, RatioX: 0.767,
         offset: Vector(3.3, 0, 16.7), rot: Angle(0, 90, -90),
-        x1: -10.5, x2: 10.5, y1: 8.6, y2: 24.7, z: 3.3
     },
     ["models/props/cs_office/tv_plasma.mdl"]: {
-        Name: "Plasma TV (16:10)", RS: 0.065, RatioX: 0.5965,
+        RS: 0.065, RatioX: 0.5965,
         offset: Vector(6.1, 0, 18.93), rot: Angle(0, 90, -90),
-        x1: -28.5, x2: 28.5, y1: 2, y2: 36, z: 6.1
     },
     ["models/props_lab/monitor01b.mdl"]: {
-        Name: "Small TV", RS: 0.0185, RatioX: 1.0173,
+        RS: 0.0185, RatioX: 1.0173,
         offset: Vector(6.53, -1, 0.45), rot: Angle(0, 90, -90),
-        x1: -5.535, x2: 3.5, y1: -4.1, y2: 5.091, z: 6.53
     },
     ["models/props_lab/workspace002.mdl"]: {
-        Name: "Workspace 002", RS: 0.06836, RatioX: 0.9669,
+        RS: 0.06836, RatioX: 0.9669,
         offset: Vector(-42.133224, -42.372322, 42.110897), rot: Angle(0, 133.340, -120.317),
-        x1: -18.1, x2: 18.1, y1: -17.5, y2: 17.5, z: 42.1109
     },
     ["models/props_mining/billboard001.mdl"]: {
-        Name: "TF2 Red billboard", RS: 0.375, RatioX: 0.5714,
+        RS: 0.375, RatioX: 0.5714,
         offset: Vector(3.5, 0, 96), rot: Angle(0, 90, -90),
-        x1: -168, x2: 168, y1: -96, y2: 96, z: 96
     },
     ["models/props_mining/billboard002.mdl"]: {
-        Name: "TF2 Red vs Blue billboard", RS: 0.375, RatioX: 0.3137,
+        RS: 0.375, RatioX: 0.3137,
         offset: Vector(3.5, 0, 192), rot: Angle(0, 90, -90),
-        x1: -306, x2: 306, y1: -96, y2: 96, z: 192
     },
 }
 
@@ -147,16 +129,10 @@ Moonpanel.Canvas.ResolveScreenInfo = (ent, modelName) ->
         size.x = aux
 
     return {
-        Name: modelName or ""
         RS: size.y / Moonpanel.Canvas.Resolution
         RatioX: size.y / size.x
         offset: ent.OBBCenter(ent) + Vector(0, 0, maxs.z - 0.24)
         rot: Angle(0, 90, 180)
-        x1: 0
-        x2: 0
-        y1: 0
-        y2: 0
-        z: 0
     }
 
 -- Build screen matrix from resolved info.
@@ -473,7 +449,6 @@ class Canvas
 	SetupSounds: =>
 		return unless @__soundEnabled
 		return if @__sounds
-		@__sounds = {}
 
 		target = if @__worldEntity and
 			((SERVER and IsValid @__worldEntity) or CLIENT)
@@ -482,6 +457,7 @@ class Canvas
 			LocalPlayer!
 
 		return if not target
+		@__sounds = {}
 		preset = Moonpanel.Canvas.ResolveSoundPreset @GetSoundPreset!
 		for name, definition in pairs PANEL_SOUNDS
 			continue if definition[3] and not CLIENT
@@ -731,10 +707,10 @@ class Canvas
 		@__geometry.barLength) or 1
 
 	socketAt = (canvas, x, y) ->
-		data = canvas\GetData!
-		return unless data
-		width = data.Meta.Width * 2 + 1
-		height = data.Meta.Height * 2 + 1
+		panelWidth, panelHeight = canvas\GetDimensions!
+		return if panelWidth <= 0 or panelHeight <= 0
+		width = panelWidth * 2 + 1
+		height = panelHeight * 2 + 1
 		return if x < 1 or y < 1 or x > width or y > height
 		canvas\GetSocketAtDataIndex x + (y - 1) * width
 
@@ -756,9 +732,6 @@ class Canvas
 	GetCellSocketAt: (x, y) =>
 		socketAt @, x * 2, y * 2
 
-	GetSocketDataIndex: (socket) =>
-		socket and socket\GetDataIndex!
-
 	GetSocketAtDataIndex: (index) =>
 		@__sockets and @__sockets[index]
 
@@ -767,6 +740,9 @@ class Canvas
 	-- Not guaranteed to be useful, see ExportData. --
 	--------------------------------------------------
 	GetData: => @__data
+	GetDimensions: =>
+		meta = @__data and @__data.Meta
+		meta and meta.Width or 0, meta and meta.Height or 0
 
 	SetSolvedState: (solved) =>
 		@__solved = solved == true
@@ -871,7 +847,7 @@ class Canvas
 		-- objects. Enrich the freshly-built topology once at the canvas
 		-- boundary so snapshots can be evaluated identically in either realm.
 		socketIndex = (socket) -> Moonpanel.Canvas.CanonicalSeamIndex(
-			@GetSocketDataIndex(socket), @__data, surfaceSpec)
+			socket\GetDataIndex!, @__data, surfaceSpec)
 		for node in *topology.nodes
 			if node.socket
 				node.socketIndex = socketIndex node.socket
@@ -931,19 +907,28 @@ class Canvas
 			sound: @GetSoundStatus!
 		}
 	CanSubmitTrace: => @__pathFinder and @__pathFinder\canSubmit! or false
-	GetTraceTopology: => @__pathFinder and @__pathFinder.topology
-	GetTraceCursor: (index = 1) => @__pathFinder and @__pathFinder.cursors and @__pathFinder.cursors[index]
+	GetTraceCursor: (index = 1) => @__pathFinder and @__pathFinder\GetCursor index
 	GetConstraintDecisions: => @__pathFinder and @__pathFinder\GetConstraintDecisions!
-	GetTraceRevision: => @__pathFinder and @__pathFinder.topology.revision or 0
-	GetTracePhase: => @__pathFinder and @__pathFinder.phase
+	GetTraceRevision: => @__pathFinder and @__pathFinder\GetRevision! or 0
+	GetTracePhase: => @__pathFinder and @__pathFinder\GetPhase!
 	IsExitPath: => @__pathFinder and @__pathFinder\isExitPath! or false
 	SetTraceFeedback: =>
 		return unless @__pathFinder
-		@__pathFinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback
+		@__pathFinder\SetFeedback!
 	BeginTraceEvaluation: => @__pathFinder and @__pathFinder\beginEvaluation!
 	RestoreTraceSnapshot: (snapshot) =>
 		return false unless @__pathFinder and snapshot
 		@__pathFinder\restore snapshot
+		true
+	ApplyObserverSnapshot: (snapshot, sequence = 0) =>
+		return false unless CLIENT and @RestoreTraceSnapshot snapshot
+		follower = @__observerFollower
+		unless follower
+			follower = Moonpanel.Canvas.ObserverTraceFollower @__pathFinder.topology
+			follower\reset snapshot, true, sequence
+			@SetObserverFollower follower
+		else
+			follower\setTarget snapshot, sequence
 		true
 
 	GetRenderMaterial: => @__rtAlloc and @__rtAlloc.rt and @__rtAlloc.rt.material
@@ -963,6 +948,35 @@ class Canvas
 	GetTraceSnapshot: =>
 		return unless @__pathFinder
 		@__pathFinder\snapshot!
+	GetTracePath: (snapshot, maximum = 512) =>
+		return "" unless snapshot and istable snapshot.stacks and @__pathFinder
+		topology = @__pathFinder.topology
+		data = @__data
+		width = data and data.Meta and tonumber data.Meta.Width
+		stack = snapshot.stacks[1]
+		return "" unless topology and topology.nodes and istable stack
+		direction = (fromNode, toNode) ->
+			return "?" unless fromNode and toNode
+			dx = (toNode.x or 0) - (fromNode.x or 0)
+			dy = (toNode.y or 0) - (fromNode.y or 0)
+			if width and width > 0
+				half = width * 0.5
+				while dx > half
+					dx -= width
+				while dx < -half
+					dx += width
+			return "R" if math.abs(dx) > math.abs(dy) and dx > 0.000001
+			return "L" if math.abs(dx) > math.abs(dy) and dx < -0.000001
+			return "D" if math.abs(dy) > 0.000001 and dy > 0
+			return "U" if math.abs(dy) > 0.000001 and dy < 0
+			"?"
+		characters = {}
+		for index = 2, #stack
+			fromNode = topology.nodes[tonumber stack[index - 1]]
+			toNode = topology.nodes[tonumber stack[index]]
+			table.insert characters, direction fromNode, toNode
+			break if #characters >= maximum
+		table.concat characters
 
 	HasRuntimeState: =>
 		return true if @__solutionCoroutine
@@ -1048,10 +1062,7 @@ class Canvas
 			return unless IsValid @__worldEntity
 			return if transitionSerial > 0 and
 				transitionSerial ~= @__resetPresentationSerial
-			@ResetPresentation "reset-complete"
-			@__playData = {}
-			@ResetTraceEngine!
-			@__rtDirty = true
+			@ResetRuntime "reset-complete"
 		true
 
 	ResetRuntime: (reason = "reset") =>
@@ -1237,10 +1248,7 @@ class Canvas
 		-- the rendered head travels the same short distance as the engine nudge.
 		pathfinder = @__pathFinder
 		nudgeExitAnimation = CLIENT and forceAbort ~= true and pathfinder and
-			pathfinder\canSubmit! and pathfinder.active and
-			pathfinder.active.primary and pathfinder.active.primary.isExit and
-			(not pathfinder.active.secondary or pathfinder.active.secondary.isExit) and
-			not pathfinder.touchingExit
+			pathfinder\NeedsExitNudge!
 		partialTraceSnapshot = pathfinder\snapshot! if nudgeExitAnimation
 		if nudgeExitAnimation
 			follower = Moonpanel.Canvas.ObserverTraceFollower pathfinder.topology
@@ -1253,7 +1261,7 @@ class Canvas
 		@__playData.wasAborted = forceAbort == true or not @__pathFinder\canSubmit!
 
 		if @__playData.wasAborted
-			@__pathFinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback
+			@__pathFinder\SetFeedback!
 			return @FinishSolution!
 
 		@__pathFinder\beginEvaluation!
@@ -1309,8 +1317,7 @@ class Canvas
 
 	FinishSolution: (solutionData) =>
 		Moonpanel.Canvas.ReleaseVerifier @ if Moonpanel.Canvas.ReleaseVerifier
-		if @__pathFinder
-			@__pathFinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback
+		@SetTraceFeedback!
 		report = solutionData and solutionData.ruleReport
 		result = {
 			ruleRevision: report and report.ruleRevision

@@ -232,11 +232,11 @@ CANVAS.CreateSolutionCoroutine = =>
 
 CANVAS.IsTraced = (socket) =>
 	return unless @__solutionData and socket
-	index = @GetSocketDataIndex socket
+	index = socket\GetDataIndex!
 	index and @__solutionData.traced[index]
 
 CANVAS.GetAreaNum = (socket) =>
 	return unless @__solutionData and socket
-	index = @GetSocketDataIndex socket
+	index = socket\GetDataIndex!
 	faceId = @__ruleDefinition and @__ruleDefinition.faceBySocket[index]
 	faceId and @__solutionData.regionByFace[faceId]

@@ -59,12 +59,11 @@ Editor.LoadStoredData = (force = false) =>
 	document = @EnsureDocument!
 	if force
 		document.loaded = false
-		document.history = {}
-		document.historyCursor = 0
+		document\ResetHistory!
 
 	data, loadedFromDisk, metadata = document\LoadOnDemand!
 	@CurrentData = data
-	@OpenedFile = document.currentPath
+	@OpenedFile = document\GetPath!
 	@StoredDataLoaded = true
 	data, loadedFromDisk, metadata
 
@@ -88,5 +87,5 @@ Editor.SaveDocument = (path) =>
 	ok, reason = document\Save path
 	if ok
 		@CurrentData = document\GetData!
-		@OpenedFile = document.currentPath
+		@OpenedFile = document\GetPath!
 	ok, reason

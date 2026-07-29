@@ -33,9 +33,6 @@ vgui.Register "DMoonCanvas", {
 
 			.DoClick = ->
 				if @__playMode
-					topology = @__canvas\GetTraceTopology!
-					return if not topology
-
 					if @__mouseCap
 						@__mouseCap = false
 						@__canvas\End!
@@ -45,7 +42,7 @@ vgui.Register "DMoonCanvas", {
 					x = Moonpanel.Canvas.Resolution * (x / @GetWide!)
 					y = Moonpanel.Canvas.Resolution * (y / @GetTall!)
 
-					node = topology\getClosestStart x, y, 32
+					node = @__canvas\FindStartNode x, y, 32
 					if node and @__canvas\Start LocalPlayer!, node.id
 						@__mouseCap = true
 						@__mouseCapX = node.screenX / Moonpanel.Canvas.Resolution * @GetWide!
@@ -60,9 +57,6 @@ vgui.Register "DMoonCanvas", {
 
 			.Think = ->
 				if @__playMode
-					topology = @__canvas\GetTraceTopology!
-					return if not topology
-
 					if @__mouseCap
 						x, y = @LocalCursorPos!
 						cursor = @__canvas\GetTraceCursor!
@@ -70,8 +64,9 @@ vgui.Register "DMoonCanvas", {
 							cX = cursor.x / Moonpanel.Canvas.Resolution * @GetWide!
 							cY = cursor.y / Moonpanel.Canvas.Resolution * @GetTall!
 							if @__canvas\IsContinuous!
+								panelWidth = @__canvas\GetDimensions!
 								period = @__canvas\GetBarLength! *
-									@__canvas\GetData!.Meta.Width /
+									panelWidth /
 									Moonpanel.Canvas.Resolution * @GetWide!
 								cX = Moonpanel.Canvas.NearestPeriodicCoordinate cX, x, period
 
@@ -93,9 +88,9 @@ vgui.Register "DMoonCanvas", {
 						@__lastDragSocketIndex = nil
 						if @__hoveredEntity and @DoEditorPress
 							@DoEditorPress @__hoveredEntity, shiftDown
-							@__lastDragSocketIndex = @__canvas\GetSocketDataIndex @__hoveredEntity
+							@__lastDragSocketIndex = @__hoveredEntity\GetDataIndex!
 					elseif mouseDown and shiftDown and @__hoveredEntity and @DoEditorDrag
-						index = @__canvas\GetSocketDataIndex @__hoveredEntity
+						index = @__hoveredEntity\GetDataIndex!
 						if index and index ~= @__lastDragSocketIndex
 							@DoEditorDrag @__hoveredEntity
 							@__lastDragSocketIndex = index
@@ -114,14 +109,11 @@ vgui.Register "DMoonCanvas", {
 			.TestHover = ->
 				x, y = @LocalCursorPos!
 				if @__playMode
-					topology = @__canvas\GetTraceTopology!
-					return if not topology
-
 					if not @__mouseCap
 						x = Moonpanel.Canvas.Resolution * (x / @GetWide!)
 						y = Moonpanel.Canvas.Resolution * (y / @GetTall!)
 
-						node = topology\getClosestStart x, y, 32
+						node = @__canvas\FindStartNode x, y, 32
 						not not node
 				else
 					x = Moonpanel.Canvas.Resolution * (x / @GetWide!)
@@ -193,7 +185,7 @@ vgui.Register "DMoonCanvas", {
 	GetSelectedSocketIndex: => @__selectedSocketIndex
 
 	GetHoveredSocketIndex: =>
-		@__hoveredEntity and @__canvas\GetSocketDataIndex @__hoveredEntity
+		@__hoveredEntity and @__hoveredEntity\GetDataIndex!
 
 }, "Panel"
 

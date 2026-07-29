@@ -3,7 +3,6 @@ include "shared.lua"
 ENT.InitializeSided = () =>
     info = Moonpanel.Canvas.ResolveScreenInfo @, @GetModel!
     @ScreenMatrix = Moonpanel.Canvas.BuildScreenMatrix info
-    @ScreenInfo = info
     @Aspect = info.RatioX
     @Scale = info.RS
     @Origin = info.offset
@@ -149,4 +148,4 @@ ENT.TransformInputDeltas = (dX = 0, dY = 0) =>
 ENT.GetResolution = () =>
     Moonpanel.Canvas.Resolution / @Aspect, Moonpanel.Canvas.Resolution
 
-ENT.IsSynchonized = => @__canvas\GetData! ~= nil
+ENT.IsSynchronized = => @__canvas\GetData! ~= nil

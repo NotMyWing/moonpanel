@@ -2,26 +2,13 @@ local panelPath = assert(arg[1], 'panel data path is required')
 local maxPaths = tonumber(arg[2]) or 1000000
 local displayPath = arg[3] or panelPath
 
-AddCSLuaFile = function() end
-Moonpanel = { Canvas = { Symmetry = {
-    None = 0, Vertical = 1, Horizontal = 2, Rotational = 3,
-} } }
-Moonpanel.Canvas.SocketType = { Intersection = 1, Cell = 2, Path = 3 }
-istable = function(value) return type(value) == 'table' end
-isstring = function(value) return type(value) == 'string' end
-table.Count = table.Count or function(value)
-    local count = 0
-    for _ in pairs(value or {}) do count = count + 1 end
-    return count
-end
-math.Clamp = math.Clamp or function(value, minimum, maximum)
-    return math.max(minimum, math.min(maximum, value))
-end
-util = util or { JSONToTable = function() return nil end }
+dofile('tools/tests/bootstrap.lua')
 
 dofile('dest/lua/moonpanel/sh_colors.lua')
 dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 dofile('dest/lua/moonpanel/canvas/sh_paneldata.lua')
+Moonpanel.Canvas.DLX = dofile('dest/lua/moonpanel/canvas/sh_dlx.lua')
+dofile('dest/lua/moonpanel/canvas/sh_polyomino.lua')
 local RuleEngine = dofile('dest/lua/moonpanel/canvas/sh_rule_engine.lua')
 local GridTopology = dofile('tools/grid_topology.lua')
 local input = dofile(panelPath)

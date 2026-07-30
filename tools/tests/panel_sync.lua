@@ -1,63 +1,18 @@
 local test = dofile('tools/tests/harness.lua')
-
-include = function() end
-istable = function(value) return type(value) == 'table' end
-local delayedTimer
-timer = {
-  Remove = function() end,
-  Create = function(_, _, _, callback) delayedTimer = callback end,
-}
-table.Copy = table.Copy or function(value)
-  local output = {}
-  for key, child in pairs(value or {}) do output[key] = child end
-  return output
-end
-
-local sent = {}
-Moonpanel.Net = {
-  SendPanelData = function(ply, panel, data)
-    table.insert(sent, { ply = ply, panel = panel, revision = data.revision })
-    return true
-  end,
-  SendControlGrant = function() end,
-  PanelRequestDataFromPlayer = function() return true end,
-}
-Moonpanel.Wire = { UpdateState = function() end }
-Moonpanel.Canvas.SanitizeData = function(data)
-  return type(data) == 'table' and table.Copy(data) or nil
-end
-Moonpanel.IsFocused = function() return true end
-Moonpanel.SetFocused = function(_, ply, focused)
-  ply.focused = focused == true
-end
-
-IsValid = function(value) return type(value) == 'table' and value.valid ~= false end
-game = {
-  GetWorld = function()
-    return { world = true, IsPlayer = function() return false end }
-  end,
-}
-ENT = {}
+local sent = TEST_SENT
 dofile('dest/lua/moonpanel/sh_trace_session.lua')
 dofile('dest/lua/entities/moonpanel/init.lua')
 
-local function player()
-  return {
-    IsPlayer = function() return true end,
-  }
-end
-
+local function player() return {IsPlayer = function() return true end} end
 local function panel()
   return setmetatable({
-    __syncedPlayers = {},
-    __pendingSyncs = {},
-    syncData = nil,
+    __syncedPlayers = {}, __pendingSyncs = {},
     BuildPanelSyncData = function(self) return self.syncData end,
     GetController = function(self) return self.controller or game.GetWorld() end,
     SetController = function(self, controller) self.controller = controller end,
     SetErrored = function(self, value) self.errored = value == true end,
     EntIndex = function() return 1 end,
-  }, { __index = ENT })
+  }, {__index = ENT})
 end
 
 test.test('subsequent panel data assignments resync known players', function()
@@ -160,8 +115,8 @@ test.test('terminal eraser delay latches errored after feedback', function()
   SERVER = nil
   assert(not panelEntity.solved and not panelEntity.errored,
     'errored became visible before eraser feedback finished')
-  assert(delayedTimer, 'eraser feedback did not schedule the terminal transition')
-  delayedTimer()
+  assert(TEST_DELAYED_TIMER, 'eraser feedback did not schedule the terminal transition')
+  TEST_DELAYED_TIMER()
   assert(not panelEntity.solved and panelEntity.errored,
     'failed terminal result did not latch errored after the delay')
 end)

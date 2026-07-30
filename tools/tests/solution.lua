@@ -1,12 +1,10 @@
 local test = dofile('tools/tests/harness.lua')
 
 Moonpanel.Canvas.DLX = dofile('dest/lua/moonpanel/canvas/sh_dlx.lua')
+dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
+local flatIndex = Moonpanel.Helpers.flatIndex
 dofile('dest/lua/moonpanel/canvas/sh_polyomino.lua')
 local RuleEngine = dofile('dest/lua/moonpanel/canvas/sh_rule_engine.lua')
-
-local function flatIndex(width, gx, gy)
-  return 1 + (gx - 1) + (gy - 1) * (width * 2 + 1)
-end
 
 local function cellIndex(width, x, y)
   return flatIndex(width, x * 2, y * 2)

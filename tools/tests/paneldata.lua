@@ -1,25 +1,8 @@
 local test = dofile('tools/tests/harness.lua')
 
-Moonpanel.Canvas.SocketType = {
-  Intersection = 1,
-  Cell = 2,
-  Path = 3,
-}
-
-istable = function(value) return type(value) == 'table' end
-isstring = function(value) return type(value) == 'string' end
-table.Count = function(value)
-  local count = 0
-  for _ in pairs(value or {}) do count = count + 1 end
-  return count
-end
-util = {
-  JSONToTable = function() return nil end,
-  TableToJSON = function() return '' end,
-}
-
 dofile('dest/lua/moonpanel/sh_colors.lua')
 dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
+local flatIndex = Moonpanel.Helpers.flatIndex
 dofile('dest/lua/moonpanel/canvas/sh_paneldata.lua')
 
 test.test('canonical blue is pure RGB blue', function()
@@ -28,9 +11,6 @@ test.test('canonical blue is pure RGB blue', function()
     'canonical Blue is not #0000ff')
 end)
 
-local function flatIndex(width, gx, gy)
-  return 1 + (gx - 1) + (gy - 1) * (width * 2 + 1)
-end
 
 local function base(version)
   local entities = {}

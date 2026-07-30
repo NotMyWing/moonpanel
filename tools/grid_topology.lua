@@ -1,11 +1,10 @@
 local GridTopology = {}
 
+dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
+local flatIndex = Moonpanel.Helpers.flatIndex
+
 function GridTopology.key(x, y)
   return tostring(x) .. ':' .. tostring(y)
-end
-
-local function flatIndex(width, gridX, gridY)
-  return 1 + (gridX - 1) + (gridY - 1) * (width * 2 + 1)
 end
 
 local function entityType(data, socketIndex)

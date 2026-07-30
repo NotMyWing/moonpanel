@@ -1,22 +1,5 @@
 local test = dofile('tools/tests/harness.lua')
 
-Moonpanel.Canvas.SocketType = {
-  Intersection = 1,
-  Cell = 2,
-  Path = 3,
-}
-istable = function(value) return type(value) == 'table' end
-isstring = function(value) return type(value) == 'string' end
-table.Count = table.Count or function(value)
-  local count = 0
-  for _ in pairs(value or {}) do count = count + 1 end
-  return count
-end
-util = util or {
-  JSONToTable = function() return nil end,
-  TableToJSON = function() return '' end,
-}
-
 dofile('dest/lua/moonpanel/sh_colors.lua')
 dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 dofile('dest/lua/moonpanel/canvas/sh_paneldata.lua')

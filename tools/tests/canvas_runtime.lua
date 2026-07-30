@@ -1,79 +1,5 @@
 local test = dofile('tools/tests/harness.lua')
-
-CLIENT = false
-SERVER = false
-resource = { AddFile = function() end }
-util = { TraceLine = function() return { Hit = false, Fraction = 1 } end }
-Material = function(path) return { path = path } end
-Sound = function(path) return path end
-isstring = function(value) return type(value) == 'string' end
-isnumber = function(value) return type(value) == 'number' end
-istable = function(value) return type(value) == 'table' end
-IsValid = function(value) return value ~= nil end
-math.Round = math.Round or function(value)
-  return value >= 0 and math.floor(value + 0.5) or math.ceil(value - 0.5)
-end
-table.Count = table.Count or function(value)
-  local count = 0
-  for _ in pairs(value or {}) do count = count + 1 end
-  return count
-end
-table.Copy = table.Copy or function(value, seen)
-  if type(value) ~= 'table' then return value end
-  seen = seen or {}
-  if seen[value] then return seen[value] end
-  local output = {}
-  seen[value] = output
-  for key, child in pairs(value) do
-    output[table.Copy(key, seen)] = table.Copy(child, seen)
-  end
-  return output
-end
-
-local vectorMeta = {}
-vectorMeta.__index = vectorMeta
-vectorMeta.__add = function(a, b) return Vector(a.x + b.x, a.y + b.y, a.z + b.z) end
-vectorMeta.__sub = function(a, b) return Vector(a.x - b.x, a.y - b.y, a.z - b.z) end
-vectorMeta.__mul = function(a, b)
-  if type(a) == 'number' then return Vector(a * b.x, a * b.y, a * b.z) end
-  if type(b) == 'number' then return Vector(a.x * b, a.y * b, a.z * b) end
-  return Vector(a.x * b.x, a.y * b.y, a.z * b.z)
-end
-vectorMeta.__div = function(a, b) return Vector(a.x / b, a.y / b, a.z / b) end
-vectorMeta.Length = function(value)
-  return math.sqrt(value.x * value.x + value.y * value.y + value.z * value.z)
-end
-function Vector(x, y, z)
-  if type(x) == 'table' then return setmetatable({x = x.x, y = x.y, z = x.z}, vectorMeta) end
-  return setmetatable({x = x or 0, y = y or 0, z = z or 0}, vectorMeta)
-end
-function Angle(p, y, r) return { p = p or 0, y = y or 0, r = r or 0 } end
-function Matrix()
-  return setmetatable({
-    SetAngles = function() end,
-    SetTranslation = function() end,
-    SetScale = function() end,
-  }, { __mul = function() return Matrix() end })
-end
-
-dofile('dest/lua/moonpanel/sh_colors.lua')
-Moonpanel.Rect = function(x, y, width, height)
-  return { x = x, y = y, width = width, height = height }
-end
-
-local canvasRoot = 'dest/lua/moonpanel/canvas/'
-include = function(path)
-  return dofile(canvasRoot .. path)
-end
-dofile(canvasRoot .. 'sh_helpers.lua')
-dofile(canvasRoot .. 'sh_canvas.lua')
-
-local function fixture(name)
-  for _, entry in ipairs(dofile('dest/test/panel_fixtures.lua')) do
-    if entry.name == name then return entry.panel end
-  end
-  error('missing generated panel fixture: ' .. name)
-end
+local fixture = dofile('tools/tests/canvas_runtime_fixture.lua')
 
 test.test('real canvas import preserves pillartest wrapping sockets', function()
   local canvas = Moonpanel.Canvas.Canvas()
@@ -268,13 +194,9 @@ end)
 
 test.test('transient sound scheduler keeps exactly one deferred timer', function()
   CHAN_USER_BASE = 136
-  local callbacks, pending, peak, emitted = {}, 0, 0, {}
-  timer = { Simple = function(delay, callback)
-    assert(delay == 0, 'transient sound used a non-zero timer')
-    pending = pending + 1
-    peak = math.max(peak, pending)
-    callbacks[#callbacks + 1] = callback
-  end }
+  local timerState = TEST_TIMER
+  timerState.callbacks, timerState.pending, timerState.peak, timerState.assertZero = {}, 0, 0, true
+  local emitted = {}
   local canvas = Moonpanel.Canvas.Canvas()
   local target = { EmitSound = function(_, file)
     emitted[#emitted + 1] = file
@@ -287,26 +209,26 @@ test.test('transient sound scheduler keeps exactly one deferred timer', function
   canvas.__soundDurations, canvas.__soundActivity, canvas.__soundQueue = {}, {}, {}
 
   canvas:PlaySound('Start')
-  assert(#emitted == 0 and pending == 1,
+  assert(#emitted == 0 and timerState.pending == 1,
     'first transient was not exclusively timer-backed')
-  while #callbacks > 0 do
-    local callback = table.remove(callbacks, 1)
-    pending = pending - 1
+  while #timerState.callbacks > 0 do
+    local callback = table.remove(timerState.callbacks, 1)
+    timerState.pending = timerState.pending - 1
     callback()
   end
-  assert(peak == 1, 'sound scheduler created overlapping timers')
+  assert(timerState.peak == 1, 'sound scheduler created overlapping timers')
   assert(emitted[1] == 'start.wav' and emitted[2] == 'eraser.wav',
     'sound scheduler lost or reordered a reentrant cue')
 end)
 
 test.test('canvas obstruction fanout and refinement preserve visibility fraction', function()
-  local traceLine = function() return { Hit = false, Fraction = 1 } end
-  local canvas = Moonpanel.Canvas.Canvas(nil, function(trace) return traceLine(trace) end)
+  local traceLine = TestTraceLine()
+  local canvas = Moonpanel.Canvas.Canvas(nil, traceLine)
   local rays = 0
-  traceLine = function()
+  traceLine:set(function()
     rays = rays + 1
     return { Hit = false, Fraction = 1 }
-  end
+  end)
   assert(canvas:SampleSegmentVisibility(
     Vector(0, 0, 10), Vector(0, 0, 0), Vector(10, 0, 0), {}, 8, 0) == 1,
     'clear segment did not remain completely visible')
@@ -314,10 +236,10 @@ test.test('canvas obstruction fanout and refinement preserve visibility fraction
     'clear segment did not perform one start and eight fanout rays: ' .. rays)
 
   rays = 0
-  traceLine = function(trace)
+  traceLine:set(function(trace)
     rays = rays + 1
     return { Hit = trace.endpos.x >= 5, Fraction = trace.endpos.x >= 5 and 0.5 or 1 }
-  end
+  end)
 
   local fraction = canvas:SampleSegmentVisibility(
     Vector(0, 0, 10), Vector(0, 0, 0), Vector(10, 0, 0), {}, 8, 0)
@@ -327,15 +249,15 @@ test.test('canvas obstruction fanout and refinement preserve visibility fraction
     'obstruction did not perform one start, four fanout, and ten refinement rays')
 
   rays = 0
-  traceLine = function()
+  traceLine:set(function()
     rays = rays + 1
     return { Hit = true, Fraction = 0.25, Entity = { class = 'prop_physics' } }
-  end
+  end)
   assert(canvas:SampleSegmentVisibility(
     Vector(0, 0, 10), Vector(0, 0, 0), Vector(10, 0, 0), {}, 8, 0) == 0,
     'blocked start ray did not reject the complete segment')
   assert(rays == 1, 'blocked start ray incorrectly entered fanout/refinement')
-  traceLine = function() return { Hit = false, Fraction = 1 } end
+  traceLine:set(nil)
 end)
 
 test.run()

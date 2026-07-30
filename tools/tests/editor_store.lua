@@ -19,26 +19,8 @@ local function runStore(exists, serializedData, initialData, metadata, openedDat
       end,
     },
   }
-  file = {
-    Exists = function(path, realm)
-      assert(realm == 'DATA')
-      if path == 'moonpanel/autosave.meta.txt' then return metadata ~= nil end
-      if path == 'moonpanel/autosave.txt' then return exists end
-      return metadata and path == metadata.path and openedData ~= nil
-    end,
-    Read = function(path, realm)
-      assert(realm == 'DATA')
-      if path == 'moonpanel/autosave.meta.txt' then return 'metadata' end
-      if path == 'moonpanel/autosave.txt' then
-        return exists and (serializedData and 'valid' or 'corrupt') or nil
-      end
-      return metadata and path == metadata.path and openedData and 'opened' or nil
-    end,
-  }
-  util = {
-    JSONToTable = function(contents) return contents == 'metadata' and metadata or nil end,
-    TableToJSON = function() return '{}' end,
-  }
+  TEST_FILE_STATE = {exists = exists, serializedData = serializedData,
+    metadata = metadata, openedData = openedData}
   dofile('dest/lua/moonpanel/canvas/editor/cl_store.lua')
   return Moonpanel.Editor
 end

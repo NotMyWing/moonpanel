@@ -6,6 +6,7 @@ tableOrEmpty = Helpers.tableOrEmpty
 num = Helpers.num
 bool = Helpers.bool
 copyColor = Helpers.copyColor
+flatIndex = Helpers.flatIndex
 Canvas.SchemaVersion = 7
 Canvas.DefaultDisjointLength = 0.4
 
@@ -296,9 +297,6 @@ entitySocketType = (typeName) ->
 		when "Hexagon"
 			"PathOrIntersection"
 
-flatIndex = (gridX, gridY, width) ->
-	Helpers.flatIndex width, gridX, gridY
-
 legacyTypeName = (typeValue) ->
 	if isstring typeValue
 		typeValue
@@ -398,16 +396,16 @@ Canvas.LegacyToCanvasData = (tileData) ->
 		}
 
 	copyLegacyGrid output, tileData.Cells, width, width, height,
-		(x, y, w) -> flatIndex x * 2, y * 2, w
+		(x, y, w) -> flatIndex w, x * 2, y * 2
 
 	copyLegacyGrid output, tileData.Intersections, width, width + 1, height + 1,
-		(x, y, w) -> flatIndex (x - 1) * 2 + 1, (y - 1) * 2 + 1, w
+		(x, y, w) -> flatIndex w, (x - 1) * 2 + 1, (y - 1) * 2 + 1
 
 	copyLegacyGrid output, tileData.HPaths, width, width, height + 1,
-		(x, y, w) -> flatIndex x * 2, (y - 1) * 2 + 1, w
+		(x, y, w) -> flatIndex w, x * 2, (y - 1) * 2 + 1
 
 	copyLegacyGrid output, tileData.VPaths, width, width + 1, height,
-		(x, y, w) -> flatIndex (x - 1) * 2 + 1, y * 2, w
+		(x, y, w) -> flatIndex w, (x - 1) * 2 + 1, y * 2
 
 	Canvas.SanitizeData output
 

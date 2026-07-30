@@ -5,6 +5,10 @@
 
 local RuleEngine = {}
 
+local function flatIndex(width, gridX, gridY)
+    return 1 + (gridX - 1) + (gridY - 1) * (width * 2 + 1)
+end
+
 local TRACE_UNITS = 4096
 
 local function profileNow()
@@ -145,9 +149,6 @@ function RuleEngine.HashValue(value)
     return bxor(appendValue(CRC_MASK, value), CRC_MASK)
 end
 
-local function flatIndex(width, gridX, gridY)
-    return 1 + (gridX - 1) + (gridY - 1) * (width * 2 + 1)
-end
 
 local function socketInfo(index, width)
     local numCols = width * 2 + 1

@@ -1,13 +1,5 @@
 local test = dofile('tools/tests/harness.lua')
 
-istable = function(value) return type(value) == 'table' end
-table.Copy = function(value)
-  if type(value) ~= 'table' then return value end
-  local output = {}
-  for key, child in pairs(value) do output[key] = table.Copy(child) end
-  return output
-end
-
 dofile('dest/lua/moonpanel/canvas/sh_surface.lua')
 dofile('dest/lua/moonpanel/canvas/sh_continuous_topology.lua')
 dofile('dest/lua/moonpanel/canvas/sh_pathfinder.lua')

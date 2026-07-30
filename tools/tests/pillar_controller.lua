@@ -1,8 +1,5 @@
 local test = dofile('tools/tests/harness.lua')
 
-AddCSLuaFile = function() end
-CLIENT = false
-SERVER = false
 Moonpanel = { Canvas = {} }
 
 dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')

@@ -1166,7 +1166,7 @@ class Canvas
 			@SetLoop "PresenceLoop", 1, 1, 0
 		elseif PRESENTATION_SOUND_CUES[cue]
 			@PlaySound cue, (cue == "Scint" or cue == "StartScint") and
-				(@__visualFrame and @__visualFrame.scintPower or 1) or 1
+				0.25 * (@__visualFrame and @__visualFrame.scintPower or 1) or 1
 
 	-----------------------------------------------------------
 	-- Applies an already-quantized deterministic input sample. --

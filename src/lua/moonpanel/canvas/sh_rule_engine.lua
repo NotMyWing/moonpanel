@@ -4,12 +4,26 @@
 -- enriches TraceTopology with socketIndex values.
 
 local RuleEngine = {}
-
-local function flatIndex(width, gridX, gridY)
-    return 1 + (gridX - 1) + (gridY - 1) * (width * 2 + 1)
-end
+local hashReport
+local flatIndex = Moonpanel.Helpers.flatIndex
+local arrayCopy = Moonpanel.Helpers.copyArray
 
 local TRACE_UNITS = 4096
+local CACHE_TTL = 120
+local CACHE_LIMITS = { reports = 8, facts = 16, erasers = 32, polyominoes = 64 }
+
+local function canonicalSocketIndex(index, width, continuous)
+    if not continuous or width < 1 or not index then return index end
+    local columns = width * 2 + 1
+    if 1 + (index - 1) % columns == columns then
+        return index - (columns - 1)
+    end
+    return index
+end
+
+local function authoredEntity(value)
+    return type(value) == "table" and value.Type ~= nil
+end
 
 local function profileNow()
     if SysTime then return SysTime() end
@@ -24,6 +38,99 @@ end
 local function profileCount(profile, key, amount)
     if not profile then return end
     profile.counters[key] = (profile.counters[key] or 0) + (amount or 1)
+end
+
+local function copyTree(value, seen)
+    if type(value) ~= "table" then return value end
+    seen = seen or {}
+    if seen[value] then return seen[value] end
+    local output = {}
+    seen[value] = output
+    for key, child in pairs(value) do
+        output[key] = copyTree(child, seen)
+    end
+    return output
+end
+
+local function cacheBucket(cache, name)
+    local bucket = cache[name]
+    if not bucket then
+        bucket = { count = 0 }
+        cache[name] = bucket
+    end
+    return bucket
+end
+
+local function pruneBucket(bucket, now)
+    for key, entry in pairs(bucket) do
+        if key ~= "count" and entry.expiresAt <= now then
+            bucket[key] = nil
+            bucket.count = bucket.count - 1
+        end
+    end
+end
+
+function RuleEngine.NewCache(options)
+    options = options or {}
+    return {
+        ttl = math.max(1, tonumber(options.ttl) or CACHE_TTL),
+        clock = options.clock or profileNow,
+        nextPrune = 0,
+    }
+end
+
+function RuleEngine.PruneCache(cache, force)
+    if type(cache) ~= "table" or type(cache.clock) ~= "function" then return end
+    local now = cache.clock()
+    if not force and now < cache.nextPrune then return end
+    for name in pairs(CACHE_LIMITS) do
+        local bucket = cache[name]
+        if bucket then pruneBucket(bucket, now) end
+    end
+    cache.nextPrune = now + 5
+end
+
+local function cacheGet(cache, name, key)
+    if type(cache) ~= "table" or type(cache.clock) ~= "function" or not key then
+        return nil
+    end
+    local bucket = cache[name]
+    local entry = bucket and bucket[key]
+    if not entry then return nil end
+    if entry.expiresAt <= cache.clock() then
+        bucket[key] = nil
+        bucket.count = bucket.count - 1
+        return nil
+    end
+    return entry.value
+end
+
+local function cachePut(cache, name, key, value)
+    if type(cache) ~= "table" or type(cache.clock) ~= "function" or
+            not key or value == nil then return end
+    local now = cache.clock()
+    local bucket = cacheBucket(cache, name)
+    pruneBucket(bucket, now)
+    if not bucket[key] and bucket.count >= CACHE_LIMITS[name] then
+        local oldestKey, oldestAt
+        for candidateKey, entry in pairs(bucket) do
+            if candidateKey ~= "count" and
+                    (oldestAt == nil or entry.createdAt < oldestAt) then
+                oldestKey, oldestAt = candidateKey, entry.createdAt
+            end
+        end
+        if oldestKey then
+            bucket[oldestKey] = nil
+            bucket.count = bucket.count - 1
+        end
+    end
+    if not bucket[key] then bucket.count = bucket.count + 1 end
+    bucket[key] = {
+        value = value,
+        createdAt = now,
+        expiresAt = now + cache.ttl,
+    }
+    cache.nextPrune = math.min(cache.nextPrune or 0, now + 5)
 end
 
 local function profileRegion(profile, regionId)
@@ -54,51 +161,11 @@ local function finishProfile(report, profile, started)
     return report
 end
 
-local function finishReport(report, profile, started)
-    report.reportHash = RuleEngine.HashReport(report)
-    return finishProfile(report, profile, started)
-end
+local DOT_ANY, DOT_PRIMARY, DOT_SECONDARY = 0, 1, 2
 
-RuleEngine.DotRole = {
-    Any = 0,
-    Primary = 1,
-    Secondary = 2,
-}
-
-local UINT32 = 4294967296
-local CRC_MASK = 4294967295
-local CRC_POLYNOMIAL = 3988292384
-
-local function bxor(a, b)
-    return bit.bxor(a, b) % UINT32
-end
-
-local CRC_TABLE = {}
-for byte = 0, 255 do
-    local value = byte
-    for _ = 1, 8 do
-        if value % 2 == 1 then
-            value = bxor(math.floor(value / 2), CRC_POLYNOMIAL)
-        else
-            value = math.floor(value / 2)
-        end
-    end
-    CRC_TABLE[byte] = value
-end
-
-local function appendByte(crc, byte)
-    local index = bxor(crc % 256, byte % 256)
-    return bxor(math.floor(crc / 256), CRC_TABLE[index])
-end
-
-local function appendNumber(crc, value)
-    value = math.floor(tonumber(value) or 0) % UINT32
-    for _ = 1, 4 do
-        crc = appendByte(crc, value % 256)
-        value = math.floor(value / 256)
-    end
-    return crc
-end
+local CRC_MASK = Moonpanel.Helpers.CRC32Begin
+local appendByte = Moonpanel.Helpers.CRC32AppendByte
+local appendNumber = Moonpanel.Helpers.CRC32AppendNumber
 
 local function sortedKeys(value)
     local keys = {}
@@ -146,7 +213,530 @@ local function appendValue(crc, value, seen)
 end
 
 function RuleEngine.HashValue(value)
-    return bxor(appendValue(CRC_MASK, value), CRC_MASK)
+    return Moonpanel.Helpers.CRC32Finish(appendValue(CRC_MASK, value))
+end
+
+local function trimPolyShape(shape)
+    local rows, columns = #shape, #(shape[1] or {})
+    if rows == 0 or columns == 0 then return {{1}} end
+    local minX, minY, maxX, maxY
+    for y = 1, rows do
+        for x = 1, #(shape[y] or {}) do
+            if shape[y][x] == 1 then
+                minX = not minX and x or math.min(minX, x)
+                maxX = not maxX and x or math.max(maxX, x)
+                minY = not minY and y or math.min(minY, y)
+                maxY = not maxY and y or math.max(maxY, y)
+            end
+        end
+    end
+    if not minX then return {{1}} end
+    local output = {}
+    for y = minY, maxY do
+        local row = {}
+        for x = minX, maxX do row[#row + 1] = shape[y][x] == 1 and 1 or 0 end
+        output[#output + 1] = row
+    end
+    return output
+end
+
+local function rotatePolyShape(shape)
+    local rows, columns = #shape, #(shape[1] or {})
+    local output = {}
+    for y = 1, columns do
+        output[y] = {}
+        for x = 1, rows do
+            output[y][x] = shape[rows - x + 1][y] == 1 and 1 or 0
+        end
+    end
+    return trimPolyShape(output)
+end
+
+local function polyShapeKey(shape)
+    local parts = {}
+    for y = 1, #shape do
+        local row = {}
+        for x = 1, #(shape[y] or {}) do
+            row[x] = shape[y][x] == 1 and "1" or "0"
+        end
+        parts[y] = table.concat(row)
+    end
+    return table.concat(parts, "/")
+end
+
+local function polyShapeCells(shape)
+    local cells = {}
+    for y = 1, #shape do
+        for x = 1, #(shape[y] or {}) do
+            if shape[y][x] == 1 then cells[#cells + 1] = { x = x - 1, y = y - 1 } end
+        end
+    end
+    return cells
+end
+
+local function polyOrientations(shape, rotatable)
+    local current = trimPolyShape(shape)
+    local output, seen = {}, {}
+    for _ = 1, rotatable and 4 or 1 do
+        local key = polyShapeKey(current)
+        if not seen[key] then
+            seen[key] = true
+            output[#output + 1] = {
+                key = key,
+                cells = polyShapeCells(current),
+                width = #(current[1] or {}),
+                height = #current,
+            }
+        end
+        current = rotatePolyShape(current)
+    end
+    table.sort(output, function(a, b) return a.key < b.key end)
+    return output
+end
+
+local function polyCellKey(x, y)
+    return string.format("%d:%d", x, y)
+end
+
+local function normalizePolyRegion(input)
+    input = input or {}
+    local wrapWidth = math.floor(tonumber(input.wrapWidth) or 0)
+    local region = { cells = {}, contains = {} }
+    for _, cell in ipairs(input.cells or {}) do
+        local x, y = tonumber(cell.x or cell[1]), tonumber(cell.y or cell[2])
+        if x and y then
+            if wrapWidth > 0 then x = ((x - 1) % wrapWidth) + 1 end
+            local key = polyCellKey(x, y)
+            if not region.contains[key] then
+                region.contains[key] = true
+                region.cells[#region.cells + 1] = { x = x, y = y, id = cell.id }
+                region.minX = not region.minX and x or math.min(region.minX, x)
+                region.maxX = not region.maxX and x or math.max(region.maxX, x)
+                region.minY = not region.minY and y or math.min(region.minY, y)
+                region.maxY = not region.maxY and y or math.max(region.maxY, y)
+            end
+        end
+    end
+    table.sort(region.cells, function(a, b)
+        if a.y ~= b.y then return a.y < b.y end
+        return a.x < b.x
+    end)
+    region.wrapWidth = wrapWidth > 0 and wrapWidth or nil
+    return region
+end
+
+local function normalizePolyPieces(input)
+    local pieces = {}
+    for index, piece in ipairs(input or {}) do
+        pieces[#pieces + 1] = {
+            id = piece.id or index,
+            sign = piece.negative == true and -1 or 1,
+            orientations = piece.orientations or
+                polyOrientations(piece.shape or {{1}}, piece.rotatable == true),
+        }
+    end
+    table.sort(pieces, function(a, b) return a.id < b.id end)
+    return pieces
+end
+
+local function polyPlacementCells(orientation, offsets, originX, originY,
+        wrapWidth, minX, minY, domainWidth)
+    local cells = {}
+    if not wrapWidth then
+        local originIndex = (originY - minY) * domainWidth + originX - minX + 1
+        for index, offset in ipairs(offsets) do cells[index] = originIndex + offset end
+        return cells
+    end
+    local seen = {}
+    for _, point in ipairs(orientation.cells) do
+        local x = originX + point.x
+        if wrapWidth then x = ((x - 1) % wrapWidth) + 1 end
+        local cellIndex = (originY + point.y - minY) * domainWidth + x - minX + 1
+        if seen[cellIndex] then return nil end
+        seen[cellIndex] = true
+        cells[#cells + 1] = cellIndex
+    end
+    return cells
+end
+
+local function polyCoverageKey(coverage, activeCells, targets, target, spend,
+        minX, minY, domainWidth, tokens)
+    if target == 0 then
+        local occupied, occupiedMinX, occupiedMinY = {}
+        for _, cellIndex in ipairs(activeCells) do
+            if not spend() then return nil end
+            local value = coverage[cellIndex] or 0
+            if value ~= 0 then
+                local offset = cellIndex - 1
+                local x = offset % domainWidth + minX
+                local y = math.floor(offset / domainWidth) + minY
+                occupiedMinX = not occupiedMinX and x or math.min(occupiedMinX, x)
+                occupiedMinY = not occupiedMinY and y or math.min(occupiedMinY, y)
+                occupied[#occupied + 1] = { x = x, y = y, value = value }
+            end
+        end
+        if not occupiedMinX then return "empty" end
+        local parts = {}
+        for _, cell in ipairs(occupied) do
+            parts[#parts + 1] = string.format(
+                "%d:%d:%d", cell.x - occupiedMinX,
+                cell.y - occupiedMinY, cell.value)
+        end
+        return table.concat(parts, ";")
+    end
+    local parts = {}
+    for _, cellIndex in ipairs(activeCells) do
+        if not spend() then return nil end
+        local value = (coverage[cellIndex] or 0) - targets[cellIndex]
+        parts[#parts + 1] = tokens and tokens[value] or tostring(value)
+    end
+    return table.concat(parts, ",")
+end
+
+local function solvePolyominoPlacements(region, pieces, target, checkpoint)
+    local pendingWork, searchCheckpoints = 0, 0
+    local function spend(force)
+        if not checkpoint then return true end
+        if not force then pendingWork = pendingWork + 1 end
+        local batchSize = searchCheckpoints < 4 and 16 or 256
+        if not force and pendingWork < batchSize then return true end
+        if pendingWork == 0 then return true end
+        local amount = pendingWork
+        pendingWork = 0
+        searchCheckpoints = searchCheckpoints + 1
+        return checkpoint(amount) ~= false
+    end
+    local margin, negativeArea = 0, 0
+    for _, piece in ipairs(pieces) do
+        local maximum = 1
+        for _, orientation in ipairs(piece.orientations) do
+            maximum = math.max(maximum, orientation.width, orientation.height)
+        end
+        margin = margin + maximum - 1
+        if piece.sign < 0 then negativeArea = negativeArea + #piece.orientations[1].cells end
+    end
+    if target == 1 and negativeArea == 0 then margin = 0 end
+
+    local minX = region.wrapWidth and 1 or region.minX - margin
+    local maxX = region.wrapWidth or region.maxX + margin
+    local minY, maxY = region.minY - margin, region.maxY + margin
+    local domainWidth = maxX - minX + 1
+    local targets, activeCells, generationSteps = {}, {}, 0
+    for y = minY, maxY do
+        for x = minX, maxX do
+            generationSteps = generationSteps + 1
+            if not spend() then
+                return { status = "complexity", backend = "signed", steps = generationSteps }
+            end
+            local cellIndex = #activeCells + 1
+            activeCells[cellIndex] = cellIndex
+            targets[cellIndex] = region.contains[polyCellKey(x, y)] and target or 0
+        end
+    end
+
+    local placements, positiveSupport = {}, {}
+    if target == 1 then
+        for _, cellIndex in ipairs(activeCells) do
+            if targets[cellIndex] == 1 then positiveSupport[cellIndex] = true end
+        end
+    end
+    for pieceIndex, piece in ipairs(pieces) do
+        local candidates = {}
+        for orientationIndex, orientation in ipairs(piece.orientations) do
+            local offsets = {}
+            for index, point in ipairs(orientation.cells) do
+                offsets[index] = point.y * domainWidth + point.x
+            end
+            local startY, endY = minY, maxY - orientation.height + 1
+            local startX = region.wrapWidth and 1 or minX
+            local endX = region.wrapWidth or maxX - orientation.width + 1
+            if target == 0 and pieceIndex == 1 then
+                startX, endX, startY, endY =
+                    region.minX, region.minX, region.minY, region.minY
+            end
+            for originY = startY, endY do
+                for originX = startX, endX do
+                    generationSteps = generationSteps + 1
+                    if not spend() then
+                        return { status = "complexity", backend = "signed", steps = generationSteps }
+                    end
+                    local cells = polyPlacementCells(
+                        orientation, offsets, originX, originY, region.wrapWidth,
+                        minX, minY, domainWidth)
+                    if cells then
+                        cells.orientationIndex = orientationIndex
+                        cells.ox, cells.oy = originX, originY
+                        local outside = 0
+                        if target == 1 and piece.sign > 0 then
+                            for _, cellIndex in ipairs(cells) do
+                                if targets[cellIndex] ~= 1 then
+                                    outside = outside + 1
+                                end
+                            end
+                        end
+                        if outside <= negativeArea then
+                            candidates[#candidates + 1] = cells
+                            if target == 1 and piece.sign > 0 then
+                                for _, cellIndex in ipairs(cells) do
+                                    positiveSupport[cellIndex] = true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        placements[pieceIndex] = candidates
+    end
+
+    if target == 1 then
+        local supported = {}
+        for _, cellIndex in ipairs(activeCells) do
+            if positiveSupport[cellIndex] then supported[#supported + 1] = cellIndex end
+        end
+        activeCells = supported
+        for pieceIndex, piece in ipairs(pieces) do
+            if piece.sign < 0 then
+                local filtered = {}
+                for _, placement in ipairs(placements[pieceIndex]) do
+                    local fits = true
+                    for _, cellIndex in ipairs(placement) do
+                        if not positiveSupport[cellIndex] then
+                            fits = false
+                            break
+                        end
+                    end
+                    if fits then filtered[#filtered + 1] = placement end
+                end
+                placements[pieceIndex] = filtered
+            end
+        end
+    end
+
+    local touches, supportKeys = {}, {}
+    local remainingPositiveSupport, remainingNegativeSupport = {}, {}
+    local remainingPositiveCandidates, remainingNegativeCandidates = {}, {}
+    local positivePiecesByCell, negativePiecesByCell = {}, {}
+    for pieceIndex, candidates in ipairs(placements) do
+        local pieceTouches, keys = {}, {}
+        local remainingSupport = pieces[pieceIndex].sign > 0 and
+            remainingPositiveSupport or remainingNegativeSupport
+        local remainingCandidates = pieces[pieceIndex].sign > 0 and
+            remainingPositiveCandidates or remainingNegativeCandidates
+        local piecesByCell = pieces[pieceIndex].sign > 0 and
+            positivePiecesByCell or negativePiecesByCell
+        for placementIndex, placement in ipairs(candidates) do
+            for _, cellIndex in ipairs(placement) do
+                local cellPlacements = pieceTouches[cellIndex]
+                if not cellPlacements then
+                    cellPlacements = {}
+                    pieceTouches[cellIndex] = cellPlacements
+                    keys[#keys + 1] = cellIndex
+                    remainingSupport[cellIndex] =
+                        (remainingSupport[cellIndex] or 0) + 1
+                    local cellPieces = piecesByCell[cellIndex] or {}
+                    cellPieces[#cellPieces + 1] = pieceIndex
+                    piecesByCell[cellIndex] = cellPieces
+                end
+                cellPlacements[#cellPlacements + 1] = placementIndex
+                remainingCandidates[cellIndex] =
+                    (remainingCandidates[cellIndex] or 0) + 1
+            end
+        end
+        touches[pieceIndex] = pieceTouches
+        supportKeys[pieceIndex] = keys
+    end
+
+    local coverage, chosen, seen = {}, {}, {}
+    local remaining, remainingCount = {}, #pieces
+    for index = 1, #pieces do remaining[index] = true end
+    local coverageTokens
+    if negativeArea > 0 and #pieces <= 126 then
+        coverageTokens = {}
+        for value = -#pieces - 1, #pieces do
+            coverageTokens[value] = string.char(value + #pieces + 1)
+        end
+    end
+    local steps, aborted = generationSteps, false
+
+    local function withinRemainingBounds()
+        for _, cellIndex in ipairs(activeCells) do
+            if not spend() then aborted = true return false end
+            local value = coverage[cellIndex] or 0
+            if value - (remainingNegativeSupport[cellIndex] or 0) > targets[cellIndex] or
+                    value + (remainingPositiveSupport[cellIndex] or 0) < targets[cellIndex] then
+                return false
+            end
+        end
+        return true
+    end
+
+    local function adjustSupport(pieceIndex, amount)
+        local remainingSupport = pieces[pieceIndex].sign > 0 and
+            remainingPositiveSupport or remainingNegativeSupport
+        local remainingCandidates = pieces[pieceIndex].sign > 0 and
+            remainingPositiveCandidates or remainingNegativeCandidates
+        for _, key in ipairs(supportKeys[pieceIndex]) do
+            remainingSupport[key] = remainingSupport[key] + amount
+            remainingCandidates[key] = remainingCandidates[key] +
+                amount * #touches[pieceIndex][key]
+        end
+    end
+
+    local function remainingKey()
+        local ids = {}
+        for index, piece in ipairs(pieces) do
+            if remaining[index] then ids[#ids + 1] = piece.id end
+        end
+        return table.concat(ids, ",")
+    end
+
+    local function selectCandidates()
+        local bestKey, bestSign, bestCount
+        for _, cellIndex in ipairs(activeCells) do
+            if not spend() then aborted = true return nil end
+            local value = coverage[cellIndex] or 0
+            if value ~= targets[cellIndex] then
+                local requiredSign = value < targets[cellIndex] and 1 or -1
+                local counts = requiredSign > 0 and
+                    remainingPositiveCandidates or remainingNegativeCandidates
+                local count = counts[cellIndex] or 0
+                if count == 0 then return {} end
+                if not bestCount or count < bestCount then
+                    bestKey, bestSign, bestCount = cellIndex, requiredSign, count
+                end
+            end
+        end
+        if bestKey then
+            local candidates = {}
+            local cellPieces = bestSign > 0 and
+                positivePiecesByCell[bestKey] or negativePiecesByCell[bestKey]
+            for _, pieceIndex in ipairs(cellPieces or {}) do
+                if remaining[pieceIndex] then
+                    for _, placementIndex in ipairs(touches[pieceIndex][bestKey] or {}) do
+                        candidates[#candidates + 1] = pieceIndex
+                        candidates[#candidates + 1] = placementIndex
+                    end
+                end
+            end
+            return candidates
+        end
+        for pieceIndex = 1, #pieces do
+            if remaining[pieceIndex] then
+                local anchored = {}
+                for placementIndex, placement in ipairs(placements[pieceIndex]) do
+                    if placement.ox == region.minX and placement.oy == region.minY then
+                        anchored[#anchored + 1] = pieceIndex
+                        anchored[#anchored + 1] = placementIndex
+                    end
+                end
+                return anchored
+            end
+        end
+        return {}
+    end
+
+    local function search()
+        if remainingCount == 0 then
+            for _, cellIndex in ipairs(activeCells) do
+                if (coverage[cellIndex] or 0) ~= targets[cellIndex] then return false end
+            end
+            return true
+        end
+        local fieldKey = polyCoverageKey(coverage, activeCells, targets, target,
+            spend, minX, minY, domainWidth, coverageTokens)
+        if not fieldKey then aborted = true return false end
+        local memoKey = remainingKey() .. "|" .. fieldKey
+        if seen[memoKey] then return false end
+        seen[memoKey] = true
+
+        local candidates = selectCandidates()
+        if aborted then return false end
+        for index = 1, #candidates, 2 do
+            steps = steps + 1
+            if not spend() then aborted = true return false end
+            local pieceIndex = candidates[index]
+            local placement = placements[pieceIndex][candidates[index + 1]]
+            for _, cellIndex in ipairs(placement) do
+                coverage[cellIndex] = (coverage[cellIndex] or 0) + pieces[pieceIndex].sign
+            end
+            chosen[pieceIndex] = placement
+            remaining[pieceIndex] = false
+            remainingCount = remainingCount - 1
+            adjustSupport(pieceIndex, -1)
+            if withinRemainingBounds() and search() then return true end
+            adjustSupport(pieceIndex, 1)
+            remaining[pieceIndex] = true
+            remainingCount = remainingCount + 1
+            for _, cellIndex in ipairs(placement) do
+                local value = (coverage[cellIndex] or 0) - pieces[pieceIndex].sign
+                coverage[cellIndex] = value ~= 0 and value or nil
+            end
+            chosen[pieceIndex] = nil
+            if aborted then return false end
+        end
+        return false
+    end
+
+    local solved = search()
+    if not aborted and not spend(true) then aborted, solved = true, false end
+    if not solved then
+        return {
+            status = aborted and "complexity" or "unsatisfied",
+            backend = "signed",
+            steps = steps,
+        }
+    end
+    local result = {
+        status = "solved", backend = "signed", steps = steps,
+        target = target, placements = {},
+    }
+    for index, piece in ipairs(pieces) do
+        local selected = chosen[index]
+        local cells = {}
+        for cellIndex, point in ipairs(
+                piece.orientations[selected.orientationIndex].cells) do
+            local x = selected.ox + point.x
+            if region.wrapWidth then x = ((x - 1) % region.wrapWidth) + 1 end
+            cells[cellIndex] = { x = x, y = selected.oy + point.y }
+        end
+        result.placements[index] = {
+            pieceId = piece.id,
+            sign = piece.sign,
+            orientationIndex = selected.orientationIndex,
+            ox = selected.ox,
+            oy = selected.oy,
+            cells = cells,
+        }
+    end
+    return result
+end
+
+local function solveNormalizedPolyomino(region, pieces, options)
+    if #region.cells == 0 or #pieces == 0 then return { status = "unsatisfied" } end
+    local hasNegative, signedArea = false, 0
+    for _, piece in ipairs(pieces) do
+        local area = #piece.orientations[1].cells
+        hasNegative = hasNegative or piece.sign < 0
+        signedArea = signedArea + piece.sign * area
+    end
+    local checkpoint = options and options.checkpoint
+    if not hasNegative then
+        if signedArea ~= #region.cells then return { status = "unsatisfied", backend = "exact" } end
+        local result = solvePolyominoPlacements(region, pieces, 1, checkpoint)
+        result.backend = "exact"
+        return result
+    end
+    if signedArea ~= #region.cells and signedArea ~= 0 then
+        return { status = "unsatisfied", backend = "signed" }
+    end
+    return solvePolyominoPlacements(
+        region, pieces, signedArea == #region.cells and 1 or 0, checkpoint)
+end
+
+function RuleEngine.SolvePolyomino(regionInput, pieceInput, options)
+    return solveNormalizedPolyomino(
+        normalizePolyRegion(regionInput), normalizePolyPieces(pieceInput), options)
 end
 
 
@@ -178,14 +768,14 @@ local function inferDotRole(data, meta)
     local explicit = math.floor(tonumber(data.TraceRole) or -1)
     if explicit >= 0 and explicit <= 2 then return explicit end
     local tintColor = data.TintColor or data.RuleColor or data.Color
-    if tintColor == nil or tintColor == 1 then return RuleEngine.DotRole.Any end
+    if tintColor == nil or tintColor == 1 then return DOT_ANY end
 
     local options = meta.SymmetryOptions or {}
-    if not options.Colorful then return RuleEngine.DotRole.Any end
+    if not options.Colorful then return DOT_ANY end
     local traces = options.Traces or {}
-    if traces[1] and traces[1].Color == tintColor then return RuleEngine.DotRole.Primary end
-    if traces[2] and traces[2].Color == tintColor then return RuleEngine.DotRole.Secondary end
-    return RuleEngine.DotRole.Any
+    if traces[1] and traces[1].Color == tintColor then return DOT_PRIMARY end
+    if traces[2] and traces[2].Color == tintColor then return DOT_SECONDARY end
+    return DOT_ANY
 end
 
 local function edgeToken(fromId, toId)
@@ -197,78 +787,71 @@ local function compileBoundarySegments(definition, topology)
     local requirements = {}
     local nodes = topology and topology.nodes or {}
     local edges = topology and topology.edges or {}
+    local visited = {}
 
     -- A path socket can be subdivided by midpoint starts and exits. Socket IDs
     -- remain useful for route clues, but region separation must retain those
     -- subdivisions: touching one half of an authored edge does not close the
     -- other half. Exit stubs and gap endpoints never contribute coverage.
-    for fromId = 1, #nodes do
-        for toId = fromId + 1, #nodes do
-            local forward = edges[fromId] and edges[fromId][toId]
-            local reverse = edges[toId] and edges[toId][fromId]
-            local edge = forward or reverse
-            local socketIndex = edge and edge.socketIndex
-            local socketKind = socketIndex and socketInfo(socketIndex, definition.width)
-            if socketKind == "path" then
-                local fromNode, toNode = nodes[fromId], nodes[toId]
-                local isStub = fromNode.exit == true or toNode.exit == true or
-                    fromNode["break"] == true or toNode["break"] == true
-                if not isStub then
-                    local requirement = requirements[socketIndex]
-                    if not requirement then
-                        requirement = {
-                            socketIndex = socketIndex,
-                            segments = {},
-                            coverageQ = 0,
-                            hasUnknownCoverage = false,
-                        }
-                        requirements[socketIndex] = requirement
-                    end
-                    requirement.segments[#requirement.segments + 1] =
-                        edgeToken(fromId, toId)
-                    local lengthQ = tonumber((forward and forward.lengthQ) or
-                        (reverse and reverse.lengthQ))
-                    if lengthQ then
-                        requirement.coverageQ = requirement.coverageQ + lengthQ
-                    else
-                        -- Lightweight test/adaptor topologies historically did
-                        -- not carry fixed lengths. Requiring all of their parts
-                        -- preserves the safe behavior without rejecting them.
-                        requirement.hasUnknownCoverage = true
+    for fromId, adjacent in pairs(edges) do
+        for toId, edge in pairs(adjacent) do
+            local token = edgeToken(fromId, toId)
+            if not visited[token] then
+                visited[token] = true
+                local reverse = edges[toId] and edges[toId][fromId]
+                local socketIndex = edge and canonicalSocketIndex(
+                    edge.socketIndex, definition.width, definition.continuous)
+                local socketKind = socketIndex and socketInfo(socketIndex, definition.width)
+                if socketKind == "path" then
+                    local fromNode, toNode = nodes[fromId] or {}, nodes[toId] or {}
+                    local isStub = fromNode.exit == true or toNode.exit == true or
+                        fromNode["break"] == true or toNode["break"] == true
+                    if not isStub then
+                        local requirement = requirements[socketIndex]
+                        if not requirement then
+                            requirement = {
+                                segments = {},
+                                coverageQ = 0,
+                            }
+                            requirements[socketIndex] = requirement
+                        end
+                        requirement.segments[#requirement.segments + 1] = token
+                        local lengthQ = tonumber(edge.lengthQ or
+                            (reverse and reverse.lengthQ))
+                        if lengthQ then
+                            requirement.coverageQ = requirement.coverageQ + lengthQ
+                        else
+                            -- Lightweight test/adaptor topologies historically did
+                            -- not carry fixed lengths. Requiring all of their parts
+                            -- preserves the safe behavior without rejecting them.
+                            requirement.hasUnknownCoverage = true
+                        end
                     end
                 end
             end
         end
     end
 
-    local ordered = {}
-    for socketIndex, requirement in pairs(requirements) do
+    for _, requirement in pairs(requirements) do
         table.sort(requirement.segments)
         requirement.complete = requirement.hasUnknownCoverage or
             requirement.coverageQ >= TRACE_UNITS
-        ordered[#ordered + 1] = socketIndex
     end
-    table.sort(ordered)
-    return requirements, ordered
+    return requirements
 end
 
 function RuleEngine.Compile(panelData, topology)
     panelData = panelData or {}
     local meta = panelData.Meta or {}
     local schemaVersion = math.floor(tonumber(panelData.SchemaVersion) or 1)
+    local extensions = panelData.Extensions or {}
     local width = math.floor(tonumber(meta.Width) or 0)
     local height = math.floor(tonumber(meta.Height) or 0)
     local continuous = topology and topology.wrapX == true
     local function canonicalSocket(index)
-        if not continuous or width < 1 then return index end
-        local columns = width * 2 + 1
-        if 1 + (index - 1) % columns == columns then
-            return index - (columns - 1)
-        end
-        return index
+        return canonicalSocketIndex(index, width, continuous)
     end
     local definition = {
-        schemaVersion = schemaVersion,
         width = width,
         height = height,
         symmetry = math.floor(tonumber(meta.Symmetry) or 0),
@@ -280,7 +863,6 @@ function RuleEngine.Compile(panelData, topology)
         faceBySocket = {},
         incidentFaces = {},
         permanentBoundaries = {},
-        extensions = panelData.Extensions or {},
         continuous = continuous,
         dataErrors = {},
     }
@@ -293,17 +875,39 @@ function RuleEngine.Compile(panelData, topology)
 
     local entities = panelData.Entities or {}
     local count = (width * 2 + 1) * (height * 2 + 1)
+    if continuous and width > 0 and height > 0 then
+        local columns = width * 2 + 1
+        for row = 0, height * 2 do
+            local leftIndex = 1 + row * columns
+            local rightIndex = (row + 1) * columns
+            if authoredEntity(entities[leftIndex]) and authoredEntity(entities[rightIndex]) then
+                definition.dataErrors[#definition.dataErrors + 1] = {
+                    code = "continuous_seam_duplicate",
+                    clueId = leftIndex,
+                    socketIndex = leftIndex,
+                    leftIndex = leftIndex,
+                    rightIndex = rightIndex,
+                    details = { leftIndex = leftIndex, rightIndex = rightIndex },
+                }
+            end
+        end
+    end
     for index = 1, count do
         local reference = entities[index] or {}
+        local physicalIndex = canonicalSocket(index)
+        if physicalIndex ~= index and authoredEntity(reference) and
+                authoredEntity(entities[physicalIndex]) then
+            reference = {}
+        end
         local typeName = reference.Type
         local kind = KIND[typeName]
-        local socketKind, x, y, horizontal = socketInfo(index, width)
+        local socketKind, x, y, horizontal = socketInfo(physicalIndex, width)
 
         -- Invisible path sockets are authored barriers, not merely paths with
         -- no renderable entity. They must divide regions before any trace is
         -- applied, matching the legacy verifier's disconnected-area behavior.
         if socketKind == "path" and typeName == "Invisible" then
-            definition.permanentBoundaries[index] = true
+            definition.permanentBoundaries[physicalIndex] = true
         end
 
         -- An invisible cell is an authored hole in the region graph. Since it
@@ -324,7 +928,6 @@ function RuleEngine.Compile(panelData, topology)
         if socketKind == "cell" and typeName ~= "Invisible" then
             local face = {
                 id = #definition.faces + 1,
-                socketIndex = index,
                 x = x,
                 y = y,
                 boundaries = {
@@ -332,12 +935,6 @@ function RuleEngine.Compile(panelData, topology)
                     canonicalSocket(flatIndex(width, x * 2 + 1, y * 2)),
                     canonicalSocket(flatIndex(width, x * 2, y * 2 + 1)),
                     canonicalSocket(flatIndex(width, x * 2 - 1, y * 2)),
-                },
-                corners = {
-                    canonicalSocket(flatIndex(width, x * 2 - 1, y * 2 - 1)),
-                    canonicalSocket(flatIndex(width, x * 2 + 1, y * 2 - 1)),
-                    canonicalSocket(flatIndex(width, x * 2 + 1, y * 2 + 1)),
-                    canonicalSocket(flatIndex(width, x * 2 - 1, y * 2 + 1)),
                 },
             }
             definition.faces[#definition.faces + 1] = face
@@ -347,7 +944,13 @@ function RuleEngine.Compile(panelData, topology)
                 adjacent[#adjacent + 1] = face.id
                 definition.incidentFaces[socketIndex] = adjacent
             end
-            for _, socketIndex in ipairs(face.corners) do
+            local corners = {
+                canonicalSocket(flatIndex(width, x * 2 - 1, y * 2 - 1)),
+                canonicalSocket(flatIndex(width, x * 2 + 1, y * 2 - 1)),
+                canonicalSocket(flatIndex(width, x * 2 + 1, y * 2 + 1)),
+                canonicalSocket(flatIndex(width, x * 2 - 1, y * 2 + 1)),
+            }
+            for _, socketIndex in ipairs(corners) do
                 local adjacent = definition.incidentFaces[socketIndex] or {}
                 adjacent[#adjacent + 1] = face.id
                 definition.incidentFaces[socketIndex] = adjacent
@@ -357,8 +960,8 @@ function RuleEngine.Compile(panelData, topology)
         if kind then
             local data = reference.Data or {}
             local clue = {
-                id = index,
-                socketIndex = index,
+                id = physicalIndex,
+                socketIndex = physicalIndex,
                 socketKind = socketKind,
                 x = x,
                 y = y,
@@ -384,6 +987,7 @@ function RuleEngine.Compile(panelData, topology)
                 end
                 clue.rotatable = data.Rotational == true
                 clue.negative = data.Negative == true
+                clue.orientations = polyOrientations(clue.shape, clue.rotatable)
             end
             definition.clues[#definition.clues + 1] = clue
             definition.clueById[clue.id] = clue
@@ -400,14 +1004,14 @@ function RuleEngine.Compile(panelData, topology)
                     code = "missing_rule_color", clueId = clue.id,
                 }
             end
-            if kind == "dot" and clue.traceRole == RuleEngine.DotRole.Secondary and
+            if kind == "dot" and clue.traceRole == DOT_SECONDARY and
                     definition.symmetry == 0 then
                 definition.dataErrors[#definition.dataErrors + 1] = {
                     code = "invalid_dot_role", clueId = clue.id,
                 }
             end
             if kind == "triangle" and (clue.count < 1 or clue.count > 3) and
-                    not (clue.count == 4 and definition.extensions.FourTriangle == true) then
+                    not (clue.count == 4 and extensions.FourTriangle == true) then
                 definition.dataErrors[#definition.dataErrors + 1] = {
                     code = "invalid_triangle", clueId = clue.id,
                 }
@@ -434,11 +1038,10 @@ function RuleEngine.Compile(panelData, topology)
     end)
     for _, faces in pairs(definition.incidentFaces) do table.sort(faces) end
 
-    definition.boundarySegments, definition.boundarySegmentOrder =
-        compileBoundarySegments(definition, topology)
+    definition.boundarySegments = compileBoundarySegments(definition, topology)
 
     local hashable = {
-        schemaVersion = definition.schemaVersion,
+        schemaVersion = schemaVersion,
         width = width,
         height = height,
         symmetry = definition.symmetry,
@@ -447,8 +1050,7 @@ function RuleEngine.Compile(panelData, topology)
         faces = definition.faces,
         permanentBoundaries = definition.permanentBoundaries,
         boundarySegments = definition.boundarySegments,
-        boundarySegmentOrder = definition.boundarySegmentOrder,
-        extensions = definition.extensions,
+        extensions = extensions,
         dataErrors = definition.dataErrors,
     }
     definition.ruleRevision = RuleEngine.HashValue(hashable)
@@ -463,20 +1065,210 @@ local function addMask(current, branch)
     return current
 end
 
-local function coordKey(x, y)
-    -- Socket coordinates are integral, but Lua 5.3 preserves an integer/float
-    -- distinction in tostring ("1" versus "1.0"). Canonical formatting keeps
-    -- topology joins identical under LuaJIT and the standalone test runtime.
-    return string.format("%d:%d", x, y)
+local TRACE_ERROR_FIELDS = {
+    "branch", "index", "code", "nodeId", "fromId", "toId",
+}
+
+local function sortTraceErrors(errors)
+    table.sort(errors, function(left, right)
+        for _, key in ipairs(TRACE_ERROR_FIELDS) do
+            local a, b = left[key], right[key]
+            if a ~= b then
+                if a == nil then return true end
+                if b == nil then return false end
+                if type(a) == type(b) and
+                        (type(a) == "number" or type(a) == "string") then
+                    return a < b
+                end
+                return type(a) .. ":" .. tostring(a) < type(b) .. ":" .. tostring(b)
+            end
+        end
+        return false
+    end)
 end
 
-function RuleEngine.BuildFacts(definition, traceSnapshot, profile)
+local function validateCompletedTrace(definition, snapshot)
+    local errors = {}
+    local topology = definition.topology or {}
+    local nodes, stacks = topology.nodes or {}, snapshot.stacks
+    local traced, tracedSegments = {}, {}
+    if type(stacks) ~= "table" then stacks = {} end
+    local expectedBranches = definition.symmetry == 0 and 1 or 2
+    local branchCount = 0
+    for key, stack in pairs(stacks) do
+        if type(key) == "number" and key >= 1 and key == math.floor(key) and
+                type(stack) == "table" then
+            branchCount = branchCount + 1
+        end
+    end
+    if branchCount ~= expectedBranches then
+        errors[#errors + 1] = {
+            code = "trace_branch_count", clueId = 0,
+            expected = expectedBranches, actual = branchCount,
+        }
+    end
+
+    local branchNodes, branchEdges = {}, {}
+    local function getEdge(fromId, toId)
+        if topology.getEdge then return topology:getEdge(fromId, toId) end
+        return topology.edges and topology.edges[fromId] and topology.edges[fromId][toId]
+    end
+    local function validStart(nodeId)
+        if topology.isValidStart then return topology:isValidStart(nodeId) end
+        local node = nodes[nodeId]
+        if node and node.clickable == true then return true end
+        for _, id in ipairs(topology.starts or {}) do
+            if id == nodeId then return true end
+        end
+        return false
+    end
+    local function validExit(nodeId)
+        local node = nodes[nodeId]
+        if node and node.exit == true then return true end
+        for _, id in ipairs(topology.exits or {}) do
+            if id == nodeId then return true end
+        end
+        return false
+    end
+
+    for branch = 1, expectedBranches do
+        local stack = stacks[branch]
+        branchNodes[branch], branchEdges[branch] = {}, {}
+        if type(stack) ~= "table" or #stack == 0 then
+            errors[#errors + 1] = {
+                code = "trace_empty_branch", clueId = 0, branch = branch,
+            }
+        else
+            if not validStart(stack[1]) then
+                errors[#errors + 1] = {
+                    code = "trace_start", clueId = 0, branch = branch,
+                    index = 1, nodeId = stack[1],
+                }
+            end
+            if not validExit(stack[#stack]) then
+                errors[#errors + 1] = {
+                    code = "trace_exit", clueId = 0, branch = branch,
+                    index = #stack, nodeId = stack[#stack],
+                }
+            end
+            for index, nodeId in ipairs(stack) do
+                local node = type(nodeId) == "number" and
+                    nodeId == math.floor(nodeId) and nodes[nodeId] or nil
+                if not node then
+                    errors[#errors + 1] = {
+                        code = "trace_node", clueId = 0, branch = branch,
+                        index = index, nodeId = nodeId,
+                    }
+                elseif branchNodes[branch][nodeId] then
+                    errors[#errors + 1] = {
+                        code = "trace_repeated_node", clueId = 0, branch = branch,
+                        index = index, nodeId = nodeId,
+                    }
+                else
+                    branchNodes[branch][nodeId] = true
+                    if node.socketIndex then
+                        local socketIndex = canonicalSocketIndex(
+                            node.socketIndex, definition.width, definition.continuous)
+                        traced[socketIndex] = addMask(traced[socketIndex], branch)
+                    end
+                end
+                local nextId = stack[index + 1]
+                if nextId ~= nil then
+                    local edge = node and getEdge(nodeId, nextId) or nil
+                    if not edge then
+                        errors[#errors + 1] = {
+                            code = "trace_adjacency", clueId = 0, branch = branch,
+                            index = index, fromId = nodeId, toId = nextId,
+                        }
+                    else
+                        local token = edgeToken(nodeId, nextId)
+                        if edge.socketIndex then
+                            local socketIndex = canonicalSocketIndex(
+                                edge.socketIndex, definition.width, definition.continuous)
+                            traced[socketIndex] = addMask(traced[socketIndex], branch)
+                        end
+                        tracedSegments[token] = addMask(tracedSegments[token], branch)
+                        if branchEdges[branch][token] then
+                            errors[#errors + 1] = {
+                                code = "trace_repeated_edge", clueId = 0,
+                                branch = branch, index = index,
+                                fromId = nodeId, toId = nextId,
+                            }
+                        else
+                            branchEdges[branch][token] = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if expectedBranches == 2 and type(stacks[1]) == "table" and
+            type(stacks[2]) == "table" then
+        if #stacks[1] ~= #stacks[2] then
+            errors[#errors + 1] = {
+                code = "trace_symmetry", clueId = 0,
+                expected = #stacks[1], actual = #stacks[2],
+            }
+        end
+        local limit = math.min(#stacks[1], #stacks[2])
+        for index = 1, limit do
+            local primary, secondary = stacks[1][index], stacks[2][index]
+            local mirror = topology.getSymmetricalNodeId and
+                topology:getSymmetricalNodeId(primary) or
+                topology.symmetryNodes and topology.symmetryNodes[primary]
+            if mirror ~= secondary then
+                errors[#errors + 1] = {
+                    code = "trace_symmetry", clueId = 0, branch = 2,
+                    index = index, nodeId = secondary, expectedNodeId = mirror,
+                }
+            end
+            if index < limit then
+                local nextPrimary, nextSecondary = stacks[1][index + 1], stacks[2][index + 1]
+                local mirrorEdge = topology.getSymmetricalEdge and
+                    topology:getSymmetricalEdge(primary, nextPrimary) or
+                    topology.symmetryEdges and topology.symmetryEdges[primary] and
+                    topology.symmetryEdges[primary][nextPrimary]
+                local mirrorNext = topology.getSymmetricalNodeId and
+                    topology:getSymmetricalNodeId(nextPrimary) or
+                    topology.symmetryNodes and topology.symmetryNodes[nextPrimary]
+                local expectedToken = mirrorEdge and mirrorEdge.fromId and
+                    edgeToken(mirrorEdge.fromId, mirrorEdge.toId) or
+                    mirror and mirrorNext and edgeToken(mirror, mirrorNext)
+                local actualToken = type(secondary) == "number" and
+                    type(nextSecondary) == "number" and edgeToken(secondary, nextSecondary)
+                if not mirrorEdge or expectedToken ~= actualToken then
+                    errors[#errors + 1] = {
+                        code = "trace_symmetry_edge", clueId = 0, branch = 2,
+                        index = index, fromId = secondary, toId = nextSecondary,
+                    }
+                end
+            end
+        end
+        for nodeId in pairs(branchNodes[1]) do
+            if branchNodes[2][nodeId] then
+                errors[#errors + 1] = {
+                    code = "trace_shared_node", clueId = 0, nodeId = nodeId,
+                }
+            end
+        end
+        for token in pairs(branchEdges[1]) do
+            if branchEdges[2][token] then
+                errors[#errors + 1] = {
+                    code = "trace_shared_edge", clueId = 0, segment = token,
+                }
+            end
+        end
+    end
+    return errors, traced, tracedSegments
+end
+
+local function buildFacts(definition, traceSnapshot, profile, suppliedTraceHash)
     local pathStarted = profile and profileNow()
     traceSnapshot = traceSnapshot or {}
     local topology = definition.topology or {}
-    local traced = {}
-    local tracedSegments = {}
-    local traceErrors = {}
+    local traceErrors, traced, tracedSegments =
+        validateCompletedTrace(definition, traceSnapshot)
     if traceSnapshot.revision ~= nil and
             traceSnapshot.revision ~= definition.topologyRevision then
         traceErrors[#traceErrors + 1] = {
@@ -485,48 +1277,12 @@ function RuleEngine.BuildFacts(definition, traceSnapshot, profile)
             actual = traceSnapshot.revision,
         }
     end
-    for branch, stack in ipairs(traceSnapshot.stacks or {}) do
-        for index, nodeId in ipairs(stack) do
-            local node = topology.nodes and topology.nodes[nodeId]
-            if node and node.socketIndex then
-                traced[node.socketIndex] = addMask(traced[node.socketIndex], branch)
-            elseif not node then
-                traceErrors[#traceErrors + 1] = {
-                    code = "trace_node", clueId = 0,
-                    branch = branch, index = index, nodeId = nodeId,
-                }
-            end
-            local nextId = stack[index + 1]
-            local edge
-            if nextId and topology.getEdge then
-                edge = topology:getEdge(nodeId, nextId)
-                if edge and edge.socketIndex then
-                    traced[edge.socketIndex] = addMask(traced[edge.socketIndex], branch)
-                end
-            elseif nextId and topology.edges and topology.edges[nodeId] then
-                edge = topology.edges[nodeId][nextId]
-                if edge and edge.socketIndex then
-                    traced[edge.socketIndex] = addMask(traced[edge.socketIndex], branch)
-                end
-            end
-            if nextId and not edge then
-                traceErrors[#traceErrors + 1] = {
-                    code = "trace_edge", clueId = 0,
-                    branch = branch, index = index,
-                    fromId = nodeId, toId = nextId,
-                }
-            elseif nextId and edge then
-                local token = edgeToken(nodeId, nextId)
-                tracedSegments[token] = addMask(tracedSegments[token], branch)
-            end
-        end
-    end
+    sortTraceErrors(traceErrors)
     local closedBoundaries = {}
     for socketIndex in pairs(definition.permanentBoundaries or {}) do
         closedBoundaries[socketIndex] = true
     end
-    for _, socketIndex in ipairs(definition.boundarySegmentOrder or {}) do
-        local requirement = definition.boundarySegments[socketIndex]
+    for socketIndex, requirement in pairs(definition.boundarySegments or {}) do
         local closed = requirement.complete == true and #requirement.segments > 0
         for _, token in ipairs(requirement.segments) do
             if not tracedSegments[token] then
@@ -556,18 +1312,20 @@ function RuleEngine.BuildFacts(definition, traceSnapshot, profile)
         if a < b then parent[b] = a else parent[a] = b end
     end
 
-    local faceAt = {}
     for _, face in ipairs(definition.faces) do
         parent[face.id] = face.id
-        faceAt[coordKey(face.x, face.y)] = face.id
+    end
+    local function faceAt(x, y)
+        if x < 1 or x > definition.width or y < 1 or y > definition.height then return nil end
+        return definition.faceBySocket[flatIndex(definition.width, x * 2, y * 2)]
     end
     for _, face in ipairs(definition.faces) do
-        local right = faceAt[coordKey(face.x + 1, face.y)]
+        local right = faceAt(face.x + 1, face.y)
         if right and not closedBoundaries[face.boundaries[2]] then union(face.id, right) end
-        local below = faceAt[coordKey(face.x, face.y + 1)]
+        local below = faceAt(face.x, face.y + 1)
         if below and not closedBoundaries[face.boundaries[3]] then union(face.id, below) end
         if definition.continuous and face.x == definition.width then
-            local wrapped = faceAt[coordKey(1, face.y)]
+            local wrapped = faceAt(1, face.y)
             if wrapped and not closedBoundaries[face.boundaries[2]] then
                 union(face.id, wrapped)
             end
@@ -583,7 +1341,11 @@ function RuleEngine.BuildFacts(definition, traceSnapshot, profile)
     local regions = {}
     for index, root in ipairs(orderedRoots) do
         regionByRoot[root] = index
-        regions[index] = { id = index, faces = {}, clues = {} }
+        regions[index] = {
+            id = index, faces = {}, cells = {}, clues = {}, erasers = {}, targets = {},
+            squares = {}, squareColorSet = {}, stars = {}, starByColor = {},
+            colored = {}, dots = {}, triangles = {}, polyominoes = {},
+        }
     end
 
     local regionByFace = {}
@@ -591,11 +1353,17 @@ function RuleEngine.BuildFacts(definition, traceSnapshot, profile)
         local regionId = regionByRoot[find(face.id)]
         regionByFace[face.id] = regionId
         regions[regionId].faces[#regions[regionId].faces + 1] = face.id
+        regions[regionId].cells[#regions[regionId].cells + 1] = {
+            id = face.id, x = face.x, y = face.y,
+        }
+    end
+    for _, region in ipairs(regions) do
+        region.cacheKey = table.concat(region.faces, ",")
     end
     if profile then profileAddTime(profile, "regionConstruction", regionStarted) end
 
     local groupingStarted = profile and profileNow()
-    local clueRegions = {}
+    local globalClues = {}
     for _, clue in ipairs(definition.clues) do
         local regionId
         if clue.socketKind == "cell" then
@@ -608,85 +1376,65 @@ function RuleEngine.BuildFacts(definition, traceSnapshot, profile)
                 if candidate and (not regionId or candidate < regionId) then regionId = candidate end
             end
         end
-        clueRegions[clue.id] = regionId
-        if regionId then regions[regionId].clues[#regions[regionId].clues + 1] = clue.id end
-    end
-    for _, region in ipairs(regions) do table.sort(region.clues) end
-
-    local mirrorRegion = {}
-    local ignoredClues = {}
-    for _, region in ipairs(regions) do
-        local face = region.faces[1] and definition.faces[region.faces[1]]
-        if face then
-            local mirrorX, mirrorY = face.x, face.y
-            if definition.symmetry == 1 or definition.symmetry == 3 then
-                mirrorX = definition.width + 1 - mirrorX
-            end
-            if definition.symmetry == 2 or definition.symmetry == 3 then
-                mirrorY = definition.height + 1 - mirrorY
-            end
-            local mirrorFace = faceAt[coordKey(mirrorX, mirrorY)]
-            mirrorRegion[region.id] = mirrorFace and regionByFace[mirrorFace]
-        end
-    end
-    local canonicalRegion = {}
-    for regionId, mirrorId in pairs(mirrorRegion) do
-        if mirrorId and mirrorId ~= regionId then
-            local canonical = regionId
-            local ownFace = definition.faces[regions[regionId].faces[1]]
-            local mirrorFace = definition.faces[regions[mirrorId].faces[1]]
-            local preferMirror = false
-            if definition.symmetry == 1 then
-                preferMirror = mirrorFace.x > ownFace.x
-            elseif definition.symmetry == 2 then
-                preferMirror = mirrorFace.y > ownFace.y
-            elseif definition.symmetry == 3 then
-                preferMirror = mirrorFace.x > ownFace.x or
-                    (mirrorFace.x == ownFace.x and mirrorFace.y > ownFace.y)
-            end
-            if preferMirror then
-                canonical = mirrorId
-            end
-            canonicalRegion[regionId] = canonical
-            canonicalRegion[mirrorId] = canonical
-        end
-    end
-    local evaluationRegions = {}
-    for _, region in ipairs(regions) do
-        local canonical = canonicalRegion[region.id] or region.id
-        if canonical == region.id then
-            evaluationRegions[#evaluationRegions + 1] = region
+        regionId = regionId or 0
+        if regionId == 0 then
+            globalClues[#globalClues + 1] = clue
         else
-            for _, clueId in ipairs(region.clues) do
-                ignoredClues[clueId] = true
+            local region = regions[regionId]
+            region.clues[#region.clues + 1] = clue
+            local group = clue.kind == "eraser" and region.erasers or region.targets
+            group[#group + 1] = clue.id
+            if clue.kind == "square" then
+                region.squares[#region.squares + 1] = clue
+                region.squareColorSet[clue.ruleColor] = true
+            elseif clue.kind == "star" then
+                region.stars[#region.stars + 1] = clue
+                local stars = region.starByColor[clue.ruleColor] or {}
+                stars[#stars + 1] = clue
+                region.starByColor[clue.ruleColor] = stars
+            elseif clue.kind == "polyomino" then
+                region.polyominoes[#region.polyominoes + 1] = {
+                    id = clue.id,
+                    sign = clue.negative == true and -1 or 1,
+                    orientations = clue.orientations,
+                }
+            elseif clue.kind == "dot" then
+                region.dots[#region.dots + 1] = clue
+            elseif clue.kind == "triangle" then
+                region.triangles[#region.triangles + 1] = clue
+            end
+            if clue.socketKind == "cell" and clue.ruleColor then
+                region.colored[#region.colored + 1] = clue
             end
         end
     end
-    regions = evaluationRegions
+
+    for _, region in ipairs(regions) do
+        region.squareColorOrder = sortedKeys(region.squareColorSet)
+        region.squareColorSet = nil
+        region.starGroups = {}
+        for _, color in ipairs(sortedKeys(region.starByColor)) do
+            region.starGroups[#region.starGroups + 1] = {
+                color = color, clues = region.starByColor[color],
+            }
+        end
+        region.starByColor = nil
+    end
+
     if profile then profileAddTime(profile, "clueGrouping", groupingStarted) end
 
     return {
         definition = definition,
-        snapshot = traceSnapshot,
         traced = traced,
-        tracedSegments = tracedSegments,
-        closedBoundaries = closedBoundaries,
         regions = regions,
-        regionByFace = regionByFace,
-        clueRegions = clueRegions,
-        ignoredClues = ignoredClues,
+        globalClues = globalClues,
         traceErrors = traceErrors,
-        traceHash = RuleEngine.HashValue({
-            revision = traceSnapshot.revision,
-            stacks = traceSnapshot.stacks,
-        }),
+        traceHash = suppliedTraceHash ~= nil and suppliedTraceHash or
+            RuleEngine.HashValue({
+                revision = traceSnapshot.revision,
+                stacks = traceSnapshot.stacks,
+            }),
     }
-end
-
-local function arrayCopy(input)
-    local output = {}
-    for index, value in ipairs(input or {}) do output[index] = value end
-    return output
 end
 
 local function sortedSet(set)
@@ -699,9 +1447,9 @@ end
 local function dotSatisfied(clue, mask)
     mask = mask or 0
     local covered
-    if clue.traceRole == RuleEngine.DotRole.Primary then
+    if clue.traceRole == DOT_PRIMARY then
         covered = mask % 2 == 1
-    elseif clue.traceRole == RuleEngine.DotRole.Secondary then
+    elseif clue.traceRole == DOT_SECONDARY then
         covered = math.floor(mask / 2) % 2 == 1
     else
         covered = mask > 0
@@ -710,7 +1458,6 @@ local function dotSatisfied(clue, mask)
 end
 
 local function addConstraint(report, kind, regionId, participants, details)
-    table.sort(participants)
     local constraint = {
         kind = kind,
         regionId = regionId or 0,
@@ -718,164 +1465,178 @@ local function addConstraint(report, kind, regionId, participants, details)
         details = details,
     }
     report.constraints[#report.constraints + 1] = constraint
-    for _, id in ipairs(participants) do report.violationSet[id] = true end
+    for _, id in ipairs(participants) do report.violations[#report.violations + 1] = id end
 end
 
-local function evaluateActiveSet(facts, active, options, onlyRegion)
+local function evaluateRegion(facts, regionId, removed, options, removalGeneration,
+        suppliedRegionProfile)
     local definition = facts.definition
     local profile = options and options.__profile
+    local region = regionId > 0 and facts.regions[regionId] or nil
+    local regionStarted = profile and profileNow()
+    local regionProfile = suppliedRegionProfile or region and profileRegion(profile, regionId)
+    removalGeneration = removalGeneration or 0
     local report = {
         status = "complete",
         constraints = {},
-        violationSet = {},
+        violations = {},
         witnesses = { polyomino = {} },
     }
-
-    for _, clue in ipairs(definition.clues) do
-        if active[clue.id] and not facts.ignoredClues[clue.id] and
-                clue.kind == "dot" and
-                (not onlyRegion or facts.clueRegions[clue.id] == onlyRegion) and
-                not dotSatisfied(clue, facts.traced[clue.socketIndex]) then
-            addConstraint(report, "dot", facts.clueRegions[clue.id], {clue.id}, {
-                traceRole = clue.traceRole,
-                negative = clue.negative == true,
-            })
-        end
+    if regionProfile then
+        regionProfile.revalidations = regionProfile.revalidations + 1
+        profileCount(profile, "fullRegionRevalidations")
     end
 
-    for _, clue in ipairs(definition.clues) do
-        if active[clue.id] and not facts.ignoredClues[clue.id] and
-                clue.kind == "triangle" and
-                (not onlyRegion or facts.clueRegions[clue.id] == onlyRegion) then
-            local faceId = definition.faceBySocket[clue.socketIndex]
-            local face = faceId and definition.faces[faceId]
-            local count = 0
-            for _, boundary in ipairs(face and face.boundaries or {}) do
-                if facts.traced[boundary] then count = count + 1 end
-            end
-            if count ~= clue.count then
-                addConstraint(report, "triangle", facts.clueRegions[clue.id], {clue.id}, {
-                    expected = clue.count,
-                    actual = count,
+    local clues = region and region.clues or facts.globalClues
+    for _, clue in ipairs(clues) do
+        local clueId = clue.id
+        local isRemoved = removed[clueId] == removalGeneration
+        if not isRemoved then
+            if clue.kind == "dot" and
+                    not dotSatisfied(clue, facts.traced[clue.socketIndex]) then
+                addConstraint(report, "dot", regionId, {clue.id}, {
+                    traceRole = clue.traceRole,
+                    negative = clue.negative == true,
                 })
+            elseif clue.kind == "triangle" then
+                local faceId = definition.faceBySocket[clue.socketIndex]
+                local face = faceId and definition.faces[faceId]
+                local count = 0
+                for _, boundary in ipairs(face and face.boundaries or {}) do
+                    if facts.traced[boundary] then count = count + 1 end
+                end
+                if count ~= clue.count then
+                    addConstraint(report, "triangle", regionId, {clue.id}, {
+                        expected = clue.count,
+                        actual = count,
+                    })
+                end
             end
+
         end
     end
 
-    for _, region in ipairs(facts.regions) do
-        if not onlyRegion or region.id == onlyRegion then
-            local regionStarted = profile and profileNow()
-            local regionProfile = profileRegion(profile, region.id)
-            if regionProfile then
-                regionProfile.revalidations = regionProfile.revalidations + 1
-                profileCount(profile, "fullRegionRevalidations")
-            end
-            local squareColors = {}
-            local starsByColor = {}
-            local coloredCellCount = {}
-            local polyominoes = {}
-            for _, clueId in ipairs(region.clues) do
-                local clue = definition.clueById[clueId]
-                if active[clueId] then
-                    if clue.socketKind == "cell" and clue.ruleColor then
-                        coloredCellCount[clue.ruleColor] = (coloredCellCount[clue.ruleColor] or 0) + 1
-                    end
-                    if clue.kind == "square" then
-                        local group = squareColors[clue.ruleColor] or {}
-                        group[#group + 1] = clue.id
-                        squareColors[clue.ruleColor] = group
-                    elseif clue.kind == "star" then
-                        local group = starsByColor[clue.ruleColor] or {}
-                        group[#group + 1] = clue.id
-                        starsByColor[clue.ruleColor] = group
-                    elseif clue.kind == "polyomino" then
-                        polyominoes[#polyominoes + 1] = {
-                            id = clue.id,
-                            shape = clue.shape,
-                            rotatable = clue.rotatable,
-                            negative = clue.negative,
-                        }
-                    end
+    if region then
+        if #region.squares > 1 then
+            local squareColors, participants = {}, {}
+            for _, clue in ipairs(region.squares) do
+                local clueId = clue.id
+                local isRemoved = removed[clueId] == removalGeneration
+                if not isRemoved then
+                    squareColors[clue.ruleColor] = true
+                    participants[#participants + 1] = clueId
                 end
             end
-
-            local squareColorIds = sortedKeys(squareColors)
+            local squareColorIds = {}
+            for _, color in ipairs(region.squareColorOrder) do
+                if squareColors[color] then squareColorIds[#squareColorIds + 1] = color end
+            end
             if #squareColorIds > 1 then
-                local participants = {}
-                for _, color in ipairs(squareColorIds) do
-                    for _, id in ipairs(squareColors[color]) do participants[#participants + 1] = id end
-                end
-                addConstraint(report, "squares", region.id, participants, { colors = squareColorIds })
+                addConstraint(report, "squares", regionId, participants,
+                    { colors = squareColorIds })
             end
+        end
 
-            for _, color in ipairs(sortedKeys(starsByColor)) do
-                local actual = coloredCellCount[color] or 0
-                if actual ~= 2 then
-                    addConstraint(report, "stars", region.id, arrayCopy(starsByColor[color]), {
-                        color = color,
+        if #region.stars > 0 then
+            local coloredCellCount = {}
+            for _, clue in ipairs(region.colored) do
+                local clueId = clue.id
+                local isRemoved = removed[clueId] == removalGeneration
+                if not isRemoved then
+                    coloredCellCount[clue.ruleColor] =
+                        (coloredCellCount[clue.ruleColor] or 0) + 1
+                end
+            end
+            for _, group in ipairs(region.starGroups) do
+                local participants = {}
+                for _, clue in ipairs(group.clues) do
+                    if removed[clue.id] ~= removalGeneration then
+                        participants[#participants + 1] = clue.id
+                    end
+                end
+                local actual = coloredCellCount[group.color] or 0
+                if #participants > 0 and actual ~= 2 then
+                    addConstraint(report, "stars", regionId,
+                        participants, {
+                        color = group.color,
                         actual = actual,
                         expected = 2,
                     })
                 end
             end
+        end
 
-            if #polyominoes > 0 then
-                local regionCells = {}
-                for _, faceId in ipairs(region.faces) do
-                    local face = definition.faces[faceId]
-                    regionCells[#regionCells + 1] = { id = face.id, x = face.x, y = face.y }
-                end
-                local keyParts = {}
-                for _, piece in ipairs(polyominoes) do keyParts[#keyParts + 1] = piece.id end
-                local cache = options and options.__polyominoCache
-                local cacheKey = region.id .. ":" .. table.concat(keyParts, ",")
-                local solve = cache and cache[cacheKey]
+        if #region.polyominoes > 0 then
+            local polyominoes = {}
+            for _, clue in ipairs(region.polyominoes) do
+                local clueId = clue.id
+                local isRemoved = removed[clueId] == removalGeneration
+                if not isRemoved then polyominoes[#polyominoes + 1] = clue end
+            end
+        if #polyominoes > 0 then
+            local keyParts = {}
+            for _, piece in ipairs(polyominoes) do keyParts[#keyParts + 1] = piece.id end
+            local localCache = options and options.__polyominoCache
+            local solverCache = options and options.cache
+            local cacheKey = definition.ruleRevision .. ":" .. region.cacheKey ..
+                ":" .. table.concat(keyParts, ",")
+            local solve = localCache and localCache[cacheKey]
+            if solve then
+                profileCount(profile, "polyominoCacheHits")
+            else
+                solve = cacheGet(solverCache, "polyominoes", cacheKey)
                 if solve then
                     profileCount(profile, "polyominoCacheHits")
+                    profileCount(profile, "polyominoPersistentCacheHits")
                 else
                     profileCount(profile, "polyominoSolverCalls")
                     profileCount(profile, "polyominoCacheMisses")
-                    solve = Moonpanel.Canvas.PolyominoSolver.Solve({
-                        cells = regionCells,
+                    region.polyRegion = region.polyRegion or normalizePolyRegion({
+                        cells = region.cells,
                         wrapWidth = definition.continuous and definition.width or nil,
-                    }, polyominoes, {
+                    })
+                    solve = solveNormalizedPolyomino(region.polyRegion, polyominoes, {
                         checkpoint = options and options.checkpoint,
                     })
-                    if cache then cache[cacheKey] = solve end
-                end
-                if solve.status == "complexity" then
-                    report.status = "complexity"
-                    report.complexity = { kind = "polyomino", regionId = region.id, steps = solve.steps }
-                    if regionProfile then
-                        regionProfile.time = regionProfile.time + profileNow() - regionStarted
+                    if solve.status ~= "complexity" then
+                        cachePut(solverCache, "polyominoes", cacheKey, solve)
                     end
-                    return report
-                elseif solve.status ~= "solved" then
-                    local participants = {}
-                    for _, piece in ipairs(polyominoes) do participants[#participants + 1] = piece.id end
-                    addConstraint(report, "polyomino", region.id, participants, { backend = solve.backend })
-                else
-                    report.witnesses.polyomino[region.id] = {
-                        backend = solve.backend,
-                        target = solve.target,
-                        placements = solve.placements,
-                    }
                 end
+                if localCache then localCache[cacheKey] = solve end
             end
-            if regionProfile then
-                regionProfile.time = regionProfile.time + profileNow() - regionStarted
+            if solve.status == "complexity" then
+                report.status = "complexity"
+                report.complexity = {
+                    kind = "polyomino", regionId = regionId, steps = solve.steps,
+                }
+            elseif solve.status ~= "solved" then
+                local participants = {}
+                for _, piece in ipairs(polyominoes) do
+                    participants[#participants + 1] = piece.id
+                end
+                addConstraint(report, "polyomino", regionId, participants,
+                    { backend = solve.backend })
+            else
+                report.witnesses.polyomino[regionId] = {
+                    backend = solve.backend,
+                    target = solve.target,
+                    placements = copyTree(solve.placements),
+                }
             end
+        end
         end
     end
 
-    report.violations = sortedSet(report.violationSet)
-    report.violationSet = nil
+    if regionProfile then
+        regionProfile.time = regionProfile.time + profileNow() - regionStarted
+    end
+    table.sort(report.violations)
     report.success = report.status == "complete" and #report.violations == 0
     return report
 end
 
 local function forEachCombination(values, count, checkpoint, callback, profile,
-        depthBase, copyResult, branchCallback)
+        depthBase)
     local current = {}
     local function visit(start, depth)
         if profile then
@@ -885,19 +1646,14 @@ local function forEachCombination(values, count, checkpoint, callback, profile,
         end
         if checkpoint and checkpoint(1) == false then return false, "complexity" end
         if depth > count then
-            local result = copyResult == false and current or arrayCopy(current)
-            if callback(result) == false then return false, "stopped" end
+            if callback(current) == false then return false, "stopped" end
             return true
         end
         local maximum = #values - (count - depth)
         for index = start, maximum do
             current[depth] = values[index]
-            local branchResult = branchCallback and branchCallback(current, depth)
-            if branchResult == "stop" then return false, "stopped" end
-            if branchResult ~= false then
-                local complete, reason = visit(index + 1, depth + 1)
-                if not complete then return false, reason end
-            end
+            local complete, reason = visit(index + 1, depth + 1)
+            if not complete then return false, reason end
         end
         current[depth] = nil
         return true
@@ -914,47 +1670,59 @@ local function mapping(erasers, targets)
     return output
 end
 
-local function evaluateRegionWithRemoved(facts, baseActive, regionId, usedErasers, targets, options)
-    local active = {}
-    for key, value in pairs(baseActive) do active[key] = value end
-    for _, id in ipairs(usedErasers) do active[id] = nil end
-    for _, id in ipairs(targets) do active[id] = nil end
-    return evaluateActiveSet(facts, active, options, regionId)
-end
-
-local function sliceRegionReport(report, regionId)
-    local constraints = {}
-    local violationSet = {}
-    for _, constraint in ipairs(report.constraints or {}) do
-        if constraint.regionId == regionId then
-            constraints[#constraints + 1] = constraint
-            for _, id in ipairs(constraint.participants or {}) do violationSet[id] = true end
-        end
-    end
-    local witnesses = { polyomino = {} }
-    local poly = report.witnesses and report.witnesses.polyomino
-    if poly and poly[regionId] then witnesses.polyomino[regionId] = poly[regionId] end
-    local violations = sortedSet(violationSet)
-    return {
-        status = report.status,
-        success = report.status == "complete" and #violations == 0,
-        constraints = constraints,
-        violations = violations,
-        witnesses = witnesses,
-    }
-end
-
-local function solveEraserRegion(facts, baseActive, region, erasers, targets, options, baseline)
+local function solveEraserRegion(facts, region, erasers, targets, options, baseline)
     if baseline.status ~= "complete" then return { status = baseline.status, report = baseline } end
-
-    local fullValid
-    local bestFull
-    local bestFullScore
-    local bestFullTargets
     local profile = options and options.__profile
     local regionProfile = profileRegion(profile, region.id)
     local pendingSearchWork = 0
     local searchCheckpoints = 0
+    local candidateCache = {}
+    local removed, removalGeneration = {}, 0
+    local summaryOnly = #region.polyominoes == 0
+    local validSummary = { status = "complete", success = true }
+    local invalidSummary = { status = "complete", success = false }
+    local compactKeys = #erasers <= 52 and #targets <= 52
+    local flatKeys = compactKeys and #erasers + #targets <= 52
+    local eraserKeyRange = flatKeys and 2 ^ #erasers
+    local eraserBits, targetBits = {}, {}
+    if compactKeys then
+        for index, id in ipairs(erasers) do eraserBits[id] = 2 ^ (index - 1) end
+        for index, id in ipairs(targets) do targetBits[id] = 2 ^ (index - 1) end
+    end
+    local function selectionKey(eraserSet, targetSet)
+        if compactKeys then
+            local eraserKey, targetKey = 0, 0
+            for _, id in ipairs(eraserSet) do eraserKey = eraserKey + eraserBits[id] end
+            for _, id in ipairs(targetSet) do targetKey = targetKey + targetBits[id] end
+            return eraserKey, targetKey
+        end
+        local eraserKey, targetKey = arrayCopy(eraserSet), arrayCopy(targetSet)
+        table.sort(eraserKey)
+        table.sort(targetKey)
+        return table.concat(eraserKey, ",") .. "|" .. table.concat(targetKey, ",")
+    end
+    local function cached(cache, key, subkey)
+        if not compactKeys then return cache[key] end
+        if flatKeys then return cache[key + subkey * eraserKeyRange] end
+        local bucket = cache[key]
+        return bucket and bucket[subkey]
+    end
+    local function cache(cacheTable, key, subkey, value)
+        if not compactKeys then
+            cacheTable[key] = value
+            return
+        end
+        if flatKeys then
+            cacheTable[key + subkey * eraserKeyRange] = value
+            return
+        end
+        local bucket = cacheTable[key]
+        if not bucket then
+            bucket = {}
+            cacheTable[key] = bucket
+        end
+        bucket[subkey] = value
+    end
     local function checkpointSearch(force)
         pendingSearchWork = pendingSearchWork + 1
         local batchSize = searchCheckpoints < 4 and 16 or 64
@@ -963,200 +1731,318 @@ local function solveEraserRegion(facts, baseActive, region, erasers, targets, op
         searchCheckpoints = searchCheckpoints + 1
         return not options or not options.checkpoint or options.checkpoint(1) ~= false
     end
-    -- Without other targets, the largest even set of Erasers consumes itself.
-    -- An odd survivor remains an unsatisfied clue.
-    if #targets == 0 and #erasers > 1 then
-        local usedCount = #erasers - #erasers % 2
-        local used, retained = {}, {}
-        for index, eraserIndex in ipairs(erasers) do
-            local destination = index <= usedCount and used or retained
-            destination[#destination + 1] = eraserIndex
-        end
-        local candidate = evaluateRegionWithRemoved(
-            facts, baseActive, region.id, used, {}, options)
-        if candidate.status ~= "complete" then
-            return { status = candidate.status, report = candidate }
-        end
-        if candidate.success or #retained == 1 and #(candidate.violations or {}) == 1 then
-            local assignments = {}
-            for index, eraserIndex in ipairs(used) do
-                assignments[#assignments + 1] = {
-                    eraserIndex = eraserIndex,
-                    targetIndex = used[index % #used + 1],
-                }
-            end
-            return {
-                status = "complete",
-                success = candidate.success,
-                baseline = baseline,
-                selected = candidate,
-                erasures = assignments,
-                invalidErasers = #retained > 0 and retained or nil,
-                proof = { minimumUsed = usedCount, targets = {} },
-            }
-        end
-    end
-    -- Find the smallest set of non-Eraser clues that makes the region valid;
-    -- any remaining Erasers can only cancel in pairs, with an odd survivor
-    -- reported as the remaining error.
-    if #targets > 0 and #targets <= #erasers then
-        local solution
-        for targetCount = 1, #targets do
-            local failedStatus
-            local _, reason = forEachCombination(
-                targets, targetCount, function() return checkpointSearch(false) end,
-                function(targetSet)
-                local candidate = evaluateRegionWithRemoved(
-                    facts, baseActive, region.id, erasers, targetSet, options)
-                if candidate.status ~= "complete" then
-                    failedStatus = candidate
-                    return false
-                end
-                if candidate.success then
-                    solution = { report = candidate, targets = arrayCopy(targetSet) }
-                    return false
-                end
-                return true
-            end, profile, 0, false)
-            if reason == "complexity" then return { status = "complexity" } end
-            if failedStatus then
-                return { status = failedStatus.status, report = failedStatus }
-            end
-            if solution then break end
-        end
-        if solution then
-            local targetCount = #solution.targets
-            local remainder = #erasers - targetCount
-            local cycleCount = remainder - remainder % 2
-            local assignments = {}
-            for index, targetIndex in ipairs(solution.targets) do
-                assignments[#assignments + 1] = {
-                    eraserIndex = erasers[index],
-                    targetIndex = targetIndex,
-                }
-            end
-            local cycleStart = targetCount + 1
-            local cycleEnd = targetCount + cycleCount
-            for index = cycleStart, cycleEnd do
-                assignments[#assignments + 1] = {
-                    eraserIndex = erasers[index],
-                    targetIndex = erasers[index < cycleEnd and index + 1 or cycleStart],
-                }
-            end
-            local retained = {}
-            for index = cycleEnd + 1, #erasers do retained[#retained + 1] = erasers[index] end
-            local used = {}
-            for index = 1, cycleEnd do used[index] = erasers[index] end
-            local selected = evaluateRegionWithRemoved(
-                facts, baseActive, region.id, used, solution.targets, options)
-            return {
-                status = "complete",
-                success = #retained == 0 and selected.success,
-                baseline = baseline,
-                selected = selected,
-                erasures = assignments,
-                invalidErasers = #retained > 0 and retained or nil,
-                proof = { minimumUsed = cycleEnd, targets = solution.targets },
-            }
-        end
-    end
-    -- Every authored Eraser must consume one non-Eraser clue. A temporarily
-    -- valid state reached with only a subset does not make the remaining
-    -- Erasers optional; the complete assignment is the puzzle state that must
-    -- be validated.
-    if profile and #erasers > 0 then
-        local function combinations(count, selected)
-            if selected < 0 or selected > count then return 0 end
-            selected = math.min(selected, count - selected)
-            local result = 1
-            for index = 1, selected do
-                result = result * (count - selected + index) / index
-            end
-            return result
-        end
-        local pruned = 0
-        for usedCount = 0, #erasers - 1 do
-            pruned = pruned + combinations(#erasers, usedCount) *
-                combinations(#targets, usedCount)
-        end
-        profileCount(profile, "prunedEraserStates", pruned)
-    end
-    local usedCount = #erasers
-    local failedStatus
-    local function targetBranch()
+    local function scoreCandidate(eraserSet, targetSet, key, subkey)
         profileCount(profile, "eraserBranches")
-        return true
-    end
-    local _, targetReason = forEachCombination(
-                targets, usedCount, function() return checkpointSearch(false) end,
-                function(targetSet)
-                profileCount(profile, "eraserStatesExplored")
-                if regionProfile then
-                    regionProfile.eraserStates = regionProfile.eraserStates + 1
-                end
-                local scoreStarted = profile and profileNow()
-                local candidate = evaluateRegionWithRemoved(
-                    facts, baseActive, region.id, erasers, targetSet, options)
-                if profile then profileAddTime(profile, "eraserScoring", scoreStarted) end
-                if candidate.status ~= "complete" then
-                    failedStatus = { status = candidate.status, report = candidate }
-                    return false
-                end
-                local score = #(candidate.violations or {})
-                if bestFullScore == nil or score < bestFullScore or
-                        score == bestFullScore and not bestFullTargets then
-                    bestFullScore = score
-                    bestFullTargets = arrayCopy(targetSet)
-                end
-                if score == 0 then
-                    if not fullValid then
-                        fullValid = { report = candidate, targets = arrayCopy(targetSet) }
+        if key == nil then key, subkey = selectionKey(eraserSet, targetSet) end
+        local previous = cached(candidateCache, key, subkey)
+        if previous then
+            profileCount(profile, "eraserCacheHits")
+            return previous
+        end
+        profileCount(profile, "eraserStatesExplored")
+        if regionProfile then regionProfile.eraserStates = regionProfile.eraserStates + 1 end
+        local previousRegionTime = regionProfile and regionProfile.time or 0
+        removalGeneration = removalGeneration + 1
+        for _, id in ipairs(eraserSet) do removed[id] = removalGeneration end
+        for _, id in ipairs(targetSet) do removed[id] = removalGeneration end
+        local candidate
+        if summaryOnly then
+            local started = profile and profileNow()
+            local color, success
+            success = true
+            for _, clue in ipairs(region.squares) do
+                if removed[clue.id] ~= removalGeneration then
+                    if color == nil then
+                        color = clue.ruleColor
+                    elseif color ~= clue.ruleColor then
+                        success = false
+                        break
                     end
+                end
+            end
+            if success and #region.stars > 0 then
+                local coloredCellCount = {}
+                for _, clue in ipairs(region.colored) do
+                    if removed[clue.id] ~= removalGeneration then
+                        coloredCellCount[clue.ruleColor] =
+                            (coloredCellCount[clue.ruleColor] or 0) + 1
+                    end
+                end
+                for _, group in ipairs(region.starGroups) do
+                    local active = false
+                    for _, clue in ipairs(group.clues) do
+                        if removed[clue.id] ~= removalGeneration then
+                            active = true
+                            break
+                        end
+                    end
+                    if active and (coloredCellCount[group.color] or 0) ~= 2 then
+                        success = false
+                        break
+                    end
+                end
+            end
+            if success then
+                for _, clue in ipairs(region.dots) do
+                    if removed[clue.id] ~= removalGeneration and
+                            not dotSatisfied(clue, facts.traced[clue.socketIndex]) then
+                        success = false
+                        break
+                    end
+                end
+            end
+            if success then
+                for _, clue in ipairs(region.triangles) do
+                    if removed[clue.id] ~= removalGeneration then
+                        local faceId = facts.definition.faceBySocket[clue.socketIndex]
+                        local face = faceId and facts.definition.faces[faceId]
+                        local count = 0
+                        for _, boundary in ipairs(face and face.boundaries or {}) do
+                            if facts.traced[boundary] then count = count + 1 end
+                        end
+                        if count ~= clue.count then
+                            success = false
+                            break
+                        end
+                    end
+                end
+            end
+            candidate = success and validSummary or invalidSummary
+            if regionProfile then
+                regionProfile.revalidations = regionProfile.revalidations + 1
+                profileCount(profile, "fullRegionRevalidations")
+                regionProfile.time = regionProfile.time + profileNow() - started
+            end
+        else
+            candidate = evaluateRegion(
+                facts, region.id, removed, options, removalGeneration, regionProfile)
+        end
+        cache(candidateCache, key, subkey, candidate)
+        if profile then
+            profile.timings.eraserScoring = (profile.timings.eraserScoring or 0) +
+                regionProfile.time - previousRegionTime
+        end
+        return candidate
+    end
+
+    local function lexLess(left, right)
+        for index = 1, math.min(#left, #right) do
+            if left[index] ~= right[index] then return left[index] < right[index] end
+        end
+        return #left < #right
+    end
+    local function constraintCoverage(targetSet)
+        local selected, covered = {}, 0
+        for _, clueId in ipairs(targetSet) do selected[clueId] = true end
+        for _, constraint in ipairs(baseline.constraints or {}) do
+            for _, clueId in ipairs(constraint.participants or {}) do
+                if selected[clueId] then
+                    covered = covered + 1
+                    break
+                end
+            end
+        end
+        return covered
+    end
+    local fullValid, fullValidCoverage
+    local failedStatus, smaller, orderFailure
+    local function recordImproper(candidate, eraserSet, targetSet, fullTargets)
+        local nextValue = {
+            report = candidate,
+            erasers = arrayCopy(eraserSet),
+            targets = arrayCopy(targetSet),
+            fullTargets = arrayCopy(fullTargets),
+        }
+        if not smaller or #nextValue.erasers < #smaller.erasers or
+                #nextValue.erasers == #smaller.erasers and
+                (lexLess(nextValue.erasers, smaller.erasers) or
+                    not lexLess(smaller.erasers, nextValue.erasers) and
+                    lexLess(nextValue.targets, smaller.targets)) then
+            smaller = nextValue
+        end
+    end
+    local function orderedAssignment(targetSet, fullReport)
+        if baseline.success then
+            recordImproper(baseline, {}, {}, targetSet)
+            return nil
+        end
+        local usedErasers, usedTargets = {}, {}
+        local orderedErasers, orderedTargets = {}, {}
+        local visited = {}
+        local function visit(depth, eraserKey, targetKey)
+            if profile then
+                profile.counters.maxRecursiveDepth = math.max(
+                    profile.counters.maxRecursiveDepth or 0, depth)
+            end
+            for _, eraserId in ipairs(erasers) do
+                if not usedErasers[eraserId] then
+                    usedErasers[eraserId] = true
+                    orderedErasers[depth] = eraserId
+                    for _, targetId in ipairs(targetSet) do
+                        if not usedTargets[targetId] then
+                            usedTargets[targetId] = true
+                            orderedTargets[depth] = targetId
+                            local key, subkey
+                            if compactKeys then
+                                key = eraserKey + eraserBits[eraserId]
+                                subkey = targetKey + targetBits[targetId]
+                            else
+                                key = selectionKey(orderedErasers, orderedTargets)
+                            end
+                            if not cached(visited, key, subkey) then
+                                cache(visited, key, subkey, true)
+                                if not checkpointSearch(false) then return nil, "complexity" end
+                                local candidate = depth == #erasers and fullReport or
+                                    scoreCandidate(orderedErasers, orderedTargets, key, subkey)
+                                if candidate.status ~= "complete" then
+                                    failedStatus = candidate
+                                    return nil, "failed"
+                                end
+                                if depth == #erasers then
+                                    return {
+                                        report = candidate,
+                                        erasers = arrayCopy(orderedErasers),
+                                        targets = arrayCopy(orderedTargets),
+                                        pairs = mapping(orderedErasers, orderedTargets),
+                                    }
+                                elseif candidate.success then
+                                    recordImproper(candidate, orderedErasers,
+                                        orderedTargets, targetSet)
+                                else
+                                    local found, reason = visit(depth + 1,
+                                        compactKeys and key or 0,
+                                        compactKeys and subkey or 0)
+                                    if found or reason then return found, reason end
+                                end
+                            end
+                            usedTargets[targetId] = nil
+                            orderedTargets[depth] = nil
+                        end
+                    end
+                    usedErasers[eraserId] = nil
+                    orderedErasers[depth] = nil
+                end
+            end
+            return nil
+        end
+        return visit(1, 0, 0)
+    end
+    local _, fullReason = forEachCombination(
+        targets, #erasers, function() return checkpointSearch(false) end,
+        function(targetSet)
+            local candidate = scoreCandidate(erasers, targetSet)
+            if candidate.status ~= "complete" then
+                failedStatus = candidate
+                return false
+            end
+            if candidate.success then
+                local ordered, reason = orderedAssignment(targetSet, candidate)
+                if reason then
+                    orderFailure = reason
                     return false
                 end
-                return true
-            end, profile, usedCount, false, targetBranch)
-    if targetReason == "complexity" then
-        failedStatus = { status = "complexity" }
-    end
-    if failedStatus then return failedStatus end
-
-    if pendingSearchWork > 0 and not checkpointSearch(true) then
+                if ordered then
+                    local coverage = constraintCoverage(targetSet)
+                    if fullValidCoverage == nil or coverage > fullValidCoverage then
+                        fullValidCoverage = coverage
+                        fullValid = ordered
+                    end
+                end
+            end
+            return true
+        end, profile, #erasers)
+    if fullReason == "complexity" or orderFailure == "complexity" or
+            pendingSearchWork > 0 and
+            not checkpointSearch(true) then
         return {
             status = "complexity",
             complexity = { kind = "eraser", regionId = region.id },
         }
     end
-
-    if not fullValid and bestFullTargets then
-        if profile then profileCount(profile, "bestEraserScore", bestFullScore or 0) end
-        bestFull = evaluateRegionWithRemoved(
-            facts, baseActive, region.id, erasers, bestFullTargets, options)
-        if bestFull.status ~= "complete" then
-            return { status = bestFull.status, report = bestFull }
-        end
+    if failedStatus then
+        return { status = failedStatus.status, report = failedStatus }
     end
-
-    if fullValid then
+    if not fullValid and not smaller then
         return {
             status = "complete",
-            success = true,
-            baseline = baseline,
-            selected = fullValid.report,
-            erasures = mapping(erasers, fullValid.targets),
-            proof = { minimumUsed = usedCount, targets = fullValid.targets },
+            success = false,
+            selected = baseline,
+            erasures = {},
+            invalidErasers = arrayCopy(erasers),
+            proof = {
+                minimumUsed = false,
+                erasers = {},
+                targets = {},
+            },
         }
     end
 
+    if not fullValid and smaller then
+        local used = {}
+        for _, eraserId in ipairs(smaller.erasers) do used[eraserId] = true end
+        local unused = {}
+        for _, eraserId in ipairs(erasers) do
+            if not used[eraserId] then unused[#unused + 1] = eraserId end
+        end
+        local improperPairs = mapping(smaller.erasers, smaller.targets)
+        return {
+            status = "complete",
+            success = false,
+            selected = smaller.report,
+            erasures = improperPairs,
+            unnecessary = unused,
+            proof = {
+                minimumUsed = #smaller.erasers,
+                fullAssignment = {
+                    erasers = arrayCopy(erasers),
+                    targets = arrayCopy(smaller.fullTargets),
+                    pairs = mapping(erasers, smaller.fullTargets),
+                },
+                improperAssignment = {
+                    erasers = arrayCopy(smaller.erasers),
+                    targets = arrayCopy(smaller.targets),
+                    pairs = improperPairs,
+                    unusedErasers = arrayCopy(unused),
+                },
+            },
+        }
+    end
     return {
         status = "complete",
-        success = false,
-        baseline = baseline,
-        selected = bestFull or baseline,
-        erasures = bestFullTargets and mapping(erasers, bestFullTargets) or {},
-        invalidErasers = bestFullTargets and {} or arrayCopy(erasers),
-        proof = { minimumUsed = false, targets = bestFullTargets or {} },
+        success = true,
+        selected = fullValid.report,
+        erasures = fullValid.pairs,
+        proof = {
+            minimumUsed = #erasers,
+            fullAssignment = {
+                erasers = arrayCopy(fullValid.erasers),
+                targets = arrayCopy(fullValid.targets),
+                pairs = fullValid.pairs,
+            },
+        },
     }
+end
+
+local function eraserRegionCacheKey(facts, region)
+    local definition = facts.definition
+    local parts = {
+        definition.ruleRevision, region.id, region.cacheKey,
+    }
+    for _, clue in ipairs(region.dots) do
+        parts[#parts + 1] = clue.id
+        parts[#parts + 1] = facts.traced[clue.socketIndex] or 0
+    end
+    for _, clue in ipairs(region.triangles) do
+        local faceId = definition.faceBySocket[clue.socketIndex]
+        local face = faceId and definition.faces[faceId]
+        local count = 0
+        for _, boundary in ipairs(face and face.boundaries or {}) do
+            if facts.traced[boundary] then count = count + 1 end
+        end
+        parts[#parts + 1] = clue.id
+        parts[#parts + 1] = count
+    end
+    return table.concat(parts, ":")
 end
 
 function RuleEngine.NewBudget(options)
@@ -1219,19 +2105,92 @@ function RuleEngine.NewBudget(options)
     return budget
 end
 
+local function makeReport(definition, facts, status, fields)
+    local report = fields or {}
+    report.status = status
+    report.success = status == "complete" and report.success == true
+    report.violations = report.violations or {}
+    report.erasures = report.erasures or {}
+    report.remaining = report.remaining or arrayCopy(report.violations)
+    report.constraints = report.constraints or {}
+    report.witnesses = report.witnesses or {}
+    report.ruleRevision = definition.ruleRevision
+    report.traceHash = facts.traceHash
+    return report
+end
+
+local function traceCacheKey(traceSnapshot, suppliedTraceHash)
+    if type(traceSnapshot) ~= "table" or type(traceSnapshot.stacks) ~= "table" then
+        return nil
+    end
+    local revision = traceSnapshot.revision
+    if revision ~= nil and (type(revision) ~= "number" or revision ~= revision) then
+        return nil
+    end
+    local stacks = traceSnapshot.stacks
+    local parts = {
+        "r", tostring(revision), "h", type(suppliedTraceHash),
+        tostring(suppliedTraceHash), "b", tostring(#stacks),
+    }
+    for key in pairs(stacks) do
+        if type(key) ~= "number" or key < 1 or key > #stacks or key % 1 ~= 0 then
+            return nil
+        end
+    end
+    for branch = 1, #stacks do
+        local stack = stacks[branch]
+        if type(stack) ~= "table" then return nil end
+        parts[#parts + 1] = "s"
+        parts[#parts + 1] = tostring(#stack)
+        for key in pairs(stack) do
+            if type(key) ~= "number" or key < 1 or key > #stack or key % 1 ~= 0 then
+                return nil
+            end
+        end
+        for index = 1, #stack do
+            local nodeId = stack[index]
+            if type(nodeId) ~= "number" or nodeId ~= nodeId or nodeId % 1 ~= 0 then
+                return nil
+            end
+            parts[#parts + 1] = tostring(nodeId)
+        end
+    end
+    return table.concat(parts, ":")
+end
+
 function RuleEngine.Evaluate(definition, traceSnapshot, options)
     options = options or {}
-    local evaluationStarted = profileNow()
     local profile = beginProfile(options)
-    if profile then
-        local runtimeOptions = {}
-        for key, value in pairs(options) do runtimeOptions[key] = value end
-        runtimeOptions.__profile = profile
-        options = runtimeOptions
+    local evaluationStarted = profile and profileNow()
+    local solverCache = options.cache
+    local traceKey = traceCacheKey(traceSnapshot, options.traceHash)
+    local exactKey = traceKey and definition.ruleRevision .. ":" .. traceKey
+    local cachedReport = cacheGet(solverCache, "reports", exactKey)
+    if cachedReport then
+        profileCount(profile, "exactReportCacheHits")
+        return finishProfile(copyTree(cachedReport), profile, evaluationStarted)
     end
-    options.__polyominoCache = {}
-    local facts = RuleEngine.BuildFacts(definition, traceSnapshot, profile)
-    if options.traceHash then facts.traceHash = options.traceHash end
+    if exactKey then profileCount(profile, "exactReportCacheMisses") end
+    local runtimeOptions = {}
+    for key, value in pairs(options) do runtimeOptions[key] = value end
+    runtimeOptions.__profile = profile
+    runtimeOptions.__polyominoCache = {}
+    options = runtimeOptions
+    local function complete(report)
+        report.reportHash = hashReport(report)
+        if report.status ~= "complexity" then
+            cachePut(solverCache, "reports", exactKey, copyTree(report))
+        end
+        return finishProfile(report, profile, evaluationStarted)
+    end
+    local facts = cacheGet(solverCache, "facts", exactKey)
+    if facts then
+        profileCount(profile, "traceFactsCacheHits")
+    else
+        if exactKey then profileCount(profile, "traceFactsCacheMisses") end
+        facts = buildFacts(definition, traceSnapshot, profile, options.traceHash)
+        cachePut(solverCache, "facts", exactKey, facts)
+    end
     local dataErrors = {}
     for _, failure in ipairs(definition.dataErrors) do dataErrors[#dataErrors + 1] = failure end
     for _, failure in ipairs(facts.traceErrors) do dataErrors[#dataErrors + 1] = failure end
@@ -1241,94 +2200,95 @@ function RuleEngine.Evaluate(definition, traceSnapshot, options)
             if failure.clueId > 0 then violationSet[failure.clueId] = true end
         end
         local violations = sortedSet(violationSet)
-        local report = {
-            status = "data_error",
-            success = false,
+        local report = makeReport(definition, facts, "data_error", {
             violations = violations,
-            erasures = {},
-            remaining = arrayCopy(violations),
             constraints = {{
                 kind = "data",
                 regionId = 0,
                 participants = arrayCopy(violations),
                 details = { errors = dataErrors },
             }},
-            witnesses = {},
-            ruleRevision = definition.ruleRevision,
-            traceHash = facts.traceHash,
-        }
-        return finishReport(report, profile, evaluationStarted)
+        })
+        return complete(report)
     end
-    local baseActive = {}
-    for _, clue in ipairs(definition.clues) do baseActive[clue.id] = true end
-
     local initialStarted = profile and profileNow()
-    local initial = evaluateActiveSet(facts, baseActive, options)
+    local baselines = {}
+    local noRemoved = {}
+    local initialStatus, initialComplexity = "complete"
+    local initialViolationSet, initialConstraints = {}, {}
+    local initialWitnesses = { polyomino = {} }
+    local function collectBaseline(baseline)
+        for _, id in ipairs(baseline.violations or {}) do initialViolationSet[id] = true end
+        for _, constraint in ipairs(baseline.constraints or {}) do
+            initialConstraints[#initialConstraints + 1] = constraint
+        end
+        for regionId, witness in pairs((baseline.witnesses or {}).polyomino or {}) do
+            initialWitnesses.polyomino[regionId] = witness
+        end
+        if baseline.status ~= "complete" then
+            initialStatus = baseline.status
+            initialComplexity = baseline.complexity
+        end
+    end
+    local globalBaseline = evaluateRegion(facts, 0, noRemoved, options)
+    collectBaseline(globalBaseline)
+    for _, region in ipairs(facts.regions) do
+        if initialStatus ~= "complete" then break end
+        local baseline = evaluateRegion(facts, region.id, noRemoved, options)
+        baselines[region.id] = baseline
+        collectBaseline(baseline)
+    end
+    local initialViolations = sortedSet(initialViolationSet)
     if profile then
         profileAddTime(profile, "initialValidation", initialStarted)
         for _, regionProfile in pairs(profile.regions) do
             regionProfile.initialTime = regionProfile.time
         end
     end
-    if initial.status ~= "complete" then
-        local report = {
-            status = initial.status,
-            success = false,
-            violations = initial.violations or {},
-            erasures = {},
-            remaining = initial.violations or {},
-            constraints = initial.constraints or {},
-            witnesses = initial.witnesses or {},
-            complexity = initial.complexity,
-            ruleRevision = definition.ruleRevision,
-            traceHash = facts.traceHash,
-        }
-        return finishReport(report, profile, evaluationStarted)
+    if initialStatus ~= "complete" then
+        local report = makeReport(definition, facts, initialStatus, {
+            violations = initialViolations,
+            constraints = initialConstraints,
+            witnesses = initialWitnesses,
+            complexity = initialComplexity,
+        })
+        return complete(report)
     end
 
     local violationSet, remainingSet = {}, {}
     local constraints, erasures = {}, {}
     local witnesses = { polyomino = {}, erasers = {} }
-    for _, id in ipairs(initial.violations) do violationSet[id] = true end
+    for _, id in ipairs(initialViolations) do violationSet[id] = true end
 
     -- Route clues normally inherit one adjacent region. Malformed/extension
     -- topology can leave a clue regionless; keep those constraints global so
     -- they cannot disappear merely because eraser evaluation is regional.
-    local overallSuccess = true
-    for _, constraint in ipairs(initial.constraints) do
-        if constraint.regionId == 0 then
-            constraints[#constraints + 1] = constraint
-            for _, id in ipairs(constraint.participants or {}) do remainingSet[id] = true end
-            overallSuccess = false
-        end
+    for _, constraint in ipairs(globalBaseline.constraints) do
+        constraints[#constraints + 1] = constraint
     end
+    for _, id in ipairs(globalBaseline.violations) do remainingSet[id] = true end
 
     for _, region in ipairs(facts.regions) do
         local regionEvaluationStarted = profile and profileNow()
-        local baseline = sliceRegionReport(initial, region.id)
-        local violating = {}
-        for _, clueId in ipairs(baseline.violations or {}) do
-            violating[clueId] = true
-        end
-        local erasersInRegion, targets = {}, {}
-        for _, clueId in ipairs(region.clues) do
-            local clue = definition.clueById[clueId]
-            if clue.kind == "eraser" then
-                erasersInRegion[#erasersInRegion + 1] = clue.id
-            elseif violating[clue.id] then
-                targets[#targets + 1] = clue.id
-            end
-        end
-
+        local baseline = baselines[region.id]
         local solved
-        if #erasersInRegion > 0 then
-            solved = solveEraserRegion(
-                facts, baseActive, region, erasersInRegion, targets, options, baseline)
+        if #region.erasers > 0 then
+            local eraserKey = eraserRegionCacheKey(facts, region)
+            solved = cacheGet(solverCache, "erasers", eraserKey)
+            if solved then
+                solved = copyTree(solved)
+                profileCount(profile, "eraserPersistentCacheHits")
+            else
+                solved = solveEraserRegion(
+                    facts, region, region.erasers, region.targets, options, baseline)
+                if solved.status ~= "complexity" then
+                    cachePut(solverCache, "erasers", eraserKey, copyTree(solved))
+                end
+            end
         else
             solved = {
                 status = baseline.status,
                 success = baseline.success,
-                baseline = baseline,
                 selected = baseline,
                 erasures = {},
             }
@@ -1341,20 +2301,15 @@ function RuleEngine.Evaluate(definition, traceSnapshot, options)
         end
 
         if solved.status ~= "complete" then
-            local report = {
-                status = solved.status,
-                success = false,
-                violations = initial.violations,
+            local report = makeReport(definition, facts, solved.status, {
+                violations = initialViolations,
                 erasures = erasures,
-                remaining = initial.violations,
-                constraints = initial.constraints,
+                constraints = initialConstraints,
                 witnesses = witnesses,
                 complexity = solved.complexity or
                     (solved.report and solved.report.complexity),
-                ruleRevision = definition.ruleRevision,
-                traceHash = facts.traceHash,
-            }
-            return finishReport(report, profile, evaluationStarted)
+            })
+            return complete(report)
         end
 
         for _, id in ipairs(solved.unnecessary or {}) do violationSet[id] = true end
@@ -1383,28 +2338,6 @@ function RuleEngine.Evaluate(definition, traceSnapshot, options)
             witnesses.polyomino[regionId] = witness
         end
         if solved.proof then witnesses.erasers[region.id] = solved.proof end
-        if not solved.success then overallSuccess = false end
-    end
-
-    if overallSuccess then
-        for clueId in pairs(facts.ignoredClues or {}) do
-            local clue = definition.clueById[clueId]
-            if clue and clue.kind == "dot" and
-                    not dotSatisfied(clue, facts.traced[clue.socketIndex]) then
-                violationSet[clueId] = true
-                remainingSet[clueId] = true
-                constraints[#constraints + 1] = {
-                    kind = "dot",
-                    regionId = facts.clueRegions[clueId] or 0,
-                    participants = { clueId },
-                    details = {
-                        traceRole = clue.traceRole,
-                        negative = clue.negative == true,
-                    },
-                }
-                overallSuccess = false
-            end
-        end
     end
 
     local reportingStarted = profile and profileNow()
@@ -1418,23 +2351,19 @@ function RuleEngine.Evaluate(definition, traceSnapshot, options)
         return (a.participants[1] or 0) < (b.participants[1] or 0)
     end)
 
-    local report = {
-        status = "complete",
-        success = overallSuccess and next(remainingSet) == nil,
+    local report = makeReport(definition, facts, "complete", {
+        success = next(remainingSet) == nil,
         violations = sortedSet(violationSet),
         erasures = erasures,
         remaining = sortedSet(remainingSet),
         constraints = constraints,
         witnesses = witnesses,
-        ruleRevision = definition.ruleRevision,
-        traceHash = facts.traceHash,
-    }
-    report.reportHash = RuleEngine.HashReport(report)
+    })
     if profile then profileAddTime(profile, "finalReporting", reportingStarted) end
-    return finishProfile(report, profile, evaluationStarted)
+    return complete(report)
 end
 
-function RuleEngine.HashReport(report)
+hashReport = function(report)
     return RuleEngine.HashValue({
         status = report.status,
         success = report.success,

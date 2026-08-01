@@ -5,7 +5,7 @@
   "topologyRevision": 1,
   "tests": [
     {
-      "name": "right right up up leaves one eraser erroring",
+      "name": "right right up up rejects the unnecessary full pairing",
       "traces": [[[0,2],[1,2],[2,2],[2,1],[2,0]]],
       "expected": {
         "success": false,
@@ -13,7 +13,8 @@
         "erasureCount": 1,
         "eraserTargetCount": 0,
         "nonEraserTargetCount": 1,
-        "remainingCount": 1
+        "remainingCount": 1,
+        "constraintKinds": ["eraser_unnecessary"]
       }
     }
   ]

@@ -7,7 +7,19 @@
     {
       "name": "the authored solution route",
       "traces": [[[0, 4], [1, 4], [1, 3], [2, 3], [2, 4], [3, 4], [3, 3], [4, 3], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2], [0, 1], [1, 1], [1, 0], [2, 0], [2, 1], [3, 1], [3, 0], [4, 0]]],
-      "expected": {"success": true, "status": "complete"}
+      "expected": {
+        "success": true,
+        "status": "complete",
+        "erasureCount": 4,
+        "erasures": [
+          {"eraserIndex": 17, "targetIndex": 35},
+          {"eraserIndex": 33, "targetIndex": 31},
+          {"eraserIndex": 49, "targetIndex": 47},
+          {"eraserIndex": 65, "targetIndex": 51}
+        ],
+        "remainingCount": 0,
+        "constraintKinds": []
+      }
     }
   ]
 }

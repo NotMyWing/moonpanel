@@ -138,8 +138,6 @@ AddCSLuaFile "cl_dcanvas.lua"
 AddCSLuaFile "cl_rtpool.lua"
 AddCSLuaFile "cl_colorutils.lua"
 AddCSLuaFile "cl_presentation.lua"
-AddCSLuaFile "sh_dlx.lua"
-AddCSLuaFile "sh_polyomino.lua"
 AddCSLuaFile "sh_rule_engine.lua"
 AddCSLuaFile "sh_surface.lua"
 AddCSLuaFile "sh_continuous_topology.lua"
@@ -147,10 +145,8 @@ AddCSLuaFile "editor/cl_document.lua"
 AddCSLuaFile "editor/cl_store.lua"
 AddCSLuaFile "editor/cl_editor.lua"
 
-Moonpanel.Canvas.DLX = include "sh_dlx.lua"
 include "sh_surface.lua"
 include "sh_paneldata.lua"
-include "sh_polyomino.lua"
 Moonpanel.Canvas.RuleEngine = include "sh_rule_engine.lua"
 include "sh_pathfinder.lua"
 include "sh_entities.lua"
@@ -566,13 +562,14 @@ class Canvas
 			@StopSounds!
 			@__sounds = nil
 			@SetupSounds!
+		rawCompatibility = nil
 		if @__data
 			@__surface = Moonpanel.Canvas.MakeSurfaceSpec @GetSurfaceSpec!.kind,
 				@__data.Meta.Continuous
-			if @__surface.continuous
+			rawCompatibility = Moonpanel.Canvas.GetSurfaceCompatibility @__data, @__surface
+			if @__surface.continuous and #(rawCompatibility.seamPairs or {}) == 0
 				@__data = Moonpanel.Canvas.CanonicalizeContinuousData @__data
-		@__surfaceCompatibility = @__data and
-			Moonpanel.Canvas.GetSurfaceCompatibility(@__data, @GetSurfaceSpec!) or nil
+		@__surfaceCompatibility = @__data and rawCompatibility or nil
 		@__geometry = @__data and Moonpanel.Canvas.CalculateGeometry @__data,
 			Moonpanel.Canvas.Resolution
 		if @__geometry and @IsContinuous!
@@ -881,11 +878,13 @@ class Canvas
 				if socket = resolveEdgeSocket fromNode, topology.nodes[toId]
 					edge.socketIndex = socketIndex socket
 		@__pathFinder = Moonpanel.Canvas.TraceEngine topology
-		ruleData = if @IsContinuous!
+		ruleData = if @IsContinuous! and
+			#((@__surfaceCompatibility and @__surfaceCompatibility.seamPairs) or {}) == 0
 			Moonpanel.Canvas.CanonicalizeContinuousData @__data
 		else
 			@__data
 		@__ruleDefinition = Moonpanel.Canvas.RuleEngine.Compile ruleData, topology
+		@__ruleCache = Moonpanel.Canvas.RuleEngine.NewCache ttl: 120
 		@BindWorldOcclusion!
 
 	GetTraceHash: => @__pathFinder and @__pathFinder\hash!
@@ -1291,6 +1290,7 @@ class Canvas
 	-- Thonks. --
 	-------------
 	Think: =>
+		Moonpanel.Canvas.RuleEngine.PruneCache @__ruleCache if @__ruleCache
 		return if not @__playData and not CLIENT
 
 		if CLIENT and @__clientData

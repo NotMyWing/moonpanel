@@ -1,0 +1,30 @@
+{
+  "name": "two erasers and stars",
+  "panel": "2_erasers_and_stars.txt",
+  "legacy": false,
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "up up right right exposes one premature cancellation",
+      "traces": [[[0,2],[0,1],[0,0],[1,0],[2,0]]],
+      "expected": {
+        "success": false,
+        "status": "complete",
+        "erasures": [{"eraserIndex": 7, "targetIndex": 9}],
+        "remaining": [19],
+        "constraintKinds": ["eraser_unnecessary"]
+      }
+    },
+    {
+      "name": "right up up right leaves both satisfied star pairs without eraser work",
+      "traces": [[[0,2],[1,2],[1,1],[1,0],[2,0]]],
+      "expected": {
+        "success": false,
+        "status": "complete",
+        "erasureCount": 0,
+        "remaining": [7, 19],
+        "constraintKinds": ["eraser_unnecessary", "eraser_unnecessary"]
+      }
+    }
+  ]
+}

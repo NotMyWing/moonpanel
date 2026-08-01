@@ -32,6 +32,33 @@ Helpers.flatIndex = (width, gridX, gridY) ->
 Helpers.copyArray = (values = {}) ->
 	[value for value in *values]
 
+UINT32 = 4294967296
+CRC_MASK = 4294967295
+CRC_POLYNOMIAL = 3988292384
+crcXor = (left, right) -> bit.bxor(left, right) % UINT32
+crcTable = {}
+for byte = 0, 255
+	value = byte
+	for _ = 1, 8
+		value = if value % 2 == 1
+			crcXor math.floor(value / 2), CRC_POLYNOMIAL
+		else
+			math.floor value / 2
+	crcTable[byte] = value
+
+Helpers.CRC32Begin = CRC_MASK
+Helpers.CRC32AppendByte = (crc, byte) ->
+	crcXor math.floor(crc / 256), crcTable[crcXor(crc % 256, byte % 256)]
+
+Helpers.CRC32AppendNumber = (crc, value) ->
+	value = math.floor(tonumber(value) or 0) % UINT32
+	for _ = 1, 4
+		crc = Helpers.CRC32AppendByte crc, value % 256
+		value = math.floor value / 256
+	crc
+
+Helpers.CRC32Finish = (crc) -> crcXor crc, CRC_MASK
+
 Helpers.copyColor = (input, fallback) ->
 	input = Helpers.tableOrEmpty input
 	fallback = fallback or {}

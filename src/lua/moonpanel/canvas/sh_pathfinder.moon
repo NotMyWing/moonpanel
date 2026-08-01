@@ -5,38 +5,11 @@ round = Helpers.round
 clamp = Helpers.clamp
 
 TRACE_UNITS = 4096
-UINT32 = 4294967296
-CRC_MASK = 4294967295
-CRC_POLYNOMIAL = 3988292384
-
-bxor = (left, right) -> bit.bxor(left, right) % UINT32
-
-CRC_TABLE = {}
-for byte = 0, 255
-	value = byte
-	for i = 1, 8
-		value = if value % 2 == 1
-			bxor math.floor(value / 2), CRC_POLYNOMIAL
-		else
-			math.floor value / 2
-	CRC_TABLE[byte] = value
-
+CRC_MASK = Helpers.CRC32Begin
 appendHash = (crc, value) ->
-	value = if "boolean" == type value
-		value and 1 or 0
-	elseif "number" == type value
-		math.floor(value) % UINT32
-	else
-		0
-
-	for i = 1, 4
-		byte = value % 256
-		index = bxor(crc % 256, byte)
-		crc = bxor math.floor(crc / 256), CRC_TABLE[index]
-		value = math.floor value / 256
-	crc
-
-finishHash = (crc) -> bxor crc, CRC_MASK
+	value = value and 1 or 0 if type(value) == "boolean"
+	Helpers.CRC32AppendNumber crc, value
+finishHash = Helpers.CRC32Finish
 
 historyIntent = (history, dx, dy) ->
 	pending = dx ~= nil

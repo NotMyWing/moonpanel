@@ -118,6 +118,10 @@ printVerifierProfile = (report, budget = nil) ->
 		" poly_calls=", tostring counters.polyominoSolverCalls or 0
 		" poly_hits=", tostring counters.polyominoCacheHits or 0
 		" poly_misses=", tostring counters.polyominoCacheMisses or 0
+		" report_cache=", tostring counters.exactReportCacheHits or 0
+		" facts_cache=", tostring counters.traceFactsCacheHits or 0
+		" persistent_poly=", tostring counters.polyominoPersistentCacheHits or 0
+		" persistent_eraser=", tostring counters.eraserPersistentCacheHits or 0
 		" work=", tostring(budget and budget.total or 0)
 		" yields=", tostring(budget and budget.yields or 0)
 		" slice_ms=", milliseconds(budget and budget.sliceSeconds or 0)
@@ -188,6 +192,7 @@ CANVAS.CreateSolutionCoroutine = =>
 		}
 		report = Moonpanel.Canvas.RuleEngine.Evaluate @__ruleDefinition, snapshot, {
 			:traceHash
+			cache: @__ruleCache
 			checkpoint: (amount) -> budget\checkpoint amount
 			developmentProfile: profile
 		}

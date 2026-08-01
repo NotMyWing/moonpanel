@@ -10,6 +10,9 @@ const luaBinary = process.argv[3] || 'lua';
 const caseName = process.argv[4] || 'windmill';
 const maximumWork = Math.max(1, Number(process.argv[5]) || 1000);
 const timeoutMs = Math.max(1000, Number(process.argv[6]) || 5000);
+const iterations = Math.max(1, Number(process.argv[7]) || 1);
+const developmentProfile = process.argv[8] !== 'false';
+const cacheMode = process.argv[9] || 'warm';
 const projectRoot = path.join(__dirname, '../..');
 
 function toLua(value) {
@@ -25,11 +28,14 @@ function toLua(value) {
     `[${JSON.stringify(key)}]=${toLua(child)}`).join(',')}}`;
 }
 
-const inputPath = path.join(os.tmpdir(), `moonpanel-verifier-${process.pid}.lua`);
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'moonpanel-verifier-'));
+const inputPath = path.join(tempDir, 'panel.lua');
 fs.writeFileSync(inputPath, `return ${toLua(JSON.parse(fs.readFileSync(sourcePath, 'utf8')))}\n`);
 try {
   const result = spawnSync(luaBinary, [path.join(projectRoot, 'tools/benchmarks/verifier.lua'),
-    inputPath, caseName, String(maximumWork)], {
+    inputPath, caseName, String(maximumWork), String(iterations),
+    'dest/lua/moonpanel/canvas/sh_rule_engine.lua', String(developmentProfile),
+    cacheMode], {
       cwd: projectRoot, encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL',
     });
   if (result.stdout) process.stdout.write(result.stdout);
@@ -40,5 +46,5 @@ try {
   } else if (result.error && result.status === null) throw result.error;
   else process.exitCode = result.status === null ? 1 : result.status;
 } finally {
-  fs.rmSync(inputPath, {force: true});
+  fs.rmSync(tempDir, {force: true, recursive: true});
 }

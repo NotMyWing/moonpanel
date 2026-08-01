@@ -1,9 +1,7 @@
 local test = dofile('tools/tests/harness.lua')
 
-Moonpanel.Canvas.DLX = dofile('dest/lua/moonpanel/canvas/sh_dlx.lua')
 dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 local flatIndex = Moonpanel.Helpers.flatIndex
-dofile('dest/lua/moonpanel/canvas/sh_polyomino.lua')
 local RuleEngine = dofile('dest/lua/moonpanel/canvas/sh_rule_engine.lua')
 
 local function cellIndex(width, x, y)
@@ -38,16 +36,25 @@ local function panel(width, height)
   }
 end
 
-local function topology(nodes, edgeList)
+local function topology(nodes, edgeList, symmetryNodes)
   local value = {
     revision = 9001,
-    nodes = nodes or {},
+    nodes = nodes or {{clickable = true, exit = true}},
     edges = {},
+    starts = {},
+    exits = {},
+    symmetryNodes = symmetryNodes or {},
+    symmetryEdges = {},
   }
-  for index = 1, #value.nodes do value.edges[index] = {} end
+  for index, node in ipairs(value.nodes) do
+    value.edges[index] = {}
+    value.symmetryEdges[index] = {}
+    if node.clickable then value.starts[#value.starts + 1] = index end
+    if node.exit then value.exits[#value.exits + 1] = index end
+  end
   for _, edge in ipairs(edgeList or {}) do
-    local forward = { socketIndex = edge[3] }
-    local reverse = { socketIndex = edge[3] }
+    local forward = {fromId = edge[1], toId = edge[2], socketIndex = edge[3]}
+    local reverse = {fromId = edge[2], toId = edge[1], socketIndex = edge[3]}
     for key, item in pairs(edge[4] or {}) do
       forward[key] = item
       reverse[key] = item
@@ -58,6 +65,24 @@ local function topology(nodes, edgeList)
   function value:getEdge(fromId, toId)
     return self.edges[fromId] and self.edges[fromId][toId]
   end
+  for fromId, edges in ipairs(value.edges) do
+    for toId in pairs(edges) do
+      local mirrorFrom, mirrorTo = value.symmetryNodes[fromId], value.symmetryNodes[toId]
+      value.symmetryEdges[fromId][toId] = mirrorFrom and mirrorTo and
+        value.edges[mirrorFrom] and value.edges[mirrorFrom][mirrorTo] or nil
+    end
+  end
+  function value:getSymmetricalNodeId(nodeId) return self.symmetryNodes[nodeId] end
+  function value:getSymmetricalEdge(fromId, toId)
+    return self.symmetryEdges[fromId] and self.symmetryEdges[fromId][toId]
+  end
+  function value:isValidStart(nodeId)
+    local node = self.nodes[nodeId]
+    if not node or not node.clickable then return false end
+    if #self.symmetryNodes == 0 then return true end
+    local mirror = self.symmetryNodes[nodeId]
+    return mirror and self.nodes[mirror] and self.nodes[mirror].clickable or false
+  end
   return value
 end
 
@@ -66,7 +91,7 @@ local function evaluate(data, topo, stacks)
   local definition = RuleEngine.Compile(data, topo)
   return RuleEngine.Evaluate(definition, {
     revision = topo.revision,
-    stacks = stacks or {},
+    stacks = stacks or {{1}},
   })
 end
 
@@ -86,17 +111,17 @@ local function boundaryTrace(width, mask)
     hpathIndex(width, 1, 2),
     vpathIndex(width, 1, 1),
   }
-  local nodes, edges, stacks = {}, {}, {}
+  local nodes, edges, stack = {{clickable = true}}, {}, {1}
   for side = 1, 4 do
     if math.floor(mask / (2 ^ (side - 1))) % 2 == 1 then
-      local first = #nodes + 1
-      nodes[first] = {}
-      nodes[first + 1] = {}
-      edges[#edges + 1] = {first, first + 1, sockets[side]}
-      stacks[#stacks + 1] = {first, first + 1}
+      local nextId = #nodes + 1
+      nodes[nextId] = {}
+      edges[#edges + 1] = {stack[#stack], nextId, sockets[side]}
+      stack[#stack + 1] = nextId
     end
   end
-  return topology(nodes, edges), stacks
+  nodes[#nodes].exit = true
+  return topology(nodes, edges), {stack}
 end
 
 local function setCell(data, x, typeName, attributes)
@@ -107,31 +132,44 @@ local function setCell(data, x, typeName, attributes)
   return cellIndex(data.Meta.Width, x, 1)
 end
 
-test.test('DLX positive exact cover returns a canonical witness', function()
-  local result = Moonpanel.Canvas.PolyominoSolver.Solve({
+test.test('positive exact cover returns a canonical witness', function()
+  local result = RuleEngine.SolvePolyomino({
     cells = {{x = 1, y = 1}, {x = 2, y = 1}},
   }, {
     {id = 10, shape = {{1, 1}}, rotatable = false},
   })
-  assert(result.status == 'solved' and result.backend == 'dlx', 'DLX did not solve domino')
+  assert(result.status == 'solved' and result.backend == 'exact',
+    'exact search did not solve domino')
   assert(#result.placements == 1 and result.placements[1].pieceId == 10,
-    'DLX witness was not canonical')
+    'exact-cover witness was not canonical')
 end)
 
 test.test('positive polyomino placements wrap across a continuous seam', function()
   local cells = {{x = 3, y = 1}, {x = 1, y = 1}}
   local pieces = {{id = 7, shape = {{1, 1}}, rotatable = false}}
-  assert(Moonpanel.Canvas.PolyominoSolver.Solve({cells = cells}, pieces).status ==
+  assert(RuleEngine.SolvePolyomino({cells = cells}, pieces).status ==
     'unsatisfied', 'bounded solver crossed an outer boundary')
-  local wrapped = Moonpanel.Canvas.PolyominoSolver.Solve({
+  local wrapped = RuleEngine.SolvePolyomino({
     cells = cells, wrapWidth = 3,
   }, pieces)
-  assert(wrapped.status == 'solved' and wrapped.backend == 'dlx',
+  assert(wrapped.status == 'solved' and wrapped.backend == 'exact',
     'continuous solver did not wrap a legal placement')
 end)
 
+test.test('signed polyominoes cannot overlap themselves across a seam', function()
+  local result = RuleEngine.SolvePolyomino({
+    wrapWidth = 3,
+    cells = {{x = 1, y = 1}, {x = 2, y = 1}, {x = 3, y = 1}},
+  }, {
+    {id = 1, shape = {{1, 1, 1, 1}}},
+    {id = 2, shape = {{1}}, negative = true},
+  })
+  assert(result.status == 'unsatisfied',
+    'a wrapped piece erased its own overlapping cell')
+end)
+
 test.test('fixed polyominoes never reflect', function()
-  local result = Moonpanel.Canvas.PolyominoSolver.Solve({
+  local result = RuleEngine.SolvePolyomino({
     cells = {
       {x = 1, y = 1}, {x = 1, y = 2}, {x = 2, y = 2},
     },
@@ -142,7 +180,7 @@ test.test('fixed polyominoes never reflect', function()
 end)
 
 test.test('rotatable pieces rotate but never need reflection', function()
-  local result = Moonpanel.Canvas.PolyominoSolver.Solve({
+  local result = RuleEngine.SolvePolyomino({
     cells = {{x = 1, y = 1}, {x = 1, y = 2}, {x = 2, y = 2}},
   }, {
     {id = 1, shape = {{1, 1}, {1, 0}}, rotatable = true},
@@ -150,8 +188,8 @@ test.test('rotatable pieces rotate but never need reflection', function()
   assert(result.status == 'solved', 'quarter-turn rotation was rejected')
 end)
 
-test.test('DLX covers disconnected regions and preserves holes', function()
-  local disconnected = Moonpanel.Canvas.PolyominoSolver.Solve({
+test.test('exact cover handles disconnected regions and holes', function()
+  local disconnected = RuleEngine.SolvePolyomino({
     cells = {{x = 1, y = 1}, {x = 3, y = 1}},
   }, {
     {id = 1, shape = {{1}}}, {id = 2, shape = {{1}}},
@@ -164,7 +202,7 @@ test.test('DLX covers disconnected regions and preserves holes', function()
       if x ~= 2 or y ~= 2 then ring[#ring + 1] = {x = x, y = y} end
     end
   end
-  local hole = Moonpanel.Canvas.PolyominoSolver.Solve({cells = ring}, {{
+  local hole = RuleEngine.SolvePolyomino({cells = ring}, {{
     id = 1,
     shape = {{1, 1, 1}, {1, 0, 1}, {1, 1, 1}},
   }})
@@ -180,14 +218,14 @@ test.test('duplicate positive pieces have deterministic placements', function()
     {x = 1, y = 1}, {x = 2, y = 1},
     {x = 1, y = 2}, {x = 2, y = 2},
   }}
-  local first = Moonpanel.Canvas.PolyominoSolver.Solve(region, input)
-  local second = Moonpanel.Canvas.PolyominoSolver.Solve(region, input)
+  local first = RuleEngine.SolvePolyomino(region, input)
+  local second = RuleEngine.SolvePolyomino(region, input)
   assert(first.status == 'solved' and second.status == 'solved', 'duplicate pieces failed')
   assert(RuleEngine.HashValue(first.placements) == RuleEngine.HashValue(second.placements),
     'duplicate-piece witness changed between runs')
 end)
 
-test.test('DLX matches brute-force domino tiling on every 3x2 region', function()
+test.test('exact search matches brute-force domino tiling on every 3x2 region', function()
   local function key(x, y) return x .. ':' .. y end
   local function brute(cells)
     local open = {}
@@ -228,9 +266,9 @@ test.test('DLX matches brute-force domino tiling on every 3x2 region', function(
       for id = 1, #cells / 2 do
         pieces[#pieces + 1] = {id = id, shape = {{1, 1}}, rotatable = true}
       end
-      local solved = Moonpanel.Canvas.PolyominoSolver.Solve({cells = cells}, pieces)
+      local solved = RuleEngine.SolvePolyomino({cells = cells}, pieces)
       assert((solved.status == 'solved') == brute(cells),
-        string.format('DLX/brute-force mismatch for region mask %d', mask))
+        string.format('exact/brute-force mismatch for region mask %d', mask))
     end
   end
 end)
@@ -246,13 +284,13 @@ test.test('polyomino validity is translation invariant', function()
   local moved = {cells = {
     {x = 8, y = -3}, {x = 9, y = -3}, {x = 8, y = -2}, {x = 9, y = -2},
   }}
-  assert(Moonpanel.Canvas.PolyominoSolver.Solve(first, pieces).status ==
-    Moonpanel.Canvas.PolyominoSolver.Solve(moved, pieces).status,
+  assert(RuleEngine.SolvePolyomino(first, pieces).status ==
+    RuleEngine.SolvePolyomino(moved, pieces).status,
     'translating geometry changed validity')
 end)
 
 test.test('impossible positive area is rejected before exact cover', function()
-  local result = Moonpanel.Canvas.PolyominoSolver.Solve({
+  local result = RuleEngine.SolvePolyomino({
     cells = {{x = 1, y = 1}, {x = 2, y = 1}},
   }, {{id = 1, shape = {{1}}}})
   assert(result.status == 'unsatisfied', 'undercoverage was accepted')
@@ -274,15 +312,18 @@ test.test('all triangle boundary masks count distinct physical edges', function(
   end
 end)
 
-test.test('coincident symmetry branches count one triangle edge', function()
+test.test('coincident symmetry branches are malformed', function()
   local data = panel(1, 1)
+  data.Meta.Symmetry = 1
   data.Entities[cellIndex(1, 1, 1)] = {
     Type = 'Triangle', Data = {Color = 9, RuleColor = 9, Count = 1},
   }
   local top = hpathIndex(1, 1, 1)
-  local topo = topology({{}, {}}, {{1, 2, top}})
-  assert(evaluate(data, topo, {{1, 2}, {1, 2}}).success,
-    'coincident branches double-counted a physical boundary')
+  local topo = topology({
+    {clickable = true}, {exit = true},
+  }, {{1, 2, top}}, {1, 2})
+  assert(evaluate(data, topo, {{1, 2}, {1, 2}}).status == 'data_error',
+    'coincident symmetry branches were accepted')
 end)
 
 test.test('four-triangle data requires its explicit extension flag', function()
@@ -302,6 +343,36 @@ test.test('malformed trace snapshots return a data error', function()
     'unknown canonical trace IDs were silently ignored')
 end)
 
+test.test('completed trace validation rejects malformed paths deterministically', function()
+  local data = panel(1, 1)
+  local topo = topology({{clickable = true}, {}, {exit = true}}, {
+    {1, 2, hpathIndex(1, 1, 1)},
+    {2, 3, vpathIndex(1, 2, 1)},
+  })
+  local cases = {
+    {}, {{1, 2}}, {{2, 3}}, {{1, 3}}, {{1, 2, 1, 2, 3}},
+  }
+  for index, stacks in ipairs(cases) do
+    local first = evaluate(data, topo, stacks)
+    local second = evaluate(data, topo, stacks)
+    assert(first.status == 'data_error' and first.reportHash == second.reportHash,
+      'malformed trace case ' .. index .. ' was accepted or unstable')
+  end
+end)
+
+test.test('symmetry traces require the physical topology transformation', function()
+  local data = panel(2, 1)
+  data.Meta.Symmetry = 1
+  local topo = topology({
+    {clickable = true}, {exit = true}, {clickable = true}, {exit = true},
+  }, {
+    {1, 2, hpathIndex(2, 1, 1)}, {3, 4, hpathIndex(2, 2, 1)},
+  }, {3, 4, 1, 2})
+  assert(evaluate(data, topo, {{1, 2}, {3, 4}}).status == 'complete')
+  assert(evaluate(data, topo, {{1, 2}, {4, 3}}).status == 'data_error',
+    'a reversed symmetry branch was accepted')
+end)
+
 test.test('square conflicts mark every participating square', function()
   local data = panel(2, 1)
   data.Entities[cellIndex(2, 1, 1)] = {Type = 'Color', Data = {Color = 1, RuleColor = 1}}
@@ -316,10 +387,12 @@ test.test('a traced boundary separates square colors', function()
   data.Entities[cellIndex(2, 2, 1)] = {Type = 'Color', Data = {Color = 2, RuleColor = 2}}
   local boundary = vpathIndex(2, 2, 1)
   local topo = topology({
-    {socketIndex = intersectionIndex(2, 2, 1)},
+    {socketIndex = intersectionIndex(2, 2, 1), clickable = true},
     {socketIndex = intersectionIndex(2, 2, 2)},
-  }, {{1, 2, boundary}})
-  assert(evaluate(data, topo, {{1, 2}}).success, 'square regions were not separated')
+    {exit = true},
+  }, {{1, 2, boundary}, {2, 3, intersectionIndex(2, 2, 2)}})
+  assert(evaluate(data, topo, {{1, 2, 3}}).success,
+    'square regions were not separated')
 end)
 
 test.test('continuous region construction joins the first and last columns', function()
@@ -329,10 +402,11 @@ test.test('continuous region construction joins the first and last columns', fun
   data.Entities[cellIndex(3, 3, 1)] = {Type = 'Color', Data = {RuleColor = 2}}
   local leftBoundary = vpathIndex(3, 2, 1)
   local rightBoundary = vpathIndex(3, 3, 1)
-  local topo = topology({{}, {}, {}, {}}, {
-    {1, 2, leftBoundary}, {3, 4, rightBoundary},
+  local topo = topology({{clickable = true}, {}, {}, {exit = true}}, {
+    {1, 2, leftBoundary}, {2, 3, intersectionIndex(3, 2, 1)},
+    {3, 4, rightBoundary},
   })
-  local stacks = {{1, 2}, {3, 4}}
+  local stacks = {{1, 2, 3, 4}}
   assert(evaluate(data, topo, stacks).success,
     'bounded control fixture did not separate the edge cells')
   topo.wrapX = true
@@ -348,17 +422,21 @@ test.test('one traced half of a midpoint boundary does not separate square color
   data.Entities[cellIndex(1, 1, 2)] = {Type = 'Color', Data = {Color = 2, RuleColor = 2}}
   local boundary = hpathIndex(1, 1, 2)
   local topo = topology({
-    {x = -0.5, y = 0, socketIndex = intersectionIndex(1, 1, 2)},
+    {x = -0.5, y = 0, socketIndex = intersectionIndex(1, 1, 2), clickable = true},
     {x = 0, y = 0, socketIndex = boundary, clickable = true},
     {x = 0.5, y = 0, socketIndex = intersectionIndex(1, 2, 2)},
+    {exit = true},
+    {exit = true},
   }, {
     {1, 2, boundary, {lengthQ = 2048}},
     {2, 3, boundary, {lengthQ = 2048}},
+    {1, 4, intersectionIndex(1, 1, 2)},
+    {3, 5, intersectionIndex(1, 2, 2)},
   })
 
-  assert(not evaluate(data, topo, {{2, 1}}).success,
+  assert(not evaluate(data, topo, {{2, 1, 4}}).success,
     'a midpoint start incorrectly closed its untraced boundary half')
-  assert(evaluate(data, topo, {{1, 2, 3}}).success,
+  assert(evaluate(data, topo, {{1, 2, 3, 5}}).success,
     'tracing both midpoint halves did not close the complete boundary')
 end)
 
@@ -412,8 +490,8 @@ test.test('stars count another colored cell clue as their partner', function()
   }
   local top = hpathIndex(2, 2, 1)
   local topo = topology({
-    {socketIndex = intersectionIndex(2, 2, 1)},
-    {socketIndex = intersectionIndex(2, 3, 1)},
+    {socketIndex = intersectionIndex(2, 2, 1), clickable = true},
+    {socketIndex = intersectionIndex(2, 3, 1), exit = true},
   }, {{1, 2, top}})
   assert(evaluate(data, topo, {{1, 2}}).success, 'colored triangle did not partner star')
 end)
@@ -432,7 +510,7 @@ test.test('stars exclude route dots from colored partner counts', function()
   data.Entities[dot] = {
     Type = 'Hexagon', Data = {Color = 5, RuleColor = 5, TraceRole = 0},
   }
-  local topo = topology({{}, {}}, {{1, 2, dot}})
+  local topo = topology({{clickable = true}, {exit = true}}, {{1, 2, dot}})
   local report = evaluate(data, topo, {{1, 2}})
   assert(not report.success and report.remaining[1] == cellIndex(1, 1, 1),
     'route dot incorrectly partnered a star')
@@ -444,12 +522,12 @@ test.test('branch-specific dots use semantic trace roles', function()
   local dot = intersectionIndex(1, 1, 1)
   data.Entities[dot] = {
     Type = 'Hexagon',
-    Data = {Color = 7, RuleColor = 7, TraceRole = RuleEngine.DotRole.Secondary},
+    Data = {Color = 7, RuleColor = 7, TraceRole = 2},
   }
   local topo = topology({
-    {socketIndex = intersectionIndex(1, 2, 2)},
-    {socketIndex = dot},
-  })
+    {socketIndex = intersectionIndex(1, 2, 2), clickable = true, exit = true},
+    {socketIndex = dot, clickable = true, exit = true},
+  }, nil, {2, 1})
   assert(evaluate(data, topo, {{1}, {2}}).success, 'secondary dot rejected secondary trace')
   assert(not evaluate(data, topo, {{2}, {1}}).success,
     'secondary dot accepted primary trace')
@@ -464,18 +542,38 @@ test.test('negative dots invert only their selected trace role', function()
     Data = {
       Color = 7,
       RuleColor = 7,
-      TraceRole = RuleEngine.DotRole.Primary,
+      TraceRole = 1,
       Negative = true,
     },
   }
   local topo = topology({
-    {socketIndex = dot},
-    {socketIndex = intersectionIndex(1, 2, 2)},
-  })
+    {socketIndex = dot, clickable = true, exit = true},
+    {socketIndex = intersectionIndex(1, 2, 2), clickable = true, exit = true},
+  }, nil, {2, 1})
   assert(not evaluate(data, topo, {{1}, {2}}).success,
     'negative primary dot accepted the primary trace')
   assert(evaluate(data, topo, {{2}, {1}}).success,
     'negative primary dot rejected an unrelated secondary trace')
+end)
+
+test.test('invalid clues in either mirrored region are evaluated', function()
+  local data = panel(4, 1)
+  data.Meta.Symmetry = 1
+  data.Entities[cellIndex(4, 1, 1)] = {
+    Type = 'Polyomino',
+    Data = {RuleColor = 5, Shape = {{1, 1}}, Negative = false},
+  }
+  local leftBoundary, rightBoundary = vpathIndex(4, 2, 1), vpathIndex(4, 4, 1)
+  local topo = topology({
+    {clickable = true}, {}, {exit = true},
+    {clickable = true}, {}, {exit = true},
+  }, {
+    {1, 2, leftBoundary}, {2, 3, intersectionIndex(4, 2, 1)},
+    {4, 5, rightBoundary}, {5, 6, intersectionIndex(4, 4, 1)},
+  }, {4, 5, 6, 1, 2, 3})
+  local report = evaluate(data, topo, {{1, 2, 3}, {4, 5, 6}})
+  assert(not report.success and report.constraints[1].kind == 'polyomino',
+    'the non-canonical mirrored region was skipped')
 end)
 
 test.test('negative any-trace dots reject vertex and edge coverage', function()
@@ -485,9 +583,10 @@ test.test('negative any-trace dots reject vertex and edge coverage', function()
     Type = 'Hexagon',
     Data = {Color = 1, RuleColor = 1, TraceRole = 0, Negative = true},
   }
-  local vertexTopology = topology({{socketIndex = vertex}}, {})
-  assert(evaluate(vertexData, vertexTopology, {}).success,
+  local vertexTopology = topology({{clickable = true, exit = true}}, {})
+  assert(evaluate(vertexData, vertexTopology, {{1}}).success,
     'uncovered negative vertex dot was rejected')
+  vertexTopology.nodes[1].socketIndex = vertex
   assert(not evaluate(vertexData, vertexTopology, {{1}}).success,
     'covered negative vertex dot was accepted')
 
@@ -497,9 +596,10 @@ test.test('negative any-trace dots reject vertex and edge coverage', function()
     Type = 'Hexagon',
     Data = {Color = 1, RuleColor = 1, TraceRole = 0, Negative = true},
   }
-  local edgeTopology = topology({{}, {}}, {{1, 2, edge}})
-  assert(evaluate(edgeData, edgeTopology, {}).success,
+  local edgeTopology = topology()
+  assert(evaluate(edgeData, edgeTopology, {{1}}).success,
     'uncovered negative edge dot was rejected')
+  edgeTopology = topology({{clickable = true}, {exit = true}}, {{1, 2, edge}})
   assert(not evaluate(edgeData, edgeTopology, {{1, 2}}).success,
     'covered negative edge dot was accepted')
 end)
@@ -511,9 +611,10 @@ test.test('invisible dots retain ordinary validation semantics', function()
     Type = 'Hexagon',
     Data = {Color = 1, RuleColor = 1, TraceRole = 0, Invisible = true},
   }
-  local topo = topology({{socketIndex = dot}}, {})
-  assert(not evaluate(data, topo, {}).success,
+  local topo = topology()
+  assert(not evaluate(data, topo, {{1}}).success,
     'uncovered invisible dot was accepted')
+  topo.nodes[1].socketIndex = dot
   assert(evaluate(data, topo, {{1}}).success,
     'covered invisible dot was rejected')
 end)
@@ -522,12 +623,81 @@ test.test('invisible paths permanently separate rule regions', function()
   local data = panel(2, 1)
   local barrier = vpathIndex(2, 2, 1)
   data.Entities[barrier] = {Type = 'Invisible', Data = {}}
-  local definition = RuleEngine.Compile(data, topology())
-  local facts = RuleEngine.BuildFacts(definition, {revision = 9001, stacks = {}})
-  assert(definition.permanentBoundaries[barrier] == true,
-    'invisible path was not compiled as a permanent boundary')
-  assert(#facts.regions == 2,
-    'invisible path did not keep adjacent cell areas separate')
+  data.Entities[cellIndex(2, 1, 1)] = {
+    Type = 'Color', Data = {RuleColor = 1},
+  }
+  data.Entities[cellIndex(2, 2, 1)] = {
+    Type = 'Color', Data = {RuleColor = 2},
+  }
+  assert(evaluate(data).success,
+    'invisible path did not keep conflicting colors in separate regions')
+end)
+
+test.test('continuous seam aliases compile to one physical socket', function()
+  local width = 3
+  local leftNode, rightNode = intersectionIndex(width, 1, 1),
+    intersectionIndex(width, width + 1, 1)
+  for _, authored in ipairs({leftNode, rightNode}) do
+    local data = panel(width, 1)
+    data.Meta.Continuous = true
+    data.Entities[authored] = {
+      Type = 'Hexagon', Data = {RuleColor = 1, TraceRole = 0},
+    }
+    local topo = topology({{
+      clickable = true, exit = true,
+      socketIndex = authored == leftNode and rightNode or leftNode,
+    }})
+    topo.wrapX = true
+    local definition = RuleEngine.Compile(data, topo)
+    local report = RuleEngine.Evaluate(definition, {revision = 9001, stacks = {{1}}})
+    assert(report.success and definition.clues[1].id == leftNode,
+      'a seam clue depended on its authored alias')
+  end
+
+  local left = vpathIndex(width, 1, 1)
+  local right = vpathIndex(width, width + 1, 1)
+  for _, authored in ipairs({left, right}) do
+    local data = panel(width, 1)
+    data.Meta.Continuous = true
+    data.Entities[authored] = {Type = 'Invisible', Data = {}}
+    local topo = topology()
+    topo.wrapX = true
+    local definition = RuleEngine.Compile(data, topo)
+    assert(definition.permanentBoundaries[left] and not definition.permanentBoundaries[right],
+      'invisible seam boundary retained an alias identity')
+  end
+
+  local data = panel(width, 1)
+  data.Meta.Continuous = true
+  data.Entities[vpathIndex(width, 2, 1)] = {Type = 'Invisible', Data = {}}
+  data.Entities[cellIndex(width, 1, 1)] = {
+    Type = 'Color', Data = {RuleColor = 1},
+  }
+  data.Entities[cellIndex(width, 2, 1)] = {
+    Type = 'Color', Data = {RuleColor = 2},
+  }
+  local topo = topology({{clickable = true}, {}, {exit = true}}, {
+    {1, 2, right}, {2, 3, intersectionIndex(width, 1, 1)},
+  })
+  topo.wrapX = true
+  local definition = RuleEngine.Compile(data, topo)
+  local report = RuleEngine.Evaluate(definition, {revision = 9001, stacks = {{1, 2, 3}}})
+  assert(report.success,
+    'traced seam alias did not close the canonical physical boundary')
+end)
+
+test.test('the compiler rejects duplicate continuous seam aliases directly', function()
+  local data = panel(3, 1)
+  data.Meta.Continuous = true
+  data.Entities[1] = {Type = 'Hexagon', Data = {RuleColor = 1}}
+  data.Entities[7] = {Type = 'Hexagon', Data = {RuleColor = 1}}
+  local topo = topology()
+  topo.wrapX = true
+  local report = evaluate(data, topo, {{1}})
+  local details = report.constraints[1].details.errors[1]
+  assert(report.status == 'data_error' and details.code == 'continuous_seam_duplicate' and
+    details.leftIndex == 1 and details.rightIndex == 7,
+    'direct compilation normalized a duplicate seam entity')
 end)
 
 test.test('secondary dots reject panels without a symmetry branch', function()
@@ -541,7 +711,7 @@ test.test('secondary dots reject panels without a symmetry branch', function()
 end)
 
 test.test('signed polyomino can cancel outside the region', function()
-  local result = Moonpanel.Canvas.PolyominoSolver.Solve({
+  local result = RuleEngine.SolvePolyomino({
     cells = {{x = 1, y = 1}},
   }, {
     {id = 1, shape = {{1, 1}}, rotatable = false},
@@ -552,7 +722,7 @@ test.test('signed polyomino can cancel outside the region', function()
 end)
 
 test.test('equal signed area may cancel completely', function()
-  local result = Moonpanel.Canvas.PolyominoSolver.Solve({
+  local result = RuleEngine.SolvePolyomino({
     cells = {{x = 1, y = 1}, {x = 2, y = 1}},
   }, {
     {id = 1, shape = {{1}}, rotatable = false},
@@ -564,11 +734,11 @@ end)
 
 test.test('negative-only and signed-area-impossible sets fail explicitly', function()
   local region = {cells = {{x = 1, y = 1}}}
-  local negativeOnly = Moonpanel.Canvas.PolyominoSolver.Solve(region, {
+  local negativeOnly = RuleEngine.SolvePolyomino(region, {
     {id = 1, shape = {{1}}, negative = true},
   })
   assert(negativeOnly.status == 'unsatisfied', 'negative-only set was accepted')
-  local wrongArea = Moonpanel.Canvas.PolyominoSolver.Solve(region, {
+  local wrongArea = RuleEngine.SolvePolyomino(region, {
     {id = 1, shape = {{1, 1, 1}}},
     {id = 2, shape = {{1}}, negative = true},
   })
@@ -577,11 +747,11 @@ end)
 
 test.test('rotatable negative pieces rotate without reflecting', function()
   local region = {cells = {{x = 1, y = 1}}}
-  local fixed = Moonpanel.Canvas.PolyominoSolver.Solve(region, {
+  local fixed = RuleEngine.SolvePolyomino(region, {
     {id = 1, shape = {{1, 1, 1}}},
     {id = 2, shape = {{1}, {1}}, negative = true, rotatable = false},
   })
-  local rotated = Moonpanel.Canvas.PolyominoSolver.Solve(region, {
+  local rotated = RuleEngine.SolvePolyomino(region, {
     {id = 1, shape = {{1, 1, 1}}},
     {id = 2, shape = {{1}, {1}}, negative = true, rotatable = true},
   })
@@ -623,7 +793,7 @@ test.test('equivalent eraser targets choose the lowest stable socket', function(
     'equivalent eraser mapping was not lexicographically minimal')
 end)
 
-test.test('only necessary erasers receive clues before pair cancellation', function()
+test.test('every eraser is necessary for an accepted full assignment', function()
   local data = panel(5, 1)
   setCell(data, 1, 'Color', {Color = 1, RuleColor = 1})
   setCell(data, 2, 'Color', {Color = 2, RuleColor = 2})
@@ -635,14 +805,17 @@ test.test('only necessary erasers receive clues before pair cancellation', funct
     'a necessary simultaneous two-eraser assignment failed')
 
   local subsetValid = panel(4, 1)
-  setCell(subsetValid, 1, 'Color', {Color = 1, RuleColor = 1})
+  local firstTarget = setCell(subsetValid, 1, 'Color', {Color = 1, RuleColor = 1})
   setCell(subsetValid, 2, 'Color', {Color = 2, RuleColor = 2})
-  setCell(subsetValid, 3, 'Eraser', {Color = 3, RuleColor = 3})
-  setCell(subsetValid, 4, 'Eraser', {Color = 4, RuleColor = 4})
+  local firstEraser = setCell(subsetValid, 3, 'Eraser', {Color = 3, RuleColor = 3})
+  local secondEraser = setCell(subsetValid, 4, 'Eraser', {Color = 4, RuleColor = 4})
   local complete = evaluate(subsetValid)
   assert(not complete.success and #complete.erasures == 1 and
-    #complete.remaining == 1,
-    'the solver did not preserve the unnecessary eraser as an error')
+    complete.erasures[1].eraserIndex == firstEraser and
+    complete.erasures[1].targetIndex == firstTarget and
+    complete.remaining[1] == secondEraser and
+    complete.constraints[1].kind == 'eraser_unnecessary',
+    'the minimal improper assignment was not exposed')
 end)
 
 test.test('erasers can target every clue family but never another eraser', function()
@@ -650,7 +823,7 @@ test.test('erasers can target every clue family but never another eraser', funct
     local data = panel(2, 1)
     local target = setCell(data, 1, typeName, attributes)
     setCell(data, 2, 'Eraser', {Color = 8, RuleColor = 8})
-    local topo, stacks = setup and setup(data) or topology(), {}
+    local topo, stacks = setup and setup(data) or topology(), {{1}}
     local report = evaluate(data, topo, stacks)
     assert(report.success and report.erasures[1].targetIndex == target,
       typeName .. ' was not erasable')
@@ -674,22 +847,55 @@ test.test('erasers can target every clue family but never another eraser', funct
   local firstEraser = setCell(two, 1, 'Eraser', {Color = 1, RuleColor = 1})
   local secondEraser = setCell(two, 2, 'Eraser', {Color = 2, RuleColor = 2})
   local eraserReport = evaluate(two)
-  assert(eraserReport.success and #eraserReport.erasures == 2 and
-    eraserReport.erasures[1].eraserIndex == firstEraser and
-    eraserReport.erasures[1].targetIndex == secondEraser and
-    eraserReport.erasures[2].eraserIndex == secondEraser and
-    eraserReport.erasures[2].targetIndex == firstEraser,
-    'erasers did not mutually consume without self-targeting')
+  assert(not eraserReport.success and #eraserReport.erasures == 0 and
+    eraserReport.remaining[1] == firstEraser and
+    eraserReport.remaining[2] == secondEraser,
+    'erasers targeted each other')
 end)
 
-test.test('an eraser cannot consume satisfied stars', function()
+test.test('a satisfied star and eraser pair leaves the eraser unnecessary', function()
   local data = panel(2, 1)
   setCell(data, 1, 'Sun', {Color = 3, RuleColor = 3})
   local eraser = setCell(data, 2, 'Eraser', {Color = 3, RuleColor = 3})
   local report = evaluate(data)
   assert(not report.success and #report.erasures == 0 and
-    report.remaining[1] == eraser,
-    'an eraser manufactured work by deleting satisfied Suns')
+    report.remaining[1] == eraser and
+    report.constraints[1].kind == 'eraser_unnecessary',
+    'a satisfied star pair invented work for its eraser')
+end)
+
+test.test('premature cancellation witnesses are deterministic', function()
+  local data = panel(4, 1)
+  local firstTarget = setCell(data, 1, 'Color', {Color = 1, RuleColor = 1})
+  setCell(data, 2, 'Color', {Color = 2, RuleColor = 2})
+  local firstEraser = setCell(data, 3, 'Eraser', {Color = 3, RuleColor = 3})
+  local secondEraser = setCell(data, 4, 'Eraser', {Color = 4, RuleColor = 4})
+  local report = evaluate(data)
+  local proof = report.witnesses.erasers[1]
+  assert(not report.success and #report.erasures == 1 and
+    report.erasures[1].eraserIndex == firstEraser and
+    report.erasures[1].targetIndex == firstTarget and
+    report.remaining[1] == secondEraser and proof.minimumUsed == 1 and
+    proof.improperAssignment.erasers[1] == firstEraser and
+    #proof.fullAssignment.erasers == 2,
+    'premature witness ordering was unstable')
+end)
+
+test.test('sequential necessity accepts a star-first full assignment', function()
+  local data = panel(6, 1)
+  setCell(data, 1, 'Color', {Color = 1, RuleColor = 1})
+  setCell(data, 2, 'Color', {Color = 1, RuleColor = 1})
+  local square = setCell(data, 3, 'Color', {Color = 2, RuleColor = 2})
+  local star = setCell(data, 4, 'Sun', {Color = 2, RuleColor = 2})
+  local firstEraser = setCell(data, 5, 'Eraser', {Color = 2, RuleColor = 2})
+  local secondEraser = setCell(data, 6, 'Eraser', {Color = 2, RuleColor = 2})
+  local report = evaluate(data)
+  assert(report.success and #report.erasures == 2 and
+    report.erasures[1].eraserIndex == firstEraser and
+    report.erasures[1].targetIndex == star and
+    report.erasures[2].eraserIndex == secondEraser and
+    report.erasures[2].targetIndex == square,
+    'the solver rejected the necessary star-first cancellation order')
 end)
 
 test.test('profiled eraser scoring preserves input data', function()
@@ -731,7 +937,7 @@ test.test('profiled eraser scoring preserves input data', function()
     local inputHash = RuleEngine.HashValue(data)
     local topo = topology()
     local definition = RuleEngine.Compile(data, topo)
-    local snapshot = {revision = topo.revision, stacks = {}}
+    local snapshot = {revision = topo.revision, stacks = {{1}}}
     local report = RuleEngine.Evaluate(definition, snapshot, {
       developmentProfile = true,
     })
@@ -754,7 +960,7 @@ test.test('eraser scoring reuses identical polyomino solves', function()
   local definition = RuleEngine.Compile(data, topo)
   local report = RuleEngine.Evaluate(definition, {
     revision = topo.revision,
-    stacks = {},
+    stacks = {{1}},
   }, {
     developmentProfile = true,
   })
@@ -763,6 +969,97 @@ test.test('eraser scoring reuses identical polyomino solves', function()
     'equivalent remaining polyomino sets were solved repeatedly')
   assert((counters.polyominoSolverCalls or 0) ==
     (counters.polyominoCacheMisses or 0), 'polyomino cache counters diverged')
+end)
+
+test.test('canvas-owned solver caches are exact, isolated, and expiring', function()
+  local data = panel(1, 1)
+  setCell(data, 1, 'Polyomino', {
+    Color = 5, RuleColor = 5, Shape = {{1}}, Negative = false,
+  })
+  local topo = topology()
+  local definition = RuleEngine.Compile(data, topo)
+  local now = 10
+  local cache = RuleEngine.NewCache({ttl = 120, clock = function() return now end})
+  local snapshot = {revision = topo.revision, stacks = {{1}}}
+  local function run(traceHash)
+    return RuleEngine.Evaluate(definition, snapshot, {
+      cache = cache,
+      traceHash = traceHash,
+      developmentProfile = true,
+    })
+  end
+
+  local first = run(101)
+  local repeated = run(101)
+  local sameRegion = run(102)
+  repeated.witnesses.polyomino[1].placements[1].pieceId = -1
+  local isolated = run(101)
+  now = 131
+  RuleEngine.PruneCache(cache, true)
+  local physicallyExpired = (cache.reports.count or 0) == 0 and
+    (cache.facts.count or 0) == 0 and (cache.polyominoes.count or 0) == 0
+  local expired = run(102)
+
+  assert((first.developmentProfile.counters.polyominoSolverCalls or 0) == 1,
+    'the cold cache skipped the polyomino solver')
+  assert((repeated.developmentProfile.counters.exactReportCacheHits or 0) == 1,
+    'an identical trace did not reuse its complete report')
+  assert((sameRegion.developmentProfile.counters.polyominoPersistentCacheHits or 0) == 1,
+    'a different trace identity did not reuse the same physical polyomino region')
+  assert(isolated.witnesses.polyomino[1].placements[1].pieceId ~= -1,
+    'a returned report mutated the cached solver proof')
+  assert(physicallyExpired and
+    (expired.developmentProfile.counters.exactReportCacheMisses or 0) == 1 and
+    (expired.developmentProfile.counters.polyominoSolverCalls or 0) == 1,
+    'a solver cache entry survived beyond its absolute TTL')
+end)
+
+test.test('canvas-owned cache reuses equivalent eraser regions', function()
+  local data = panel(3, 1)
+  setCell(data, 1, 'Color', {Color = 1, RuleColor = 1})
+  setCell(data, 2, 'Color', {Color = 2, RuleColor = 2})
+  setCell(data, 3, 'Eraser', {Color = 3, RuleColor = 3})
+  local topo = topology()
+  local definition = RuleEngine.Compile(data, topo)
+  local cache = RuleEngine.NewCache()
+  local snapshot = {revision = topo.revision, stacks = {{1}}}
+  local function run(traceHash)
+    return RuleEngine.Evaluate(definition, snapshot, {
+      cache = cache,
+      traceHash = traceHash,
+      developmentProfile = true,
+    })
+  end
+  local first = run(201)
+  local equivalent = run(202)
+  assert(first.success and equivalent.success and
+    (equivalent.developmentProfile.counters.eraserPersistentCacheHits or 0) == 1,
+    'an equivalent physical eraser region repeated its assignment search')
+end)
+
+test.test('solver cache never retains interrupted results', function()
+  local data = panel(1, 1)
+  setCell(data, 1, 'Polyomino', {
+    Color = 5, RuleColor = 5, Shape = {{1}}, Negative = false,
+  })
+  local topo = topology()
+  local definition = RuleEngine.Compile(data, topo)
+  local cache = RuleEngine.NewCache()
+  local snapshot = {revision = topo.revision, stacks = {{1}}}
+  local function run(maximum)
+    local budget = RuleEngine.NewBudget({slice = maximum, maximum = maximum})
+    return RuleEngine.Evaluate(definition, snapshot, {
+      cache = cache,
+      developmentProfile = true,
+      checkpoint = function(amount) return budget:checkpoint(amount) end,
+    })
+  end
+  local interrupted = run(1)
+  local completed = run(10000)
+  assert(interrupted.status == 'complexity' and completed.status == 'complete' and
+    (completed.developmentProfile.counters.exactReportCacheHits or 0) == 0 and
+    (completed.developmentProfile.counters.polyominoSolverCalls or 0) == 1,
+    'an interrupted proof contaminated the semantic solver cache')
 end)
 
 test.test('rule report hashes ignore insertion order', function()
@@ -800,7 +1097,7 @@ test.test('solver work yields through a coroutine budget', function()
       maximum = 100000,
       yieldFn = function() coroutine.yield('budget') end,
     })
-    local result = Moonpanel.Canvas.PolyominoSolver.Solve({
+    local result = RuleEngine.SolvePolyomino({
       cells = {
         {x = 1, y = 1}, {x = 2, y = 1},
         {x = 1, y = 2}, {x = 2, y = 2},
@@ -811,7 +1108,7 @@ test.test('solver work yields through a coroutine budget', function()
     }, {
       checkpoint = function(amount) return budget:checkpoint(amount) end,
     })
-    assert(result.status == 'solved', 'yielded DLX solve did not complete')
+    assert(result.status == 'solved', 'yielded exact solve did not complete')
     completed = true
   end)
   while coroutine.status(worker) ~= 'dead' do
@@ -891,7 +1188,7 @@ end)
 
 test.test('candidate generation is complexity-bounded', function()
   local budget = RuleEngine.NewBudget({slice = 100, maximum = 2})
-  local result = Moonpanel.Canvas.PolyominoSolver.Solve({
+  local result = RuleEngine.SolvePolyomino({
     cells = {{x = 1, y = 1}},
   }, {
     {id = 1, shape = {{1, 1}}},
@@ -912,7 +1209,7 @@ test.test('multi-eraser assignments stream through the work budget', function()
   end
   local definition = RuleEngine.Compile(data, topology())
   local budget = RuleEngine.NewBudget({slice = 100, maximum = 3})
-  local report = RuleEngine.Evaluate(definition, {revision = 9001, stacks = {}}, {
+  local report = RuleEngine.Evaluate(definition, {revision = 9001, stacks = {{1}}}, {
     checkpoint = function(amount) return budget:checkpoint(amount) end,
   })
   assert(report.status == 'complexity',
@@ -924,7 +1221,7 @@ test.test('coroutine slice size cannot change the report', function()
   setCell(data, 1, 'Polyomino', {Color = 5, RuleColor = 5, Shape = {{1, 1}}})
   setCell(data, 2, 'Polyomino', {Color = 5, RuleColor = 5, Shape = {{1, 1}}, Rotational = true})
   local definition = RuleEngine.Compile(data, topology())
-  local snapshot = {revision = 9001, stacks = {}}
+  local snapshot = {revision = 9001, stacks = {{1}}}
 
   local function scheduled(slice)
     local result

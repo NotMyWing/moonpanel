@@ -68,7 +68,6 @@ The Witness assets still belong to Thekla.
 * **Thekla, Inc. and Jonathan Blow** - *The Witness, its puzzle language, original visual and audio assets, and the primary inspiration for this project.*
 * [TheFifthMatt](https://windmill.thefifthmatt.com/) - *The existence of The Windmill inspired this project and its later dedicated importer.*
 * [Tyler Schrock](https://github.com/Tschrock) - *The Windmill importer.*
-* [Soojin Nam](https://github.com/sjnam/lua-dancing-links) - *Lua Dancing Links*
 * [thegrb93 and contributors](https://github.com/thegrb93/StarfallEx/) - *StarfallEX and the panel rendering codebase*
 * [WireMod contributors](https://github.com/wiremod/wire) - *Editor-presence animation*
 * [BytewaveMLP](https://github.com/BytewaveMLP) - *Buildscript*

@@ -151,6 +151,21 @@ test.test('canvas rejects suspicious imports without mutating live state', funct
     'failed import mutated the live panel')
 end)
 
+test.test('canvas preserves and blocks duplicate continuous seam authorship', function()
+  local data = table.Copy(fixture('pillartest'))
+  data.Entities[8] = {Type = 'Disjoint', Data = {}}
+  data.Entities[14] = {Type = 'Disjoint', Data = {}}
+  local canvas = Moonpanel.Canvas.Canvas()
+  assert(canvas:ImportData(data))
+  local compatibility = canvas:GetSurfaceCompatibility()
+  local exported = canvas:ExportData()
+  assert(compatibility and not compatibility.playable and
+    #compatibility.seamPairs == 1, 'duplicate seam authorship was not blocked')
+  assert(exported.Entities[8].Type == 'Disjoint' and
+    exported.Entities[14].Type == 'Disjoint',
+    'canvas normalization hid a duplicate seam entity')
+end)
+
 test.test('invisible intersections and paths are topology cuts', function()
   local canvas = Moonpanel.Canvas.Canvas()
   canvas:ImportData(fixture('core clue family coverage'))

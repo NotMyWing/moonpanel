@@ -10,19 +10,6 @@ Canvas.SurfaceKind = {
 emptyEntity = (value) ->
 	not istable(value) or value.Type == nil
 
-deepEqual = (left, right, seen = {}) ->
-	return true if left == right
-	return false unless type(left) == type(right)
-	return false unless istable left
-	seen[left] or= {}
-	return true if seen[left][right]
-	seen[left][right] = true
-	for key, value in pairs left
-		return false unless deepEqual value, right[key], seen
-	for key in pairs right
-		return false if left[key] == nil
-	true
-
 Canvas.MakeSurfaceSpec = (kind = Canvas.SurfaceKind.Flat, continuous = false) ->
 	kind = Canvas.SurfaceKind.Pillar if kind == "pillar"
 	kind = Canvas.SurfaceKind.Flat if kind == "flat"
@@ -95,7 +82,7 @@ Canvas.GetSurfaceCompatibility = (data, surfaceSpec) ->
 	for pair in *Canvas.GetSeamPairs data
 		left, right = entities[pair.left], entities[pair.right]
 		leftEmpty, rightEmpty = emptyEntity(left), emptyEntity(right)
-		if not leftEmpty and not rightEmpty and not deepEqual(left, right)
+		if not leftEmpty and not rightEmpty
 			result.playable = false
 			errorInfo = {
 				code: "continuous_seam_conflict"
@@ -115,8 +102,6 @@ Canvas.CanonicalizeContinuousData = (data) ->
 		leftEmpty, rightEmpty = emptyEntity(left), emptyEntity(right)
 		if leftEmpty and not rightEmpty
 			output.Entities[pair.left] = table.Copy right
-			output.Entities[pair.right] = {}
-		elseif not leftEmpty and not rightEmpty and deepEqual(left, right)
 			output.Entities[pair.right] = {}
 	output
 

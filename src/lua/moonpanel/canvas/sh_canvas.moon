@@ -1,4 +1,5 @@
 Moonpanel.Canvas or= {}
+Helpers = Moonpanel.Helpers
 
 -- Lifecycle timings shared by authoritative state and client presentation.
 Moonpanel.Canvas.EraserRevealDelay = 0.75
@@ -15,6 +16,7 @@ Moonpanel.Canvas.SocketType = {
 	Path: 2
 	Cell: 3
 }
+INTERSECTION_SOCKET = Moonpanel.Canvas.SocketType.Intersection
 
 Moonpanel.Canvas.Resolution = 512
 
@@ -240,9 +242,6 @@ class Canvas
 
 	GetSurfaceCompatibility: => @__surfaceCompatibility
 
-	-- A continuous board has one physical seam column. The authored right
-	-- boundary remains an import slot, but valid boards render and target the
-	-- canonical left slot. Conflicts keep both sides visible for repair.
 	IsHiddenContinuousSocket: (socket) =>
 		return false unless @IsContinuous! and socket and @__data
 		return false if @__surfaceCompatibility and
@@ -509,37 +508,30 @@ class Canvas
 	GetColors: =>
 		dataColors = @__data and @__data.Colors or {}
 		colors = {
-			Background: dataColors.Background or Canvas.DefaultColors.Background
-			Grid: dataColors.Untraced or Canvas.DefaultColors.Untraced
-			Error: dataColors.Errored or Canvas.DefaultColors.Errored
-			Cell: dataColors.Cell or Canvas.DefaultColors.Cell
-			Vignette: dataColors.Vignette or Canvas.DefaultColors.Vignette
+			Background: dataColors.Background or Moonpanel.Canvas.DefaultColors.Background
+			Grid: dataColors.Untraced or Moonpanel.Canvas.DefaultColors.Untraced
+			Error: dataColors.Errored or Moonpanel.Canvas.DefaultColors.Errored
+			Cell: dataColors.Cell
+			Vignette: dataColors.Vignette or Moonpanel.Canvas.DefaultColors.Vignette
 		}
-		colors.Trace = {dataColors.Traced or Canvas.DefaultColors.Traced, {
+		colors.Trace = {dataColors.Traced or Moonpanel.Canvas.DefaultColors.Traced, {
 			r: 255, g: 255, b: 116
 		}}
-		colors.EndTrace = {dataColors.Finished or Canvas.DefaultColors.Finished, {
-			r: 0, g: 255, b: 0
-		}}
+		colors.EndTrace = {}
 
 		symmetryOptions = @__data and @__data.Meta and @__data.Meta.SymmetryOptions
 		traces = symmetryOptions and symmetryOptions.Traces
-		if traces
+		symmetryEnabled = @__data and @__data.Meta and
+			@__data.Meta.Symmetry ~= Moonpanel.Canvas.Symmetry.None
+		if traces and symmetryEnabled
 			for i = 1, 2
-				if traces[i] and traces[i].ColorValue
-					colors.Trace[i] = traces[i].ColorValue
-
-		if symmetryOptions and symmetryOptions.Colorful
-			for i = 1, 2
-				trace = colors.Trace[i]
-				colors.EndTrace[i] = {
-					r: math.Round trace.r * 0.72
-					g: math.Round trace.g * 0.72
-					b: math.Round trace.b * 0.72
-					a: trace.a or 255
-				}
-		else
-			colors.EndTrace[2] = colors.EndTrace[1]
+				trace = traces[i] or {}
+				ruleColor = Moonpanel.Canvas.ColorValues[trace.RuleColor or trace.Color]
+				colors.Trace[i] = trace.ColorValue or ruleColor or colors.Trace[i]
+				colors.EndTrace[i] = trace.CompletionColorValue or
+					Helpers.terminalColor colors.Trace[i]
+		colors.EndTrace[1] or= Helpers.terminalColor colors.Trace[1]
+		colors.EndTrace[2] or= Helpers.terminalColor colors.Trace[2]
 
 		colors
 
@@ -713,6 +705,11 @@ class Canvas
 	GetEntityAtScreen: (scrX, scrY) =>
 		return unless @__sockets
 		for socket in *@__sockets
+			continue unless socket\GetSocketType! == INTERSECTION_SOCKET
+			continue if @IsHiddenContinuousSocket socket
+			return socket if socket\CanClick scrX, scrY
+		for socket in *@__sockets
+			continue if socket\GetSocketType! == INTERSECTION_SOCKET
 			continue if @IsHiddenContinuousSocket socket
 			return socket if socket\CanClick scrX, scrY
 

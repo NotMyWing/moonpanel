@@ -40,6 +40,67 @@ test.test('panel appearance uses the canonical defaults', function()
     'canonical grid default was not applied')
   assert(colors.Background.r == 80 and colors.Vignette.a == 80,
     'canonical appearance defaults were not applied')
+  assert(colors.Cell == nil, 'missing authored Cell color was synthesized')
+end)
+
+test.test('authored Cell color is preserved and optional presets stay optional', function()
+  local authored = base(Moonpanel.Canvas.SchemaVersion)
+  authored.Colors = {}
+  authored.Colors.Cell = {r = 1, g = 2, b = 3, a = 255}
+  local clean = Moonpanel.Canvas.SanitizeData(authored)
+  assert(clean.Colors.Cell.r == 1 and clean.Colors.Cell.g == 2 and clean.Colors.Cell.b == 3,
+    'authored Cell color was not preserved')
+  authored.Colors.Cell = table.Copy(Moonpanel.Canvas.DefaultColors.Cell)
+  assert(Moonpanel.Canvas.SanitizeData(authored).Colors.Cell ~= nil,
+    'current authored default Cell color was mistaken for a legacy sentinel')
+  assert(Moonpanel.Canvas.ResolveColorPreset('Default').Cell == nil,
+    'default preset unexpectedly enabled Cell')
+  assert(Moonpanel.Canvas.ResolveColorPreset('The Quarry Gray').Cell ~= nil,
+    'explicit Cell preset did not enable Cell')
+  local swamp = Moonpanel.Canvas.ResolveColorPreset('Swamp 1')
+  assert(swamp.Background.r == 44 and swamp.Background.g == 55 and swamp.Background.b == 0,
+    'Swamp 1 background is incorrect')
+  assert(swamp.Cell.r == 74 and swamp.Untraced.r == 95 and swamp.Traced.g == 171 and swamp.Finished.r == 157,
+    'Swamp 1 colors are incorrect')
+
+  local windmill = Moonpanel.Canvas.ResolveColorPreset('The Windmill')
+  assert(Moonpanel.Canvas.ColorPresets['The Windmill'].Cell == nil,
+    'Windmill must not author the optional Cell role')
+  assert(windmill.Cell == nil,
+    'Windmill unexpectedly enabled the optional Cell role')
+  assert(Moonpanel.Canvas.SanitizeData({
+    SchemaVersion = Moonpanel.Canvas.SchemaVersion,
+    Meta = base(Moonpanel.Canvas.SchemaVersion).Meta,
+    Entities = {},
+    Colors = windmill,
+  }).Colors.Cell == nil,
+    'Windmill application did not leave Cell absent after sanitization')
+
+  local legacyDefault = base(7)
+  legacyDefault.Colors = {Cell = table.Copy(Moonpanel.Canvas.DefaultColors.Cell)}
+  assert(Moonpanel.Canvas.SanitizeData(legacyDefault).Colors.Cell == nil,
+    'the historical synthesized Cell default was not removed')
+  legacyDefault.Colors.Cell = {r = 0, g = 0, b = 0, a = 0}
+  assert(Moonpanel.Canvas.SanitizeData(legacyDefault).Colors.Cell == nil,
+    'the historical transparent Cell sentinel was not removed')
+end)
+
+test.test('per-trace completion colors are optional and preserved', function()
+  local clean = Moonpanel.Canvas.SanitizeData(base(Moonpanel.Canvas.SchemaVersion))
+  assert(clean.Meta.SymmetryOptions.Traces[1].CompletionColorValue == nil,
+    'completion color was synthesized')
+  local authored = base(Moonpanel.Canvas.SchemaVersion)
+  authored.Meta.SymmetryOptions.Traces[2].CompletionColorValue = {r = 1, g = 2, b = 3, a = 255}
+  local sanitized = Moonpanel.Canvas.SanitizeData(authored)
+  local color = sanitized.Meta.SymmetryOptions.Traces[2].CompletionColorValue
+  assert(color.r == 1 and color.g == 2 and color.b == 3,
+    'authored per-trace completion color was not preserved')
+end)
+
+test.test('terminal color helper increases chroma for ordinary traces', function()
+  local terminal = Moonpanel.Helpers.terminalColor({r = 231, g = 98, b = 92, a = 255})
+  assert(terminal.r > terminal.g * 3 and terminal.r > terminal.b * 3,
+    'terminal color helper did not produce a saturated red')
 end)
 
 test.test('historical color presets resolve against modern defaults', function()
@@ -92,7 +153,11 @@ end)
 
 test.test('symmetry trace color values remain independently configurable', function()
   local data = base(Moonpanel.Canvas.SchemaVersion)
+  assert(Moonpanel.Canvas.SanitizeData(data).Meta.SymmetryOptions.Traces[1].ColorValue == nil,
+    'missing trace appearance was synthesized')
+  data.Meta.SymmetryOptions.Traces[1].ColorValue = {r = 200, g = 201, b = 202, a = 255}
   data.Meta.SymmetryOptions.Traces[2].ColorValue = {r = 12, g = 34, b = 56, a = 200}
+  data.Meta.SymmetryOptions.Traces[2].Invisible = true
   local clean = Moonpanel.Canvas.SanitizeData(data)
   local secondary = clean.Meta.SymmetryOptions.Traces[2].ColorValue
   assert(secondary.r == 12 and secondary.g == 34 and secondary.b == 56 and secondary.a == 200,
@@ -100,6 +165,8 @@ test.test('symmetry trace color values remain independently configurable', funct
   assert(clean.Meta.SymmetryOptions.Traces[1].ColorValue.r ~= secondary.r or
     clean.Meta.SymmetryOptions.Traces[1].ColorValue.g ~= secondary.g,
     'primary and secondary trace appearances share state')
+  assert(clean.Meta.SymmetryOptions.Traces[2].Invisible == true,
+    'per-trace invisibility was not preserved')
 end)
 
 test.test('The Windmill data imports into canonical panel coordinates', function()
@@ -197,6 +264,38 @@ test.test('legacy grid conversion retains colorful dot inference context', funct
     'legacy grid conversion erased branch-color evidence too early')
 end)
 
+test.test('legacy Tile colorful symmetry recovers branch and hexagon colors', function()
+  local converted = Moonpanel.Canvas.SanitizeData({
+    Tile = {
+      Width = 3,
+      Height = 3,
+      Symmetry = 1,
+      ColorfulSymmetry = true,
+    },
+    VPaths = {
+      {},
+      {
+        [2] = {Type = 3, Attributes = {Color = Moonpanel.Color.Magenta}},
+        [3] = {Type = 3, Attributes = {Color = Moonpanel.Color.Cyan}},
+      },
+    },
+  })
+  local traces = converted.Meta.SymmetryOptions.Traces
+  local primary = flatIndex(3, 3, 4)
+  local secondary = flatIndex(3, 5, 4)
+
+  assert(converted.Meta.SymmetryOptions.Colorful == true,
+    'legacy Tile.ColorfulSymmetry was not retained')
+  assert(traces[1].RuleColor == Moonpanel.Color.Magenta and
+    traces[2].RuleColor == Moonpanel.Color.Cyan,
+    'legacy hexagon colors were not recovered as branch colors')
+  assert(traces[1].ColorValue == nil and traces[2].ColorValue == nil,
+    'legacy rule colors were redundantly imported as appearance overrides')
+  assert(converted.Entities[primary].Data.TraceRole == Moonpanel.Canvas.DotRole.Primary and
+    converted.Entities[secondary].Data.TraceRole == Moonpanel.Canvas.DotRole.Secondary,
+    'legacy colored hexagons were not assigned to their recovered branches')
+end)
+
 test.test('legacy Tile symmetry migrates rotational panels', function()
   local converted = Moonpanel.Canvas.SanitizeData({
     Tile = {Width = 3, Height = 3, Symmetry = 1},
@@ -258,7 +357,7 @@ test.test('schema v2 repairs palette-authored semantic color mismatches', functi
   }
 
   local migrated = Moonpanel.Canvas.SanitizeData(data)
-  assert(migrated.SchemaVersion == 7, 'v2 panel was not migrated')
+  assert(migrated.SchemaVersion == Moonpanel.Canvas.SchemaVersion, 'v2 panel was not migrated')
   assert(migrated.Entities[white].Data.RuleColor == Moonpanel.Color.White,
     'v2 stale rule identity did not follow the authored visible color')
   assert(migrated.Entities[white].Data.TintColor == nil,

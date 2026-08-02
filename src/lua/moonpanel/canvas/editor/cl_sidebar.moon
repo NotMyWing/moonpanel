@@ -46,18 +46,20 @@ GROUPS = {
 }
 
 APPEARANCE = {
-	{ "Background", "Background" }, { "Grid", "Untraced" }
-	{ "Trace", "Traced" }, { "Completed", "Finished" }
+	{ "Background", "Background" }, { "Vignette", "Vignette" }
+	{ "Grid", "Untraced" }
 	{ "Error", "Errored" }, { "Cell field", "Cell" }
 }
 
 TRACE_APPEARANCE = {
-	{ "Primary trace", "Trace1" }
+	{ "Trace", "Trace1" }
+	{ "Trace completed", "Trace1Completed" }
 	{ "Secondary trace", "Trace2" }
+	{ "Secondary completed", "Trace2Completed" }
 }
 
 colorEqual = (left, right) ->
-	return false unless left and right
+	return left == right unless left and right
 	(left.r or 255) == (right.r or 255) and
 		(left.g or 255) == (right.g or 255) and
 		(left.b or 255) == (right.b or 255) and
@@ -69,17 +71,65 @@ presetMatches = (colors, preset) ->
 		return false unless colorEqual colors[role], preset[role]
 	true
 
+getTraceOptions = (data) ->
+	data.Meta and data.Meta.SymmetryOptions and data.Meta.SymmetryOptions.Traces or {}
+
+getRuleTraceColor = (data, traceId) ->
+	trace = getTraceOptions(data)[traceId]
+	colorId = trace and (trace.RuleColor or trace.Color)
+	colorId and Moonpanel.Canvas.ColorValues[colorId]
+
 getAppearanceColor = (data, role) ->
-	if role == "Trace1" or role == "Trace2"
+	if role == "Trace1" or role == "Trace2" or role == "Trace1Completed" or role == "Trace2Completed"
+		symmetry = data.Meta and data.Meta.Symmetry != Moonpanel.Canvas.Symmetry.None
+		if role == "Trace2" or role == "Trace2Completed"
+			return getAppearanceColor(data, role == "Trace2" and "Trace1" or "Trace1Completed") unless symmetry
+		if role == "Trace1Completed" or role == "Trace2Completed"
+			traceId = role == "Trace1Completed" and 1 or 2
+			traces = getTraceOptions data
+			return traces and traces[traceId] and traces[traceId].CompletionColorValue
 		traceId = role == "Trace1" and 1 or 2
-		traces = data.Meta and data.Meta.SymmetryOptions and data.Meta.SymmetryOptions.Traces
-		return traces and traces[traceId] and traces[traceId].ColorValue
+		traces = getTraceOptions data
+		appearance = traces[traceId] and traces[traceId].ColorValue
+		if symmetry
+			return appearance or getRuleTraceColor(data, traceId) or
+				(traceId == 1 and data.Colors.Traced or { r: 255, g: 255, b: 116 })
+		if role == "Trace1"
+			return appearance or data.Colors.Traced
+		return appearance
 	data.Colors[role]
+
+appearanceValue = (data, role) ->
+	value = getAppearanceColor data, role
+	return value if value
+	if role == "Trace1Completed" or role == "Trace2Completed"
+		trace = appearanceValue data, role == "Trace1Completed" and "Trace1" or "Trace2"
+		return Helpers.terminalColor trace
+	value or Moonpanel.Canvas.DefaultColors[role]
+
+appearanceEnabled = (data, role) ->
+	symmetry = data.Meta and data.Meta.Symmetry != Moonpanel.Canvas.Symmetry.None
+	return true if (role == "Trace1" or role == "Trace2") and not symmetry
+	return true unless role == "Cell" or role == "Trace1" or role == "Trace2" or role == "Trace1Completed" or role == "Trace2Completed"
+	return data.Colors.Cell ~= nil if role == "Cell"
+	traceId = (role == "Trace1" or role == "Trace1Completed") and 1 or 2
+	traces = getTraceOptions data
+	if role == "Trace1" or role == "Trace2"
+		return traces[traceId] and traces[traceId].ColorValue ~= nil
+	traces and traces[traceId] and traces[traceId].CompletionColorValue ~= nil
 
 setAppearanceColor = (data, role, color) ->
 	if role == "Trace1" or role == "Trace2"
+		symmetry = data.Meta and data.Meta.Symmetry != Moonpanel.Canvas.Symmetry.None
+		unless symmetry
+			data.Colors.Traced = color
+			return
 		traceId = role == "Trace1" and 1 or 2
 		data.Meta.SymmetryOptions.Traces[traceId].ColorValue = color
+		return
+	if role == "Trace1Completed" or role == "Trace2Completed"
+		traceId = role == "Trace1Completed" and 1 or 2
+		data.Meta.SymmetryOptions.Traces[traceId].CompletionColorValue = color
 		return
 	data.Colors[role] = color
 
@@ -895,10 +945,70 @@ Editor.BuildPanelSettings = (parent) =>
 	applySymmetry = (name) ->
 		return if symmetryCurrent! == name
 		nextData = Editor.Document\GetData!
-		nextData.Meta.Symmetry = symmetryValues[name]
+		nextSymmetry = symmetryValues[name]
+		if nextSymmetry != Moonpanel.Canvas.Symmetry.None and
+			nextData.Meta.Symmetry == Moonpanel.Canvas.Symmetry.None
+			for trace in *nextData.Meta.SymmetryOptions.Traces
+				trace.ColorValue = nil
+				trace.CompletionColorValue = nil
+		nextData.Meta.Symmetry = nextSymmetry
 		Editor\CommitData "Change symmetry", nextData
 	makePresetPicker parent, symmetryNames, symmetryCurrent,
 		"Choose the panel's trace symmetry", applySymmetry
+
+	if data.Meta.Symmetry != Moonpanel.Canvas.Symmetry.None
+		addSection parent, "TRACE RULE COLORS"
+		traces = data.Meta.SymmetryOptions.Traces
+		for traceId, label in ipairs { "Primary rule color", "Secondary rule color" }
+			trace = traces[traceId]
+			enabled = trace.RuleColor ~= nil or trace.Color ~= nil
+			ruleColorTooltip = traceId == 1 and "primary_trace_rule_color" or "secondary_trace_rule_color"
+			makeCheck(
+				parent,
+				label,
+				enabled,
+				(checked) ->
+					nextData = Editor.Document\GetData!
+					nextTrace = nextData.Meta.SymmetryOptions.Traces[traceId]
+					if checked
+						nextTrace.RuleColor = nextTrace.RuleColor or nextTrace.Color or
+							(traceId == 1 and Moonpanel.Color.Cyan or Moonpanel.Color.Magenta)
+					else
+						nextTrace.RuleColor = nil
+						nextTrace.Color = nil
+					Editor\CommitData "Toggle #{string.lower label}", nextData,
+				ruleColorTooltip
+			)
+			if enabled
+				makeColorGrid(
+					parent,
+					trace.RuleColor or trace.Color,
+					(color) ->
+						nextData = Editor.Document\GetData!
+						nextData.Meta.SymmetryOptions.Traces[traceId].RuleColor = color
+						Editor\CommitData "Change #{string.lower label}", nextData,
+					(traceId == 1 and "primary_trace_rule_color" or "secondary_trace_rule_color")
+				)
+			traceLabel = traceId == 1 and "Primary trace invisible" or "Secondary trace invisible"
+			invisibleTooltip = traceId == 1 and "primary_trace_invisible" or "secondary_trace_invisible"
+			makeCheck(
+				parent,
+				traceLabel,
+				trace.Invisible,
+				(checked) ->
+					nextData = Editor.Document\GetData!
+					nextData.Meta.SymmetryOptions.Traces[traceId].Invisible = checked
+					Editor\CommitData "Toggle #{string.lower label} visibility", nextData,
+				invisibleTooltip
+			)
+			if traceId == 1
+				with parent\Add "DPanel"
+					\Dock TOP
+					\DockMargin 10, 4, 10, 4
+					\SetTall 1
+					.Paint = (_, w, h) ->
+						surface.SetDrawColor C.border
+						surface.DrawRect 0, 0, w, h
 
 	addSection parent, "TOPOLOGY"
 	onContinuity = (enabled) ->
@@ -985,12 +1095,13 @@ Editor.BuildPanelSettings = (parent) =>
 Editor.SelectAppearanceRole = (role) =>
 	@appearanceRole = role
 	data = @Document\GetData!
-	current = getAppearanceColor data, role
+	current = appearanceValue data, role
 	if IsValid @AppearanceEditLabel
 		@AppearanceEditLabel\SetText "EDIT #{string.upper role}"
 	if IsValid(@AppearanceMixer) and current
 		@AppearanceUpdating = true
 		@AppearanceMixer\SetColor Color current.r, current.g, current.b, current.a or 255
+		@AppearanceMixer\SetEnabled appearanceEnabled data, role
 		@AppearanceUpdating = nil
 
 Editor.RefreshAppearanceControls = =>
@@ -998,11 +1109,17 @@ Editor.RefreshAppearanceControls = =>
 	if IsValid @AppearancePresetState
 		@AppearancePresetState\Refresh!
 	if IsValid(@AppearanceMixer)
-		current = getAppearanceColor data, @appearanceRole
+		current = appearanceValue data, @appearanceRole
 		if current
 			@AppearanceUpdating = true
 			@AppearanceMixer\SetColor Color current.r, current.g, current.b, current.a or 255
+			@AppearanceMixer\SetEnabled appearanceEnabled data, @appearanceRole
 			@AppearanceUpdating = nil
+	for role, toggle in pairs @AppearanceToggles or {}
+		if IsValid toggle
+			@AppearanceToggleUpdating = true
+			toggle\SetValue appearanceEnabled data, role
+			@AppearanceToggleUpdating = nil
 	@AppearanceEditLabel\SetText "EDIT #{string.upper @appearanceRole}" if IsValid @AppearanceEditLabel
 	if IsValid @SoundPresetState
 		@SoundPresetState\Refresh!
@@ -1023,7 +1140,7 @@ Editor.BuildAppearanceSettings = (parent) =>
 			return
 		nextData = Editor.Document\GetData!
 		nextData.Colors = deepCopy Moonpanel.Canvas.ResolveColorPreset presetName
-		Editor\CommitData "Apply color preset", nextData, "appearance-preset", false
+		Editor\CommitData "Apply color preset", nextData, nil, false
 		Editor\RefreshAppearanceControls!
 		Editor\SetStatus "Applied #{presetName} color preset.", C.success
 	paintColorPreset = (name, w, h) ->
@@ -1033,9 +1150,10 @@ Editor.BuildAppearanceSettings = (parent) =>
 		startX = math.max 10, w - roleCount * step - 10
 		for index, role in ipairs Moonpanel.Canvas.ColorRoles
 			value = resolved[role]
-			x = startX + (index - 1) * step
-			draw.RoundedBox 1, x, h - 17, math.max(8, step - 2), 12,
-				Color value.r, value.g, value.b, value.a or 255
+			if value
+				x = startX + (index - 1) * step
+				draw.RoundedBox 1, x, h - 17, math.max(8, step - 2), 12,
+					Color value.r, value.g, value.b, value.a or 255
 		draw.SimpleText name, "MoonpanelEditorBody", 10, 11, C.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER
 	colorPicker = makePresetPicker parent, presetNames, colorCurrent,
 		"Choose a complete panel appearance preset", applyColorPreset, paintColorPreset
@@ -1051,7 +1169,7 @@ Editor.BuildAppearanceSettings = (parent) =>
 			return
 		nextData = Editor.Document\GetData!
 		nextData.Sounds = { Preset: presetName }
-		Editor\CommitData "Apply sound preset", nextData, "sound-preset", false
+		Editor\CommitData "Apply sound preset", nextData, nil, false
 		Editor\RefreshAppearanceControls!
 		Editor\SetStatus "Applied #{presetName} sound preset.", C.success
 	soundPicker = makePresetPicker parent, soundPresetNames, soundCurrent,
@@ -1063,7 +1181,11 @@ Editor.BuildAppearanceSettings = (parent) =>
 		for entry in *entries
 			name = entry[1]
 			key = entry[2]
-			with parent\Add "DButton"
+			symmetry = data.Meta.Symmetry != Moonpanel.Canvas.Symmetry.None
+			optional = key == "Cell" or key == "Trace1Completed" or key == "Trace2Completed" or
+				(symmetry and (key == "Trace1" or key == "Trace2"))
+			row = parent\Add "DButton"
+			with row
 				.RoleKey = key
 				.RoleName = name
 				\Dock TOP
@@ -1074,21 +1196,59 @@ Editor.BuildAppearanceSettings = (parent) =>
 				.Paint = (_, w, h) ->
 					background = if _.RoleKey == Editor.appearanceRole then C.accentDim elseif _.Hovered then C.hover else C.raised
 					draw.RoundedBox 4, 0, 0, w, h, background
-					value = getAppearanceColor Editor.Document\GetData!, _.RoleKey
-					draw.RoundedBox 3, 8, 7, 18, 18, Color(value.r, value.g, value.b, value.a or 255)
-					draw.SimpleText _.RoleName, "MoonpanelEditorBody", 34, h / 2, C.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER
+					data = Editor.Document\GetData!
+					value = appearanceValue data, _.RoleKey
+					muted = optional and not appearanceEnabled(data, _.RoleKey)
+					textColor = muted and C.muted or C.text
+					swatch = muted and C.muted or Color(value.r, value.g, value.b, value.a or 255)
+					draw.RoundedBox 3, 8, 7, 18, 18, swatch
+					draw.SimpleText _.RoleName, "MoonpanelEditorBody", 34, h / 2, textColor, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER
+				if optional
+					toggle = row\Add "DCheckBox"
+					toggle\Dock RIGHT
+					toggle\DockMargin 0, 8, 8, 8
+					toggle\SetValue appearanceEnabled Editor.Document\GetData!, key
+					toggle.OnChange = (_, enabled) ->
+						return if Editor.AppearanceToggleUpdating
+						nextData = Editor.Document\GetData!
+						if enabled
+							if key == "Cell"
+								nextData.Colors.Cell = deepCopy Moonpanel.Canvas.DefaultColors.Cell
+							else
+								setAppearanceColor nextData, key, deepCopy appearanceValue nextData, key
+						else
+							if key == "Cell"
+								nextData.Colors.Cell = nil
+							elseif key == "Trace1" or key == "Trace2"
+								traceId = key == "Trace1" and 1 or 2
+								nextData.Meta.SymmetryOptions.Traces[traceId].ColorValue = nil
+							else
+								traceId = key == "Trace1Completed" and 1 or 2
+								nextData.Meta.SymmetryOptions.Traces[traceId].CompletionColorValue = nil
+						Editor\CommitData "Toggle #{string.lower name}", nextData, "appearance-#{key}-toggle", false
+						Editor\RefreshAppearanceControls!
+						Editor.AppearanceToggles or= {}
+						Editor.AppearanceToggles[key] = toggle
+					appearanceTooltip = switch key
+						when "Cell" then "cell_field"
+						when "Trace1" then "primary_trace_color"
+						when "Trace2" then "secondary_trace_color"
+						when "Trace1Completed" then "primary_trace_completed_color"
+						when "Trace2Completed" then "secondary_trace_completed_color"
+					Editor\AttachControlTooltip row, appearanceTooltip if appearanceTooltip
 
 	addAppearanceButtons "COLOR ROLE", APPEARANCE
 	addAppearanceButtons "TRACE COLORS", TRACE_APPEARANCE
 
 	@AppearanceEditLabel = addSection parent, "EDIT #{string.upper @appearanceRole}"
-	current = getAppearanceColor data, @appearanceRole
+	current = appearanceValue data, @appearanceRole
 	@AppearanceMixer = with parent\Add "DColorMixer"
 		\Dock TOP
 		\DockMargin 10, 2, 10, 10
 		\SetTall 180
 		\SetPalette false
 		\SetColor Color current.r, current.g, current.b, current.a or 255
+		\SetEnabled @appearanceRole != "Cell" or data.Colors.Cell != nil
 	@AppearanceMixer.ValueChanged = (_, color) ->
 		return if Editor.AppearanceUpdating
 		nextData = Editor.Document\GetData!

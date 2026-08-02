@@ -65,6 +65,18 @@ test.test('matching merge keys coalesce and new edits invalidate redo', function
   assert(not document:CanRedo() and document:GetData().value == 3)
 end)
 
+test.test('independent preset-style edits remain separate history entries', function()
+  local document = newDocument({ value = 0 })
+  document:BeginEdit('Apply color preset')
+  document:CommitEdit({ value = 1 })
+  document:BeginEdit('Apply color preset')
+  document:CommitEdit({ value = 2 })
+  assert(#document.history == 2,
+    'separate preset choices must not collapse into one undo step')
+  assert(document:Undo() and document:GetData().value == 1)
+  assert(document:Undo() and document:GetData().value == 0)
+end)
+
 test.test('history limit retains the most recent reversible edits', function()
   local document = newDocument({ value = 0 })
   for value = 1, 5 do

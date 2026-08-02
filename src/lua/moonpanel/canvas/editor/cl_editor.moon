@@ -320,7 +320,8 @@ Editor.Undo = =>
 	@ExitTestMode! if @TestMode
 	ok, label = @Document\Undo!
 	if ok
-		@SyncCanvas!
+		@SyncCanvas false
+		@RefreshAppearanceControls! if @RefreshAppearanceControls
 		@ScheduleRecovery!
 		@SetStatus "Undo: #{label}", C.text
 
@@ -328,7 +329,8 @@ Editor.Redo = =>
 	@ExitTestMode! if @TestMode
 	ok, label = @Document\Redo!
 	if ok
-		@SyncCanvas!
+		@SyncCanvas false
+		@RefreshAppearanceControls! if @RefreshAppearanceControls
 		@ScheduleRecovery!
 		@SetStatus "Redo: #{label}", C.text
 

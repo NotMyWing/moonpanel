@@ -1,0 +1,23 @@
+{
+  "name": "colorful symmetry",
+  "panel": "colorful_symmetry.txt",
+  "legacy": false,
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "primary from the top right follows the first colored branch",
+      "traces": [[[3,0],[3,1],[3,2],[3,3]]],
+      "expected": {"success": true, "status": "complete"}
+    },
+    {
+      "name": "primary from the bottom left follows the wrong colored branch",
+      "traces": [[[0,3],[0,2],[0,1],[0,0]]],
+      "expected": {
+        "success": false,
+        "status": "complete",
+        "violations": [22, 28],
+        "constraintKinds": ["dot", "dot"]
+      }
+    }
+  ]
+}

@@ -153,7 +153,24 @@ CANVAS.RecalculateClient = =>
 	@__rtDirty = true
 
 	@__clientData.paths = {}
+	@__clientData.cells = {}
 	seen = {}
+	meta = @__data.Meta or {}
+	width, height = tonumber(meta.Width) or 1, tonumber(meta.Height) or 1
+	barLength = @GetBarLength!
+	verticalLength = @GetVerticalBarLength!
+	resolution = Moonpanel.Canvas.Resolution
+	for y = 1, height
+		for x = 1, width
+			entityIndex = (y * 2 - 1) * (width * 2 + 1) + x * 2
+			entity = @__data.Entities and @__data.Entities[entityIndex]
+			continue if entity and entity.Type == "Invisible"
+			table.insert @__clientData.cells, {
+				x: resolution * 0.5 + (x - 0.5 - width * 0.5) * barLength - (barLength - barWidth) * 0.5
+				y: resolution * 0.5 + (y - 0.5 - height * 0.5) * verticalLength - (verticalLength - barWidth) * 0.5
+				width: math.max 1, barLength - barWidth
+				height: math.max 1, verticalLength - barWidth
+			}
 
 	-- Extract paths and calculate distances.
 	for nodeA in *@__nodes
@@ -198,7 +215,8 @@ CANVAS.RecalculateClient = =>
 	for node in *@__nodes
 		continue if node.break or node.invisible or
 			@IsHiddenContinuousSocket node.socket
-		if node.clickable or table.Count(node.neighbors) < 4
+		neighborCount = table.Count node.neighbors
+		if node.clickable or neighborCount > 0 and neighborCount < 4
 			table.insert @__clientData.visibleNodes, node
 ----------------------------
 -- Paints the trace. Duh. --
@@ -269,7 +287,10 @@ CANVAS.PaintTrace = (w, h) =>
 			blend frame.completion,
 				branchStyle and branchStyle.completionColor or
 				colors.EndTrace[stackId] or colors.EndTrace[1]
-		if (frame.flash or 0) > 0
+		-- Completion should transition directly from the active trace color to
+		-- the terminal color; suppress the generic white success flash while the
+		-- terminal blend is active.
+		if (frame.flash or 0) > 0 and (frame.completion or 0) <= 0
 			blend frame.flash * 0.65, Color 255, 255, 255
 		surface.SetDrawColor traceColor.r, traceColor.g, traceColor.b, 255
 
@@ -332,40 +353,56 @@ CANVAS.ApplyEntityVisualColor = (color, socket) =>
 	a *= math.Clamp style.alpha or 1, 0, 1
 	math.Round(r), math.Round(g), math.Round(b), math.Round(a)
 
+drawRouteStarts = (topology, routes, radius, colors, branchStyles, alpha) ->
+	seen = {}
+	for routeIndex, route in ipairs routes
+		continue if seen[route.startId]
+		seen[route.startId] = true
+		if node = topology.nodes[route.startId]
+			if colors
+				color = branchStyles and branchStyles[routeIndex] and
+					branchStyles[routeIndex].color or colors.Trace[routeIndex] or colors.Trace[1]
+				surface.SetDrawColor color.r, color.g, color.b, alpha
+			circleAt node.screenX, node.screenY, radius
+	seen
+
 CANVAS.PaintPresentationEffects = =>
 	frame = @__visualFrame
-	return unless frame and @__pathFinder
-	barWidth = @GetBarWidth!
+	return unless frame
+
+	ripple = frame.startRipple or 0
+	scintAlpha = math.Clamp frame.scintAlpha or 0, 0, 1
+	return if ripple <= 0 and scintAlpha <= 0
+	return unless @__pathFinder
+
 	topology = @__pathFinder.topology
-	state = @__renderTraceState or @GetTraceRenderState!
-	routes = state and state.routes or {}
-	drawRouteStarts = (radius) ->
-		seen = {}
-		for route in *routes
-			continue if seen[route.startId]
-			seen[route.startId] = true
-			if node = topology.nodes[route.startId]
-				circleAt node.screenX, node.screenY, radius
-		seen
-	if (frame.startRipple or 0) > 0
-		surface.SetDrawColor 255, 255, 255, math.Round(frame.startRipple * 42)
-		drawRouteStarts barWidth * (1.5 + frame.startRipple * 1.8)
-	if (frame.scintAlpha or 0) <= 0
-		return
+	barWidth = @GetBarWidth!
+	local routes
+	colors = @GetColors! if ripple > 0
+	if ripple > 0 or frame.scintStarts
+		state = @__renderTraceState or @GetTraceRenderState!
+		routes = state and state.routes or {}
+
+	if ripple > 0
+		trace = colors.Trace[1] or colors.Trace[2]
+		surface.SetDrawColor trace.r, trace.g, trace.b, math.Round(ripple * 42)
+		drawRouteStarts topology, routes, barWidth * (1.5 + ripple * 1.8),
+			colors, frame.branchStyles, math.Round(ripple * 42)
+	return if scintAlpha <= 0
+
 	surface.SetDrawColor 255, 255, 255,
-		math.Round math.Clamp(frame.scintAlpha, 0, 1) * 255
+		math.Round scintAlpha * 255 * 0.5
 	radius = barWidth * (0.25 + (frame.scintProgress or 0) * 2.5)
 	thickness = math.max 1, barWidth * 0.12
-	seen = {}
 	if frame.scintStarts
-		seen = drawRouteStarts radius
+		seen = drawRouteStarts topology, routes, radius
 		for nodeId in *topology.starts
 			continue if seen[nodeId]
 			if node = topology.nodes[nodeId]
 				drawRingAt node.screenX, node.screenY, radius, thickness
 	else
 		for node in *topology.nodes
-			if node.exit and not seen[node.id]
+			if node.exit
 				drawRingAt node.screenX, node.screenY, radius, thickness
 
 -----------------------------
@@ -438,6 +475,10 @@ CANVAS.RenderRT = =>
 
 			surface.SetDrawColor colors.Background
 			surface.DrawRect 0, 0, w, h
+			if colors.Cell
+				surface.SetDrawColor colors.Cell
+				for cell in *@__clientData.cells
+					surface.DrawRect cell.x, cell.y, cell.width, cell.height
 
 			barWidth = @GetBarWidth!
 			wrap = @IsContinuous! and not @GetEditorGeometryVisible!

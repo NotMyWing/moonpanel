@@ -42,7 +42,7 @@ CLUE_TOOLTIPS = {
 	}
 	Hexagon: {
 		title: "Dot"
-		body: "A dot normally requires a path to pass through its position. It may belong to the primary path, the symmetric path, or either. Negative dots must remain untraced; invisible dots keep their rule without being shown during play."
+		body: "The line must pass through a dot. A negative dot must be left untouched, while an invisible dot still counts even though it is hidden during play.\n\nWith symmetry, black and white dots work with either line. Other colored dots work with the line that has the same color. You can choose those line colors in the Panel settings."
 		placeOn: "Path segments or intersections"
 	}
 	Disjoint: {
@@ -58,7 +58,16 @@ CLUE_TOOLTIPS = {
 }
 
 CONTROL_TOOLTIPS = {
-	rule_color: "The clue's logical color. Puzzle rules use this color when comparing it with other symbols."
+	rule_color: "The color this clue counts as when the puzzle checks the rules."
+	cell_field: "Adds a colored backdrop inside each cell. Cell holes remain empty."
+	primary_trace_color: "Changes the drawn primary line's color. This affects its appearance, not which dots it satisfies."
+	secondary_trace_color: "Changes the drawn second line's color. This affects its appearance, not which dots it satisfies."
+	primary_trace_rule_color: "Assigns this color to the primary line for puzzle rules. In a symmetric puzzle, dots of this color must be crossed by the primary line."
+	secondary_trace_rule_color: "Assigns this color to the second line for puzzle rules. In a symmetric puzzle, dots of this color must be crossed by the second line."
+	primary_trace_completed_color: "Sets the color of the primary line after it reaches an exit. If disabled, the color is generated from the primary line color."
+	secondary_trace_completed_color: "Sets the color of the second line after it reaches an exit. If disabled, the color is generated from the second line color."
+	primary_trace_invisible: "Hides the primary line while playing. It still takes part in solving the puzzle."
+	secondary_trace_invisible: "Hides the second line while playing. It still takes part in solving the puzzle."
 	tint_override: "Changes only how the clue is drawn. Its logical rule color remains unchanged."
 	negative: "Uses this clue's negative variant. Negative polyominoes subtract cells; negative dots must remain untraced."
 	invisible: "Hides the clue during play while keeping its rule active. It remains visible in the editor."

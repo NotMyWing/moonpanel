@@ -1,6 +1,71 @@
 local test = dofile('tools/tests/harness.lua')
 local fixture = dofile('tools/tests/canvas_runtime_fixture.lua')
 
+local function sameColor(left, right)
+  return left and right and left.r == right.r and left.g == right.g and
+    left.b == right.b and (left.a or 255) == (right.a or 255)
+end
+
+local function normalizeLegacyKeys(value)
+  if type(value) ~= 'table' then return value end
+  local output = {}
+  for key, child in pairs(value) do
+    local numeric = type(key) == 'string' and tonumber(key)
+    local outputKey = numeric and numeric == math.floor(numeric) and numeric or key
+    output[outputKey] = normalizeLegacyKeys(child)
+  end
+  return output
+end
+
+test.test('symmetry rule colors drive both traces and their terminal defaults', function()
+  local canvas = Moonpanel.Canvas.Canvas()
+  canvas:ImportData(fixture('colorful symmetry'))
+  local colors = canvas:GetColors()
+  local primary = Moonpanel.Canvas.ColorValues[Moonpanel.Color.Magenta]
+  local secondary = Moonpanel.Canvas.ColorValues[Moonpanel.Color.Red]
+
+  assert(sameColor(colors.Trace[1], primary),
+    'primary trace ignored its Panel rule color')
+  assert(sameColor(colors.Trace[2], secondary),
+    'secondary trace ignored its Panel rule color')
+  assert(sameColor(colors.EndTrace[1], Moonpanel.Helpers.terminalColor(primary)) and
+    sameColor(colors.EndTrace[2], Moonpanel.Helpers.terminalColor(secondary)),
+    'terminal trace defaults were not derived from the Panel rule colors')
+end)
+
+test.test('legacy colorful symmetry renders from rule colors without appearance overrides', function()
+  local canvas = Moonpanel.Canvas.Canvas()
+  canvas:ImportData(Moonpanel.Canvas.LegacyToCanvasData(
+    normalizeLegacyKeys(fixture('legacy colorful symmetry'))))
+  local data = canvas:ExportData()
+  local traces = data.Meta.SymmetryOptions.Traces
+  local colors = canvas:GetColors()
+
+  assert(traces[1].ColorValue == nil and traces[2].ColorValue == nil,
+    'legacy import authored redundant trace appearance overrides')
+  assert(sameColor(colors.Trace[1], Moonpanel.Canvas.ColorValues[Moonpanel.Color.Magenta]) and
+    sameColor(colors.Trace[2], Moonpanel.Canvas.ColorValues[Moonpanel.Color.Cyan]),
+    'legacy rule colors did not drive the rendered traces')
+end)
+
+test.test('orphan intersections with no visible paths are not rendered as nodes', function()
+  local canvas = Moonpanel.Canvas.Canvas()
+  canvas:ImportData({
+    Meta = {Width = 1, Height = 1},
+    Entities = {
+      [2] = {Type = 'Invisible'},
+      [4] = {Type = 'Invisible'},
+      [6] = {Type = 'Invisible'},
+      [8] = {Type = 'Invisible'},
+    },
+  })
+  local orphaned = false
+  for _, node in ipairs(canvas:GetPathNodes()) do
+    if table.Count(node.neighbors) == 0 then orphaned = true end
+  end
+  assert(orphaned, 'the invisible-path regression fixture did not produce an orphaned intersection')
+end)
+
 test.test('real canvas import preserves pillartest wrapping sockets', function()
   local canvas = Moonpanel.Canvas.Canvas()
   assert(canvas.GetTraceTopology == nil,

@@ -766,15 +766,15 @@ local KIND = {
 
 local function inferDotRole(data, meta)
     local explicit = math.floor(tonumber(data.TraceRole) or -1)
-    if explicit >= 0 and explicit <= 2 then return explicit end
+    if explicit == DOT_PRIMARY or explicit == DOT_SECONDARY then return explicit end
     local tintColor = data.TintColor or data.RuleColor or data.Color
-    if tintColor == nil or tintColor == 1 then return DOT_ANY end
+    if tintColor == nil or tintColor == 1 or tintColor == 2 then return DOT_ANY end
 
+    if math.floor(tonumber(meta.Symmetry) or 0) == 0 then return DOT_ANY end
     local options = meta.SymmetryOptions or {}
-    if not options.Colorful then return DOT_ANY end
     local traces = options.Traces or {}
-    if traces[1] and traces[1].Color == tintColor then return DOT_PRIMARY end
-    if traces[2] and traces[2].Color == tintColor then return DOT_SECONDARY end
+    if traces[1] and (traces[1].RuleColor or traces[1].Color) == tintColor then return DOT_PRIMARY end
+    if traces[2] and (traces[2].RuleColor or traces[2].Color) == tintColor then return DOT_SECONDARY end
     return DOT_ANY
 end
 

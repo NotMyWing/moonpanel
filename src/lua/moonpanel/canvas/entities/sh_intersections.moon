@@ -40,13 +40,15 @@ class Moonpanel.Canvas.Entities.End extends Moonpanel.Canvas.Entities.BaseInters
                 --invis = Moonpanel.EntityTypes.Invisible
 
                 socket = @GetSocket!
-				canvas = socket\GetCanvas!
-				if Moonpanel.Canvas.UsesVerticalBoundaryExits(canvas\GetSurfaceSpec!)
-					height = canvas\GetData!.Meta.Height
-					return { x: 0, y: -1 } if socket\GetY! == 1
-					return { x: 0, y: 1 } if socket\GetY! == height + 1
-					return false
-
+                canvas = socket\GetCanvas!
+                width, height = canvas\GetDimensions!
+                if width == 1 and socket\GetY! == 1
+                    return { x: 0, y: -1 }
+                if width == 1 and socket\GetY! == height + 1
+                    return { x: 0, y: 1 }
+                if Moonpanel.Canvas.UsesVerticalBoundaryExits(canvas\GetSurfaceSpec!)
+                    return { x: 0, y: -1 } if socket\GetY! == 1
+                    return { x: 0, y: 1 } if socket\GetY! == height + 1
                 left = socket\GetLeft!
                 right = socket\GetRight!
                 top = socket\GetAbove!

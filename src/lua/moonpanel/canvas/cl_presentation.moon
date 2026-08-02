@@ -261,6 +261,12 @@ class Moonpanel.Canvas.TracePresentation
 			return frame, @drainCues!
 
 		elapsed = math.max 0, now - @resultAt
+		if elapsed < 0.25
+			frame.scint = 1
+			frame.scintPower = 1
+			frame.scintProgress = math.min(1, elapsed / 0.5)
+			frame.scintAlpha = 1 - smoothstep elapsed / 0.25
+			frame.needsAnimation = true
 		feedback = @result.feedback
 		hasEraser = #feedback.erasures > 0
 		errorPulse = (index) ->

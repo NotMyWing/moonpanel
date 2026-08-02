@@ -492,6 +492,33 @@ test.test('a primary constraint preserves shared symmetry progress', function()
     'replaying the quantized constraint decision diverged')
 end)
 
+test.test('missing obstruction transcript falls back to authority constraint', function()
+  local start = {
+    x = 0, y = 0, screenX = 0, screenY = 0,
+    clickable = true, neighbors = {},
+  }
+  local finish = {
+    x = 1, y = 0, screenX = 100, screenY = 0, neighbors = {},
+  }
+  start.neighbors = { finish }
+  finish.neighbors = { start }
+  local engine = movementFixture({
+    nodes = { start, finish }, barWidth = 10, barLength = 100,
+    screenWidth = 100, screenHeight = 100, symmetry = 0,
+  })
+  assert(engine:restart(start), 'authority obstruction fixture did not start')
+  local calls = 0
+  engine:SetOcclusionConstraint(function(_, _, oldProgress)
+    calls = calls + 1
+    return oldProgress
+  end)
+  assert(engine:applySample(4096, 0, false, 'controller', {}),
+    'blocked authority sample was not processed')
+  assert(calls == 1, 'empty transcript bypassed the authority obstruction callback')
+  assert(#engine.stacks[1] == 1 and engine.active and engine.active.progressQ == 0,
+    'empty transcript allowed the trace through an obstructed edge')
+end)
+
 test.test('continuous seam starts are targetable from either texture edge', function()
   local start = {
     x = -1.5, y = 0, screenX = 0, screenY = 50,

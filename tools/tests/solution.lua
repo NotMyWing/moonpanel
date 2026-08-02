@@ -360,6 +360,24 @@ test.test('completed trace validation rejects malformed paths deterministically'
   end
 end)
 
+test.test('completed trace validation rejects non-array snapshot metadata', function()
+  local data = panel(1, 1)
+  local topo = topology({{clickable = true}, {exit = true}}, {
+    {1, 2, hpathIndex(1, 1, 1)},
+  })
+  local cases = {
+    {{1, 2}, note = true},
+    {{1, 2, note = true}},
+    {{1, 2}, [0] = {}},
+    {{1, 2}, [2] = 'not a branch'},
+  }
+  for index, stacks in ipairs(cases) do
+    local report = evaluate(data, topo, stacks)
+    assert(report.status == 'data_error' and not report.success,
+      'non-array trace snapshot case ' .. index .. ' was accepted')
+  end
+end)
+
 test.test('symmetry traces require the physical topology transformation', function()
   local data = panel(2, 1)
   data.Meta.Symmetry = 1

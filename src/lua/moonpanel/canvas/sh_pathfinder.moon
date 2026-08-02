@@ -771,11 +771,11 @@ class Moonpanel.Canvas.TraceEngine
 			-- predicting controller records the exact integer outcome; authority
 			-- and prediction replay consume that same decision transcript.
 			if actual > 0
-				if constraintDecisions ~= nil
-					constraintIndex += 1
-					if constrained = constraintDecisions[constraintIndex]
-						candidate = clamp math.floor(constrained), oldProgress, candidate
-						table.insert @lastConstraintDecisions, candidate
+				constraintIndex += 1
+				constrained = constraintDecisions and constraintDecisions[constraintIndex]
+				if constrained ~= nil
+					candidate = clamp math.floor(constrained), oldProgress, candidate
+					table.insert @lastConstraintDecisions, candidate
 				elseif @occlusionConstraint and controllingPly ~= nil
 					candidate = clamp math.floor(
 						@.occlusionConstraint(

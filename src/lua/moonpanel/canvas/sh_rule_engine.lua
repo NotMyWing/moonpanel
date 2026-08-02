@@ -1069,6 +1069,17 @@ local TRACE_ERROR_FIELDS = {
     "branch", "index", "code", "nodeId", "fromId", "toId",
 }
 
+local function denseArrayLength(value)
+    if type(value) ~= "table" then return nil end
+    local count, maximum = 0, 0
+    for key in pairs(value) do
+        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil end
+        count = count + 1
+        if key > maximum then maximum = key end
+    end
+    return count == maximum and maximum or nil
+end
+
 local function sortTraceErrors(errors)
     table.sort(errors, function(left, right)
         for _, key in ipairs(TRACE_ERROR_FIELDS) do
@@ -1094,14 +1105,12 @@ local function validateCompletedTrace(definition, snapshot)
     local traced, tracedSegments = {}, {}
     if type(stacks) ~= "table" then stacks = {} end
     local expectedBranches = definition.symmetry == 0 and 1 or 2
-    local branchCount = 0
-    for key, stack in pairs(stacks) do
-        if type(key) == "number" and key >= 1 and key == math.floor(key) and
-                type(stack) == "table" then
-            branchCount = branchCount + 1
-        end
-    end
-    if branchCount ~= expectedBranches then
+    local branchCount = denseArrayLength(stacks)
+    if branchCount == nil then
+        errors[#errors + 1] = {
+            code = "trace_branch_shape", clueId = 0,
+        }
+    elseif branchCount ~= expectedBranches then
         errors[#errors + 1] = {
             code = "trace_branch_count", clueId = 0,
             expected = expectedBranches, actual = branchCount,
@@ -1134,9 +1143,14 @@ local function validateCompletedTrace(definition, snapshot)
     for branch = 1, expectedBranches do
         local stack = stacks[branch]
         branchNodes[branch], branchEdges[branch] = {}, {}
-        if type(stack) ~= "table" or #stack == 0 then
+        local stackLength = denseArrayLength(stack)
+        if type(stack) ~= "table" or stackLength == 0 then
             errors[#errors + 1] = {
                 code = "trace_empty_branch", clueId = 0, branch = branch,
+            }
+        elseif stackLength == nil then
+            errors[#errors + 1] = {
+                code = "trace_stack_shape", clueId = 0, branch = branch,
             }
         else
             if not validStart(stack[1]) then
@@ -1145,13 +1159,14 @@ local function validateCompletedTrace(definition, snapshot)
                     index = 1, nodeId = stack[1],
                 }
             end
-            if not validExit(stack[#stack]) then
+            if not validExit(stack[stackLength]) then
                 errors[#errors + 1] = {
                     code = "trace_exit", clueId = 0, branch = branch,
-                    index = #stack, nodeId = stack[#stack],
+                    index = stackLength, nodeId = stack[stackLength],
                 }
             end
-            for index, nodeId in ipairs(stack) do
+            for index = 1, stackLength do
+                local nodeId = stack[index]
                 local node = type(nodeId) == "number" and
                     nodeId == math.floor(nodeId) and nodes[nodeId] or nil
                 if not node then
@@ -2128,26 +2143,19 @@ local function traceCacheKey(traceSnapshot, suppliedTraceHash)
         return nil
     end
     local stacks = traceSnapshot.stacks
+    local branchCount = denseArrayLength(stacks)
+    if branchCount == nil then return nil end
     local parts = {
         "r", tostring(revision), "h", type(suppliedTraceHash),
-        tostring(suppliedTraceHash), "b", tostring(#stacks),
+        tostring(suppliedTraceHash), "b", tostring(branchCount),
     }
-    for key in pairs(stacks) do
-        if type(key) ~= "number" or key < 1 or key > #stacks or key % 1 ~= 0 then
-            return nil
-        end
-    end
-    for branch = 1, #stacks do
+    for branch = 1, branchCount do
         local stack = stacks[branch]
-        if type(stack) ~= "table" then return nil end
+        local stackLength = denseArrayLength(stack)
+        if stackLength == nil then return nil end
         parts[#parts + 1] = "s"
-        parts[#parts + 1] = tostring(#stack)
-        for key in pairs(stack) do
-            if type(key) ~= "number" or key < 1 or key > #stack or key % 1 ~= 0 then
-                return nil
-            end
-        end
-        for index = 1, #stack do
+        parts[#parts + 1] = tostring(stackLength)
+        for index = 1, stackLength do
             local nodeId = stack[index]
             if type(nodeId) ~= "number" or nodeId ~= nodeId or nodeId % 1 ~= 0 then
                 return nil

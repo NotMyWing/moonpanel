@@ -166,10 +166,10 @@ CANVAS.RecalculateClient = =>
 			entity = @__data.Entities and @__data.Entities[entityIndex]
 			continue if entity and entity.Type == "Invisible"
 			table.insert @__clientData.cells, {
-				x: resolution * 0.5 + (x - 0.5 - width * 0.5) * barLength - (barLength - barWidth) * 0.5
-				y: resolution * 0.5 + (y - 0.5 - height * 0.5) * verticalLength - (verticalLength - barWidth) * 0.5
-				width: math.max 1, barLength - barWidth
-				height: math.max 1, verticalLength - barWidth
+				x: resolution * 0.5 + (x - 0.5 - width * 0.5) * barLength - barLength * 0.5
+				y: resolution * 0.5 + (y - 0.5 - height * 0.5) * verticalLength - verticalLength * 0.5
+				width: math.max 1, barLength
+				height: math.max 1, verticalLength
 			}
 
 	-- Extract paths and calculate distances.

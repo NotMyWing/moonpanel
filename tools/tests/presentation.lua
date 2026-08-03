@@ -454,6 +454,32 @@ test.test('active presentation expands scint rings until their power expires', f
     'exit contact did not wake a settled presentation')
 end)
 
+test.test('terminal presentation fades the current scint without restarting it', function()
+  local presentation = Moonpanel.Canvas.TracePresentation()
+  presentation:beginAttempt({ id = 1, revision = 1 }, 0)
+
+  local active = presentation:sample(1)
+  assert(active.scintAlpha > 0 and active.scintProgress > 0,
+    'active scint was not available for the terminal transition')
+
+  presentation:applyResult({ aborted = true, feedback = {} }, 1)
+  local settled = presentation:sample(1)
+  test.near(settled.scintProgress, active.scintProgress, 0.000001,
+    'terminal transition restarted the scint progress')
+  test.near(settled.scintAlpha, active.scintAlpha, 0.000001,
+    'terminal transition changed scint alpha before fading')
+
+  local fading = presentation:sample(1.125)
+  assert(fading.scintProgress > active.scintProgress,
+    'terminal scint stopped progressing while fading')
+  assert(fading.scintAlpha < active.scintAlpha and fading.scintAlpha > 0,
+    'terminal scint did not fade from its current phase')
+
+  local gone = presentation:sample(1.25)
+  assert(gone.scintAlpha == 0,
+    'terminal scint remained visible after its fade')
+end)
+
 test.test('focus hint scinting targets starts before tracing and exits during tracing', function()
   local presentation = Moonpanel.Canvas.TracePresentation()
   presentation:setFocusHint(true, 0)

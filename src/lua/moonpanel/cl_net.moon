@@ -254,6 +254,12 @@ hook.Add "Think", "TheMP Trace Network", ->
 		unless validPanel panel
 			releaseSession panel
 			continue
+		canvas = nil
+		if session.observer
+			canvas = panel\GetCanvas!
+			unless canvas
+				releaseSession panel
+				continue
 
 		if session.controller == LocalPlayer! and not session.provisional and
 				#session.unsent > 0 and
@@ -261,7 +267,6 @@ hook.Add "Think", "TheMP Trace Network", ->
 			flushTraceSamples panel
 
 		if session.observer
-			canvas = panel\GetCanvas!
 			while session.presentationEvents[1] and
 					canvas\HasObserverReached session.presentationEvents[1].sequence
 				event = table.remove session.presentationEvents, 1

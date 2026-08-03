@@ -1256,6 +1256,7 @@ class Canvas
 		-- live geometry, then target the canonical post-evaluation snapshot so
 		-- the rendered head travels the same short distance as the engine nudge.
 		pathfinder = @__pathFinder
+		return unless pathfinder
 		nudgeExitAnimation = CLIENT and forceAbort ~= true and pathfinder and
 			pathfinder\NeedsExitNudge!
 		partialTraceSnapshot = pathfinder\snapshot! if nudgeExitAnimation
@@ -1266,14 +1267,14 @@ class Canvas
 
 		@__playData.endTime = CurTime!
 
-		@__playData.wasAborted = forceAbort == true or not @__pathFinder\canSubmit!
+		@__playData.wasAborted = forceAbort == true or not pathfinder\canSubmit!
 
 		if @__playData.wasAborted
-			@__pathFinder\SetFeedback!
+			pathfinder\SetFeedback!
 			return @FinishSolution!
 
-		@__pathFinder\beginEvaluation!
-		@__observerFollower\setTarget @__pathFinder\snapshot!, 1 if nudgeExitAnimation
+		pathfinder\beginEvaluation!
+		@__observerFollower\setTarget pathfinder\snapshot!, 1 if nudgeExitAnimation
 
 		crt, createError = @CreateSolutionCoroutine!
 		if crt

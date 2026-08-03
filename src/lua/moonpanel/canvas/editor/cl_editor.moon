@@ -306,6 +306,10 @@ Editor.CanvasRelease = =>
 
 Editor.CanvasRightClick = (socket) =>
 	return if @TestMode or not socket
+	entity = socket\GetEntity!
+	if not entity or entity\IsBase!
+		@SetActiveMode "erase"
+		return true
 	@PickupClue socket
 
 Editor.CanTargetSocket = (socket) =>
@@ -749,9 +753,8 @@ Editor.BuildCanvas = (parent) =>
 		surface.SetDrawColor 31, 36, 44, 180
 		surface.DrawLine x, 0, x, h for x = 0, w, 32
 		surface.DrawLine 0, y, w, y for y = 0, h, 32
-	@FrameCanvas = with parent\Add "DMoonCanvas"
+	@FrameCanvas = with parent\Add "DMoonCanvasEditor"
 		\GetCanvas!\SetSurfaceSpec @GetEffectiveSurfaceSpec(@Document\GetData!)
-		\SetPlayMode false
 		\ImportData @Document\GetData!
 		.DoEditorPress = (_, socket) -> Editor\CanvasPress socket
 		.DoEditorDrag = (_, socket) -> Editor\CanvasDrag socket

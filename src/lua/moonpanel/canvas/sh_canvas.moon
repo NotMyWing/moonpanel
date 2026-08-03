@@ -137,6 +137,7 @@ Moonpanel.Canvas.BuildScreenMatrix = (ent, modelName) ->
 
 AddCSLuaFile!
 AddCSLuaFile "cl_dcanvas.lua"
+AddCSLuaFile "editor/cl_dcanvas_editor.lua"
 AddCSLuaFile "cl_rtpool.lua"
 AddCSLuaFile "cl_colorutils.lua"
 AddCSLuaFile "cl_presentation.lua"
@@ -159,6 +160,7 @@ include "sh_continuous_topology.lua"
 if CLIENT
 	Moonpanel.EditorDocument = include "editor/cl_document.lua"
 	include "cl_dcanvas.lua"
+	include "editor/cl_dcanvas_editor.lua"
 	include "cl_rtpool.lua"
 	include "cl_presentation.lua"
 	include "editor/cl_builtins.lua"

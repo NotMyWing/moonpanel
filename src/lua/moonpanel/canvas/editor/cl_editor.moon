@@ -105,6 +105,9 @@ include "cl_windmill.lua"
 
 isEmpty = (entry) -> not entry or not entry.Type
 
+displayDocumentPath = (path) ->
+	string.gsub string.StripExtension(path), "^moonpanel/", ""
+
 styledButton = (parent, text, callback, width) ->
 	button = with parent\Add "DButton"
 		.Label = text
@@ -126,6 +129,32 @@ addLabel = (parent, text, font = "MoonpanelEditorBody", color = C.text, tall = 2
 		\SetFont font
 		\SetTextColor color
 		\SetText text
+
+styleDocumentNode = (node) ->
+	return unless IsValid node
+	node\SetTall 24
+	label = node.Label
+	return unless IsValid label
+	label\SetFont "MoonpanelEditorBody"
+	label\SetTextColor C.text
+	performLayout = node.PerformLayout
+	node.PerformLayout = (_) ->
+		performLayout _
+		if IsValid _.Expander
+			lineHeight = _\GetLineHeight!
+			_.Expander\SetY math.floor((lineHeight - _.Expander\GetTall!) / 2)
+	node.Paint = (_, w, h) ->
+		selected = label\IsSelected!
+		background = if selected then C.accentDim elseif label.Hovered then C.hover else C.inset
+		draw.RoundedBox 3, 1, 1, math.max(1, w - 2), h - 2, background
+		draw.RoundedBox 2, 1, 1, 3, h - 2, C.accent if selected
+
+styleSavedNode = (node) ->
+	styleDocumentNode node
+	node.OnNodeAdded = (_, child) ->
+		styleSavedNode child
+		text = child\GetText!
+		child\SetText string.StripExtension text if text
 
 ----
 -- Status, title, recovery
@@ -426,19 +455,21 @@ Editor.OpenBuiltIn = (id) =>
 		@SetStatus entry or "Could not read built-in panel", C.danger
 		return false
 	@WithDirtyGuard ->
-		Editor.Document\Replace data,
-			resetHistory: true
-			markSaved: true
-			clearPath: true
-			source: {
-				kind: "builtin"
-				id: entry.id
-				title: entry.title
-				category: entry.category
-			}
-		Editor\RefreshBrushValidity!
-		Editor\SyncCanvas!
-		Editor\SetStatus "Opened built-in #{entry.title}", C.success
+		with Editor
+			.Document\Replace data,
+				resetHistory: true
+				markSaved: true
+				clearPath: true
+				source: {
+					kind: "builtin"
+					id: entry.id
+					title: entry.title
+					category: entry.category
+				}
+			\RefreshBrushValidity!
+			\SyncCanvas!
+			\AddRecent "builtin:#{entry.id}"
+			\SetStatus "Opened built-in #{entry.title}", C.success
 	true
 
 Editor.ImportJsonDialog = =>
@@ -475,12 +506,24 @@ Editor.AddRecent = (path) =>
 		table.remove @RecentFiles
 	cookie.Set "moonpanel_editor_recent", table.concat(@RecentFiles, "|") if cookie
 
+builtinRecentId = (entry) ->
+	candidate = string.sub(entry, 1, 8) == "builtin:" and string.sub(entry, 9) or entry
+	for builtin in *Editor\GetBuiltInPanels!
+		return builtin.id if candidate == builtin.id or
+			entry == "thewitness/#{builtin.id}" or
+			entry == "thewitness/#{builtin.id}.txt" or
+			entry == "data_static/moonpanel/presets/thewitness/#{builtin.id}.txt"
+	nil
+
 Editor.LoadRecent = =>
 	return if @RecentFiles
 	@RecentFiles = {}
 	stored = cookie and cookie.GetString("moonpanel_editor_recent", "") or ""
-	for path in string.gmatch stored, "[^|]+"
-		table.insert @RecentFiles, path if file.Exists path, "DATA"
+	for entry in string.gmatch stored, "[^|]+"
+		if id = builtinRecentId entry
+			table.insert @RecentFiles, "builtin:#{id}"
+		elseif file.Exists entry, "DATA"
+			table.insert @RecentFiles, entry
 
 Editor.UpdateDocuments = =>
 	return unless IsValid @DocumentList
@@ -488,23 +531,36 @@ Editor.UpdateDocuments = =>
 	@RefreshBuiltInPanels! if @RefreshBuiltInPanels
 	@DocumentList\Clear!
 	recent = @DocumentList\AddNode "Recent"
-	for path in *@RecentFiles
-		with recent\AddNode string.StripExtension string.GetFileFromFilename path
-			.FilePath = path
-			\SetIcon "icon16/page_white.png"
-	with @DocumentList\AddNode "Saved panels"
-		\MakeFolder "moonpanel", "DATA", true
-		\SetExpanded true
+	styleDocumentNode recent
+	for entry in *@RecentFiles
+		if id = builtinRecentId entry
+			node = with recent\AddNode "thewitness/#{id}"
+				.BuiltInId = id
+				\SetIcon "icon16/page_white_star.png"
+			styleDocumentNode node
+		else
+			node = with recent\AddNode displayDocumentPath entry
+				.FilePath = entry
+				\SetIcon "icon16/page_white.png"
+			styleDocumentNode node
+	saved = @DocumentList\AddNode "Saved panels"
+	styleSavedNode saved
+	saved\MakeFolder "moonpanel", "DATA", true
+	saved\SetExpanded true
 	builtins = @GetBuiltInPanels!
 	if #builtins > 0
 		root = @DocumentList\AddNode "Built-in panels"
+		styleDocumentNode root
 		root\SetExpanded true
 		categoryNodes = {}
 		for entry in *builtins
-			categoryNodes[entry.category] or= root\AddNode entry.categoryTitle
-			with categoryNodes[entry.category]\AddNode entry.title
+			unless categoryNodes[entry.category]
+				categoryNodes[entry.category] = root\AddNode entry.categoryTitle
+				styleDocumentNode categoryNodes[entry.category]
+			node = with categoryNodes[entry.category]\AddNode entry.title
 				.BuiltInId = entry.id
-				\SetIcon "icon16/page_white.png"
+				\SetIcon "icon16/page_white_star.png"
+			styleDocumentNode node
 
 ----
 -- Test mode
@@ -637,18 +693,45 @@ Editor.BuildDocuments = (parent) =>
 		\SetWrap true
 	row = with parent\Add "DPanel"
 		\Dock TOP
-		\DockMargin 8, 4, 8, 6
-		\SetTall 30
+		\DockMargin 10, 4, 10, 8
+		\SetTall 32
 		.Paint = nil
-	with styledButton row, "Import JSON", (-> Editor\ImportJsonDialog!), 104
-		\Dock LEFT
-	with styledButton row, "Windmill", (-> Editor\ShowWindmillImporter!), 86
-		\Dock LEFT
-	with styledButton row, "Refresh", (-> Editor\UpdateDocuments!), 76
-		\Dock RIGHT
+
+	importButton = with styledButton row, "Import", (-> Editor\ImportJsonDialog!)
+		.ActionTooltip = "Import a panel from JSON"
+	windmillButton = with styledButton row, "Windmill", (-> Editor\ShowWindmillImporter!)
+		.ActionTooltip = "Import a panel from The Witness or Windmill"
+	refreshButton = with styledButton row, "Refresh", (-> Editor\UpdateDocuments!)
+		.ActionTooltip = "Reload the document list"
+
+	with Editor
+		\AttachTextTooltip importButton, importButton.ActionTooltip
+		\AttachTextTooltip windmillButton, windmillButton.ActionTooltip
+		\AttachTextTooltip refreshButton, refreshButton.ActionTooltip
+
+	row.PerformLayout = (_, w, h) ->
+		gap = 6
+		buttonWidth = math.floor((w - gap * 2) / 3)
+		with importButton
+			\SetPos 0, 0
+			\SetSize buttonWidth, h
+		with windmillButton
+			\SetPos buttonWidth + gap, 0
+			\SetSize buttonWidth, h
+		with refreshButton
+			\SetPos (buttonWidth + gap) * 2, 0
+			\SetSize w - (buttonWidth + gap) * 2, h
+
 	@DocumentList = with parent\Add "DTree"
 		\Dock FILL
-		\DockMargin 6, 0, 6, 6
+		\DockMargin 10, 0, 10, 8
+		\SetLineHeight 24
+		\SetIndentSize 18
+		\SetPaintBackground false
+		.Paint = (_, w, h) ->
+			draw.RoundedBox 4, 0, 0, w, h, C.inset
+			surface.SetDrawColor C.border
+			surface.DrawOutlinedRect 0, 0, w - 1, h - 1
 		.DoClick = (_, node) ->
 			if node.BuiltInId
 				Editor\OpenBuiltIn node.BuiltInId
@@ -732,17 +815,18 @@ Editor.BuildBody = (parent) =>
 
 		if compact
 			panelWidth = documentsVisible and docWidth or sidebarWidth
+			canvasX = math.min panelWidth, w
 			Editor.FileDrawer\SetVisible documentsVisible
 			Editor.Sidebar\SetVisible not documentsVisible
-			Editor.CanvasHolder\SetPos 0, 0
-			Editor.CanvasHolder\SetSize w, h
+			Editor.CanvasHolder\SetPos canvasX, 0
+			Editor.CanvasHolder\SetSize math.max(1, w - canvasX), h
 			if documentsVisible
 				Editor.FileDrawer\SetPos 0, 0
-				Editor.FileDrawer\SetSize math.min(panelWidth, w), h
+				Editor.FileDrawer\SetSize canvasX, h
 				Editor.FileDrawer\MoveToFront!
 			else
 				Editor.Sidebar\SetPos 0, 0
-				Editor.Sidebar\SetSize math.min(panelWidth, w), h
+				Editor.Sidebar\SetSize canvasX, h
 				Editor.Sidebar\MoveToFront!
 		else
 			x = 0

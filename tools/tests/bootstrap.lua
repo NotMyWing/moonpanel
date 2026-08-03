@@ -43,13 +43,16 @@ _G.TEXT_ALIGN_TOP = _G.TEXT_ALIGN_TOP or 0
 _G.EyePos = _G.EyePos or function()
   return {DistToSqr = function() return 0 end}
 end
-local disabledConVar = {
-  GetBool = function() return false end,
-  GetFloat = function() return 4096 end,
-  GetInt = function() return 1 end,
-}
-_G.CreateClientConVar = _G.CreateClientConVar or function() return disabledConVar end
-_G.GetConVar = _G.GetConVar or function() return disabledConVar end
+_G.TEST_CONVAR_INTS = _G.TEST_CONVAR_INTS or {}
+local function testConVar(name)
+  return {
+    GetBool = function() return false end,
+    GetFloat = function() return 4096 end,
+    GetInt = function() return _G.TEST_CONVAR_INTS[name] or 1 end,
+  }
+end
+_G.CreateClientConVar = _G.CreateClientConVar or function(name) return testConVar(name) end
+_G.GetConVar = _G.GetConVar or function(name) return testConVar(name) end
 _G.RunConsoleCommand = _G.RunConsoleCommand or function() end
 _G.MsgC = _G.MsgC or function() end
 _G.surface = _G.surface or {
@@ -95,8 +98,38 @@ _G.ENT = _G.ENT or {}
 local testPlayerPosition = {Distance = function() return 128 end}
 local testLocalPlayer = {EyePos = function() return testPlayerPosition end}
 _G.LocalPlayer = _G.LocalPlayer or function() return testLocalPlayer end
-_G.Moonpanel.Canvas.IsRTAllocated = _G.Moonpanel.Canvas.IsRTAllocated or function() return true end
 _G.util = _G.util or {}
+local stackMethods = {}
+function stackMethods:Push(value)
+  self[#self + 1] = value
+end
+function stackMethods:Pop()
+  local value = self[#self]
+  self[#self] = nil
+  return value
+end
+function stackMethods:Size()
+  return #self
+end
+_G.util.Stack = _G.util.Stack or function()
+  return setmetatable({}, {__index = stackMethods})
+end
+_G.TEST_RT_CREATED = _G.TEST_RT_CREATED or 0
+_G.GetRenderTargetEx = _G.GetRenderTargetEx or function(name)
+  _G.TEST_RT_CREATED = _G.TEST_RT_CREATED + 1
+  return {GetName = function() return name end}
+end
+_G.CreateMaterial = _G.CreateMaterial or function() return {} end
+_G.RT_SIZE_OFFSCREEN = _G.RT_SIZE_OFFSCREEN or 1
+_G.MATERIAL_RT_DEPTH_SHARED = _G.MATERIAL_RT_DEPTH_SHARED or 2
+_G.CREATERENDERTARGETFLAGS_HDR = _G.CREATERENDERTARGETFLAGS_HDR or 4
+_G.IMAGE_FORMAT_RGBA8888 = _G.IMAGE_FORMAT_RGBA8888 or 5
+_G.TEST_PROXY_ID = _G.TEST_PROXY_ID or 0
+_G.newproxy = _G.newproxy or function()
+  _G.TEST_PROXY_ID = _G.TEST_PROXY_ID + 1
+  return setmetatable({id = _G.TEST_PROXY_ID}, {})
+end
+_G.Moonpanel.Canvas.IsRTAllocated = _G.Moonpanel.Canvas.IsRTAllocated or function() return true end
 _G.TestTraceLine = function(handler)
   local trace = {}
   function trace:set(nextHandler) self.handler = nextHandler end

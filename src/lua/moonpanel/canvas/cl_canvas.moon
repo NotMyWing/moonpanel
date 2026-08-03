@@ -113,10 +113,10 @@ CANVAS.DeallocateRT = =>
 
 CANVAS.CanRender = => @__rtAlloc and Moonpanel.Canvas\IsRTAllocated @__rtAlloc
 
-CANVAS.AllocateRT = =>
+CANVAS.AllocateRT = (forceEvict = false) =>
 	return if @__rtAlloc and Moonpanel.Canvas\IsRTAllocated @__rtAlloc
 
-	@__rtAlloc = Moonpanel.Canvas\AllocateRT!
+	@__rtAlloc = Moonpanel.Canvas\AllocateRT forceEvict, @
 
 	if @__rtAlloc
 		clearRT @__rtAlloc.rt.texture

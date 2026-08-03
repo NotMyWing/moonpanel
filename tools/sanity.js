@@ -322,6 +322,7 @@ const contractTests = [
 	['persistence', 'tools/tests/editor_document.lua'],
 	['persistence', 'tools/tests/editor_store.lua'],
 	['wire/lifecycle', 'tools/tests/panel_sync.lua'],
+	['rendering', 'tools/tests/rtpool.lua'],
 ];
 const luaTests = contractTests.map(([, ...test]) => test);
 

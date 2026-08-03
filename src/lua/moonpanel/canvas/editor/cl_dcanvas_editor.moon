@@ -1,6 +1,7 @@
 vgui.Register "DMoonCanvasEditor", {
 	Init: =>
 		@.BaseClass.Init @
+		@SetForceRTEviction true
 		@__selectedSocketIndex = nil
 		@__lastDragSocketIndex = nil
 		@__dragSocketGroup = nil

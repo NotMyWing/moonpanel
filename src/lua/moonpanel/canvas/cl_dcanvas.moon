@@ -1,3 +1,9 @@
+isVisibleOnScreen = (panel) ->
+	while IsValid panel
+		return false unless panel\IsVisible!
+		panel = panel\GetParent!
+	true
+
 vgui.Register "DMoonCanvas", {
 	Init: =>
 		@__canvas = Moonpanel.Canvas.Canvas!
@@ -12,11 +18,12 @@ vgui.Register "DMoonCanvas", {
 		rendering = false
 
 		hook.Add "Think", @, ->
-			if not rendering and @IsVisible!
-				rendering = true
-				@__canvas\AllocateRT!
+			if isVisibleOnScreen @
+				unless rendering and @__canvas\CanRender!
+					@__canvas\AllocateRT @GetForceRTEviction!
+					rendering = @__canvas\CanRender!
 
-			elseif rendering and not @IsVisible!
+			elseif rendering
 				rendering = false
 				@__canvas\DeallocateRT!
 				@__canvas\StopSounds!
@@ -64,10 +71,6 @@ vgui.Register "DMoonCanvas", {
 
 				@__canvas\Think!
 
-			.OnRemove = ->
-				@__canvas\StopSounds!
-				@__canvas\DeallocateRT!
-
 			.Paint = ->
 
 			.TestHover = ->
@@ -82,11 +85,20 @@ vgui.Register "DMoonCanvas", {
 		@__canvas\RenderRT!
 		@__canvas\Paint w, h
 
+	OnRemove: =>
+		@__canvas\StopSounds!
+		@__canvas\DeallocateRT!
+
 	ImportData: (data) =>
 		@__canvas\ImportData data
 
 	ExportData: => @__canvas\ExportData!
 
 	GetCanvas: => @__canvas
+
+	SetForceRTEviction: (enabled) =>
+		@__forceRTEviction = enabled == true
+
+	GetForceRTEviction: => @__forceRTEviction == true
 
 }, "Panel"

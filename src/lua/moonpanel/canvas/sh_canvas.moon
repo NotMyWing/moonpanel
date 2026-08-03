@@ -144,6 +144,7 @@ AddCSLuaFile "sh_rule_engine.lua"
 AddCSLuaFile "sh_surface.lua"
 AddCSLuaFile "sh_continuous_topology.lua"
 AddCSLuaFile "editor/cl_document.lua"
+AddCSLuaFile "editor/cl_builtins.lua"
 AddCSLuaFile "editor/cl_store.lua"
 AddCSLuaFile "editor/cl_editor.lua"
 
@@ -160,6 +161,7 @@ if CLIENT
 	include "cl_dcanvas.lua"
 	include "cl_rtpool.lua"
 	include "cl_presentation.lua"
+	include "editor/cl_builtins.lua"
 	include "editor/cl_store.lua"
 	include "editor/cl_editor.lua"
 else

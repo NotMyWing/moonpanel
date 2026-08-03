@@ -77,6 +77,25 @@ test.test('independent preset-style edits remain separate history entries', func
   assert(document:Undo() and document:GetData().value == 0)
 end)
 
+test.test('built-in documents remain read-only until Save As', function()
+  local document, writes = newDocument({ value = 1 })
+  document:Replace({ value = 4 }, {
+    resetHistory = true, markSaved = true, clearPath = true,
+    source = { kind = 'builtin', id = 'thewitness/colors/1' },
+  })
+  assert(document:IsReadOnly() and document:GetSource().kind == 'builtin',
+    'built-in source state was not retained')
+  local saved = document:Save()
+  assert(not saved, 'built-in document allowed direct overwrite')
+  document:BeginEdit('change built-in')
+  document:CommitEdit({ value = 5 })
+  assert(document:IsDirty(), 'editing a built-in did not mark it dirty')
+  assert(document:SaveAs('moonpanel/copied.txt'))
+  assert(not document:IsReadOnly() and document:GetPath() == 'moonpanel/copied.txt' and
+    not document:IsDirty() and writes.file.path == 'moonpanel/copied.txt',
+    'Save As did not convert the built-in to a writable document')
+end)
+
 test.test('history limit retains the most recent reversible edits', function()
   local document = newDocument({ value = 0 })
   for value = 1, 5 do

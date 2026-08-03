@@ -44,6 +44,8 @@ Document.New = (data, options = {}) ->
 	self.activeTool = options.activeTool or "place"
 	self.placementPreset = deepCopy options.placementPreset or {}
 	self.currentPath = options.currentPath
+	self.source = deepCopy options.source or {}
+	self.readOnly = options.readOnly == true or self.source.kind == "builtin"
 	self.loaded = data ~= nil
 	self.lastError = nil
 	self.recoveryTimestamp = nil
@@ -74,10 +76,12 @@ Document._refreshDirty = =>
 	@dirty
 
 Document._persistPath = =>
-	@options.writeSession @currentPath if @options.writeSession
+	@options.writeSession @currentPath, @GetSource! if @options.writeSession
 
 Document.GetData = => deepCopy @data
 Document.GetPath = => @currentPath
+Document.GetSource = => deepCopy @source
+Document.IsReadOnly = => @readOnly == true
 Document.IsEditing = => @transaction ~= nil
 Document.SetActiveTool = (tool) => @activeTool = tool
 Document.IsDirty = => @dirty
@@ -149,6 +153,8 @@ Document.Replace = (data, options = {}) =>
 	@transaction = nil
 	@data = @_sanitize data
 	@selection = nil
+	@source = deepCopy options.source or {}
+	@readOnly = options.readOnly == true or @source.kind == "builtin"
 	if options.resetHistory ~= false
 		@history = {}
 		@historyCursor = 0
@@ -160,6 +166,22 @@ Document.Replace = (data, options = {}) =>
 	@GetData!
 
 Document.Save = (path = @currentPath) =>
+	return false, "built-in panels are read-only; use Save As" if @readOnly
+	@_SaveFile path
+
+Document.SaveAs = (path) =>
+	return false, "path required" unless path
+	previousSource = @source
+	previousReadOnly = @readOnly
+	@source = {}
+	@readOnly = false
+	ok, reason = @_SaveFile path
+	unless ok
+		@source = previousSource
+		@readOnly = previousReadOnly
+	ok, reason
+
+Document._SaveFile = (path) =>
 	return false, "path required" unless path
 	return false, "no save adapter" unless @options.writeFile
 	ok, reason = @options.writeFile path, @GetData!
@@ -181,6 +203,7 @@ Document.WriteRecovery = (force = false) =>
 	ok, timestamp = @options.writeRecovery @GetData!, {
 		path: @currentPath
 		dirty: @dirty
+		source: @GetSource!
 	}
 	if ok == false
 		@lastError = timestamp or "recovery failed"
@@ -197,6 +220,8 @@ Document.LoadOnDemand = =>
 	if data
 		@data = @_sanitize data
 		@currentPath = metadata.path if metadata and metadata.path
+		@source = deepCopy metadata.source or {} if metadata
+		@readOnly = @source.kind == "builtin"
 		@savedBaseline = @_signature(@data) if metadata and metadata.saved
 		@_refreshDirty!
 		return @GetData!, true, metadata

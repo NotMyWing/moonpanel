@@ -1,0 +1,102 @@
+{
+	"Tile": {
+		"Symmetry": false,
+		"Width": 2.0,
+		"Height": 2.0
+	},
+	"Intersections": {
+		"1": {
+			"3": {
+				"Type": 2.0,
+				"Attributes": []
+			}
+		},
+		"3": [
+			{
+				"Type": 1.0,
+				"Attributes": []
+			}
+		]
+	},
+	"HPaths": [],
+	"Dimensions": {
+		"InnerScreenRatio": 0.9292,
+		"BarWidth": 0.0506,
+		"MaxBarLength": 0.3255
+	},
+	"Colors": {
+		"Untraced": {
+			"r": 40.0,
+			"b": 186.0,
+			"a": 255.0,
+			"g": 22.0
+		},
+		"Background": {
+			"r": 80.0,
+			"b": 255.0,
+			"a": 255.0,
+			"g": 77.0
+		},
+		"Finished": {
+			"r": 110.0,
+			"b": 255.0,
+			"a": 255.0,
+			"g": 170.0
+		},
+		"Vignette": {
+			"r": 255.0,
+			"b": 255.0,
+			"a": 200.0,
+			"g": 255.0
+		},
+		"Traced": {
+			"r": 200.0,
+			"b": 255.0,
+			"a": 255.0,
+			"g": 235.0
+		},
+		"Cell": {
+			"r": 0.0,
+			"b": 0.0,
+			"a": 0.0,
+			"g": 0.0
+		},
+		"Errored": {
+			"r": 0.0,
+			"b": 0.0,
+			"a": 255.0,
+			"g": 0.0
+		}
+	},
+	"VPaths": [],
+	"Cells": [
+		[
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			},
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			}
+		],
+		[
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			},
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			}
+		]
+	]
+}

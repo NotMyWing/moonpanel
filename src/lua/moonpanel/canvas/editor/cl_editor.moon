@@ -107,6 +107,7 @@ isEmpty = (entry) -> not entry or not entry.Type
 
 styledButton = (parent, text, callback, width) ->
 	button = with parent\Add "DButton"
+		.Label = text
 		\SetText ""
 		\SetTall 30
 		\SetWide width if width
@@ -114,7 +115,7 @@ styledButton = (parent, text, callback, width) ->
 		.Paint = (_, w, h) ->
 			background = if _.Depressed then C.accentDim elseif _.Hovered then C.hover else C.raised
 			draw.RoundedBox 4, 0, 0, w, h, background
-			draw.SimpleText text, "MoonpanelEditorBody", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
+			draw.SimpleText _.Label or text, "MoonpanelEditorBody", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
 	button
 
 addLabel = (parent, text, font = "MoonpanelEditorBody", color = C.text, tall = 20) ->
@@ -139,12 +140,21 @@ Editor.SetStatus = (text, tone = C.muted) =>
 Editor.UpdateTitle = =>
 	return unless IsValid @Frame
 	path = @Document\GetPath!
+	source = @Document\GetSource!
 	name = path and string.StripExtension(string.GetFileFromFilename(path)) or "Untitled"
-	@Frame\SetTitle "Moonpanel Editor - #{name}#{@Document\IsDirty! and " *" or ""}"
+	if source.kind == "builtin"
+		name = source.title or source.id or "Built-in panel"
+	windowTitle = "Moonpanel Editor - #{name}#{@Document\IsDirty! and " *" or ""}"
+	@Frame\SetTitle windowTitle
 	if IsValid @FileStateLabel
-		state = if @Document\IsDirty! then "Unsaved changes" elseif path then "Saved" else "Untitled panel"
-		@FileStateLabel\SetText (path and "#{state}  •  #{path}" or state)
+		state = if source.kind == "builtin"
+			if @Document\IsDirty! then "Built-in panel • Unsaved changes" else "Built-in panel • Read-only"
+		elseif @Document\IsDirty! then "Unsaved changes" elseif path then "Saved" else "Untitled panel"
+		location = if source.kind == "builtin" then source.id elseif path then path
+		@FileStateLabel\SetText (location and "#{state}  •  #{location}" or state)
 		@FileStateLabel\SetTextColor @Document\IsDirty! and C.warning or C.success
+	if IsValid @SaveButton
+		@SaveButton.Label = source.kind == "builtin" and "Save As" or "Save"
 	@UndoButton\SetEnabled @Document\CanUndo! if IsValid @UndoButton
 	@RedoButton\SetEnabled @Document\CanRedo! if IsValid @RedoButton
 
@@ -339,9 +349,22 @@ Editor.Redo = =>
 ----
 
 Editor.Save = (path, callback) =>
+	return @ShowSaveAs callback if @Document\IsReadOnly!
 	path or= @Document\GetPath!
 	return @ShowSaveAs callback unless path
 	ok, reason = @Document\Save path
+	if ok
+		@OpenedFile = path
+		@Document\WriteRecovery true
+		@AddRecent path
+		@UpdateTitle!
+		@SetStatus "Saved #{path}", C.success
+	else @SetStatus reason, C.danger
+	callback ok if callback
+	ok
+
+Editor.SaveAs = (path, callback) =>
+	ok, reason = @Document\SaveAs path
 	if ok
 		@OpenedFile = path
 		@Document\WriteRecovery true
@@ -359,7 +382,7 @@ Editor.ShowSaveAs = (callback) =>
 			return
 		name = string.StripExtension name
 		name = string.gsub name, "[^%w_%-]", "_"
-		Editor\Save "moonpanel/#{name}.txt", callback
+		Editor\SaveAs "moonpanel/#{name}.txt", callback
 	cancel = -> callback false if callback
 	Derma_StringRequest "Save Moonpanel", "Save relative to data/moonpanel:", "untitled",
 		accept, cancel, "Save", "Cancel"
@@ -395,6 +418,28 @@ Editor.OpenFile = (path) =>
 		Editor\AddRecent path
 		Editor\SyncCanvas!
 		Editor\SetStatus "Opened #{path}", C.success
+
+Editor.OpenBuiltIn = (id) =>
+	@ExitTestMode! if @TestMode
+	data, entry = Editor\LoadBuiltInPanel id
+	unless data
+		@SetStatus entry or "Could not read built-in panel", C.danger
+		return false
+	@WithDirtyGuard ->
+		Editor.Document\Replace data,
+			resetHistory: true
+			markSaved: true
+			clearPath: true
+			source: {
+				kind: "builtin"
+				id: entry.id
+				title: entry.title
+				category: entry.category
+			}
+		Editor\RefreshBrushValidity!
+		Editor\SyncCanvas!
+		Editor\SetStatus "Opened built-in #{entry.title}", C.success
+	true
 
 Editor.ImportJsonDialog = =>
 	@ExitTestMode! if @TestMode
@@ -440,14 +485,26 @@ Editor.LoadRecent = =>
 Editor.UpdateDocuments = =>
 	return unless IsValid @DocumentList
 	@LoadRecent!
+	@RefreshBuiltInPanels! if @RefreshBuiltInPanels
 	@DocumentList\Clear!
 	recent = @DocumentList\AddNode "Recent"
 	for path in *@RecentFiles
 		with recent\AddNode string.StripExtension string.GetFileFromFilename path
 			.FilePath = path
+			\SetIcon "icon16/page_white.png"
 	with @DocumentList\AddNode "Saved panels"
 		\MakeFolder "moonpanel", "DATA", true
 		\SetExpanded true
+	builtins = @GetBuiltInPanels!
+	if #builtins > 0
+		root = @DocumentList\AddNode "Built-in panels"
+		root\SetExpanded true
+		categoryNodes = {}
+		for entry in *builtins
+			categoryNodes[entry.category] or= root\AddNode entry.categoryTitle
+			with categoryNodes[entry.category]\AddNode entry.title
+				.BuiltInId = entry.id
+				\SetIcon "icon16/page_white.png"
 
 ----
 -- Test mode
@@ -541,7 +598,7 @@ Editor.BuildTopBar = (parent) =>
 	with topButton parent, "Documents", (-> Editor\ToggleDocuments!), 92
 		\DockMargin 8, 4, 10, 4
 	topButton parent, "New", (-> Editor\NewPanel!), 52
-	topButton parent, "Save", (-> Editor\Save!), 56
+	@SaveButton = topButton parent, "Save", (-> Editor\Save!), 64
 	@UndoButton = topButton parent, "Undo", (-> Editor\Undo!), 58
 	@RedoButton = topButton parent, "Redo", (-> Editor\Redo!), 58
 
@@ -593,8 +650,11 @@ Editor.BuildDocuments = (parent) =>
 		\Dock FILL
 		\DockMargin 6, 0, 6, 6
 		.DoClick = (_, node) ->
-			path = node.FilePath or (node.GetFileName and node\GetFileName!)
-			Editor\OpenFile path if path and path ~= ""
+			if node.BuiltInId
+				Editor\OpenBuiltIn node.BuiltInId
+			else
+				path = node.FilePath or (node.GetFileName and node\GetFileName!)
+				Editor\OpenFile path if path and path ~= ""
 
 ----
 -- Canvas

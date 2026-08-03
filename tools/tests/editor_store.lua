@@ -2,8 +2,12 @@ local function runStore(exists, serializedData, initialData, metadata, openedDat
   CLIENT = true
   Moonpanel = {}
   dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
+  local editor = initialData and { CurrentData = initialData } or {}
+  editor.LoadBuiltInPanel = function(_, id)
+    return { source = 'builtin:' .. id }
+  end
   Moonpanel = {
-    Editor = initialData and { CurrentData = initialData } or {},
+    Editor = editor,
     EditorDocument = dofile('dest/lua/moonpanel/canvas/editor/cl_document.lua'),
     Canvas = {
       SanitizeData = function(data)
@@ -50,6 +54,18 @@ test.test('clean session metadata reopens its document instead of stale recovery
     'clean session did not reopen its last document')
   assert(editor.Document:GetPath() == 'moonpanel/opened.txt' and
     not editor.Document:IsDirty(), 'reopened document lost clean path metadata')
+end)
+
+test.test('clean session metadata reopens a built-in panel read-only', function()
+  local editor = runStore(false, nil, nil, {
+    dirty = false,
+    source = { kind = 'builtin', id = 'thewitness/colors/1' },
+  })
+  local data = editor:GetCurrentData()
+  assert(data.source == 'builtin:thewitness/colors/1',
+    'clean session did not reopen its built-in panel')
+  assert(editor.Document:IsReadOnly() and editor.Document:GetSource().kind == 'builtin',
+    'reopened built-in panel was not marked read-only')
 end)
 
 test.test('corrupt autosave preserves an existing in-memory panel', function()

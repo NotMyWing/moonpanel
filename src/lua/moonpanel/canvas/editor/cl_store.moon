@@ -18,8 +18,9 @@ readRecoveryMetadata = ->
 	return {} unless contents
 	util.JSONToTable(contents) or {}
 
-writeRecoveryMetadata = (path, dirty) ->
+writeRecoveryMetadata = (path, dirty, source) ->
 	meta = { :path, dirty: dirty == true, timestamp: os.time! }
+	meta.source = source if source and source.kind
 	file.Write recoveryMetaPath, util.TableToJSON(meta)
 	meta.timestamp
 
@@ -36,13 +37,13 @@ Editor.EnsureDocument = =>
 				data = Moonpanel.Canvas.CanonicalizeContinuousData data
 			data
 		writeFile: (path, data) -> writePanel path, data
-		writeSession: (path) ->
-			writeRecoveryMetadata path, false
+		writeSession: (path, source) ->
+			writeRecoveryMetadata path, false, source
 			true
 		writeRecovery: (data, metadata) ->
 			ok, reason = writePanel savePath, data
 			return false, reason unless ok
-			true, writeRecoveryMetadata metadata.path, metadata.dirty
+			true, writeRecoveryMetadata metadata.path, metadata.dirty, metadata.source
 		load: ->
 			data = nil
 			metadata = readRecoveryMetadata!
@@ -54,6 +55,8 @@ Editor.EnsureDocument = =>
 			elseif metadata.path and file.Exists metadata.path, "DATA"
 				contents = file.Read metadata.path, "DATA"
 				data = Moonpanel.Canvas.DeserializeData contents if contents
+			elseif metadata.source and metadata.source.kind == "builtin"
+				data = Moonpanel.Editor\LoadBuiltInPanel metadata.source.id
 
 			metadata.saved = not useRecovery
 			data or fallbackData or Moonpanel.EditorDocument.FreshPanel!, metadata

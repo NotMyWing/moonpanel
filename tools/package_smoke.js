@@ -78,6 +78,11 @@ function run() {
 		'sound/moonpanel/presets/default/panel_scint_endpoint.wav',
 	];
 	for (const file of required) assert(paths.has(file), `Package is missing required runtime file: ${file}`);
+	const builtinPanels = files.filter((file) =>
+		file.path.startsWith('data_static/moonpanel/presets/thewitness/') &&
+		file.path.endsWith('.txt'));
+	assert(builtinPanels.length === 41,
+		`Built-in panel set is incomplete: expected 41 files, found ${builtinPanels.length}`);
 	for (const name of ['path_complete', 'presence', 'solving']) {
 		const file = files.find((entry) =>
 			entry.path === `sound/moonpanel/panel_${name}_loop.wav`);

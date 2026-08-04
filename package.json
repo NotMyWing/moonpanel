@@ -24,8 +24,8 @@
     "test": "npm run rebuild && node tools/sanity.js && node tools/package_smoke.js --temporary"
   },
   "devDependencies": {
-    "del": "^6.0.0",
-    "gulp": "^4.0.2",
+    "del": "^8.0.1",
+    "gulp": "^5.0.1",
     "gulp-zip": "^5.0.2",
     "lua-format": "^1.6.1-b",
     "through2": "^4.0.2"

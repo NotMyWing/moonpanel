@@ -12,6 +12,7 @@ Moonpanel.Net.PendingPanelDataRequests or= {}
 -- autoreload can make InputMouseApply consume the player's camera forever.
 Moonpanel.Net.TraceSessions = {}
 pendingTraceStarts = {}
+CVars = Moonpanel.CVarNames
 
 Moonpanel.Net.SyncClickerState = (focused = nil) ->
 	ply = LocalPlayer!
@@ -22,7 +23,7 @@ Moonpanel.Net.SyncClickerState = (focused = nil) ->
 		predictedControl.Moonpanel
 	gui.EnableScreenClicker focused and not activeGame
 
-serverAuthoritativeTrace = CreateClientConVar "moonpanel_server_authoritative_trace", "0", true, false,
+serverAuthoritativeTrace = CreateClientConVar CVars.ServerAuthoritativeTrace, "0", true, false,
 	"Disable clientside trace prediction and display server updates only"
 
 Moonpanel.IsServerAuthoritativeTrace = => serverAuthoritativeTrace\GetBool!
@@ -125,13 +126,13 @@ Moonpanel.Net.PanelRequestControl = (entity, x = 0, y = 0) ->
 	net.WriteEntity entity
 	net.WriteUInt requestX, 16
 	net.WriteUInt requestY, 16
-	sensitivity = GetConVar("moonpanel_trace_sensitivity")
+	sensitivity = GetConVar(CVars.TraceSensitivity)
 	net.WriteUInt math.Clamp(math.Round(
 		(sensitivity and sensitivity\GetFloat! or 1) * 1000), 50, 8000), 14
-	gamepadSensitivity = GetConVar("moonpanel_gamepad_sensitivity")
+	gamepadSensitivity = GetConVar(CVars.GamepadSensitivity)
 	net.WriteUInt math.Clamp(math.Round(
 		(gamepadSensitivity and gamepadSensitivity\GetFloat! or 1) * 1000), 50, 8000), 14
-	deadzone = GetConVar("moonpanel_gamepad_deadzone")
+	deadzone = GetConVar(CVars.GamepadDeadzone)
 	net.WriteUInt math.Clamp(math.Round(
 		(deadzone and deadzone\GetFloat! or 0.16) * 1000), 0, 950), 10
 	net.SendToServer!

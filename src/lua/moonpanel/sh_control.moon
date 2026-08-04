@@ -1,6 +1,7 @@
 AddCSLuaFile!
 
 local panelSensitivity, gamepadDeadzone, gamepadSensitivity, boostMultiplier
+CVars = Moonpanel.CVarNames
 
 if CLIENT
 	Moonpanel.PillarMouseSamples = {}
@@ -16,13 +17,13 @@ if CLIENT
 		@PillarMouseSamples[commandNumber] = nil
 		sample and sample.x or 0, sample and sample.y or 0
 
-	panelSensitivity = CreateClientConVar "moonpanel_trace_sensitivity", "1", true, false,
+	panelSensitivity = CreateClientConVar CVars.TraceSensitivity, "1", true, false,
 		"Relative panel trace sensitivity", 0.05, 8
-	gamepadDeadzone = CreateClientConVar "moonpanel_gamepad_deadzone", "0.16", true, false,
+	gamepadDeadzone = CreateClientConVar CVars.GamepadDeadzone, "0.16", true, false,
 		"Trace stick deadzone", 0, 0.95
-	gamepadSensitivity = CreateClientConVar "moonpanel_gamepad_sensitivity", "1", true, false,
+	gamepadSensitivity = CreateClientConVar CVars.GamepadSensitivity, "1", true, false,
 		"Trace controller sensitivity", 0.05, 8
-	boostMultiplier = CreateClientConVar "moonpanel_trace_speed_boost", "2", true, false,
+	boostMultiplier = CreateClientConVar CVars.TraceSpeedBoost, "2", true, false,
 		"Controller trace boost", 1, 4
 
 	Moonpanel.InitControl = =>

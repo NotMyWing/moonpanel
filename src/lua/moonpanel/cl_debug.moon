@@ -1,11 +1,12 @@
 Moonpanel.Debug or= {}
 DEBUG = Moonpanel.Debug
+CVars = Moonpanel.CVarNames
 
-enabled = CreateClientConVar "moonpanel_debug", "0", true, false,
+enabled = CreateClientConVar CVars.Debug, "0", true, false,
 	"Draw Moonpanel runtime diagnostics and occlusion rays"
-rayLifetime = CreateClientConVar "moonpanel_debug_ray_lifetime", "0.2", true, false,
+rayLifetime = CreateClientConVar CVars.DebugRayLifetime, "0.2", true, false,
 	"Lifetime of Moonpanel occlusion debug rays", 0.02, 2
-maxDistance = CreateClientConVar "moonpanel_debug_distance", "4096", true, false,
+maxDistance = CreateClientConVar CVars.DebugDistance, "4096", true, false,
 	"Maximum distance for Moonpanel 3D diagnostics", 128, 16384
 
 surface.CreateFont "MoonpanelDebug3D",
@@ -310,10 +311,10 @@ setEnabled = (state) ->
 		DEBUG.Occlusion = setmetatable {}, { __mode: "k" }
 		DEBUG.Rays = {}
 
-cvars.AddChangeCallback "moonpanel_debug", ((_, _, value) ->
+cvars.AddChangeCallback CVars.Debug, ((_, _, value) ->
 	setEnabled tonumber(value) ~= 0), "Moonpanel Runtime Debug"
 
 concommand.Add "moonpanel_debug_toggle", ->
-	RunConsoleCommand "moonpanel_debug", enabled\GetBool! and "0" or "1"
+	RunConsoleCommand CVars.Debug, enabled\GetBool! and "0" or "1"
 
 timer.Simple 0, -> setEnabled enabled\GetBool!

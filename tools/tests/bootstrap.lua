@@ -16,6 +16,8 @@ _G.Moonpanel = {
     SocketType = {Intersection = 1, Cell = 2, Path = 3},
   },
 }
+-- Keep runtime tests on the same CVar registry as the addon modules they load.
+dofile('dest/lua/moonpanel/sh_cvars.lua')
 
 _G.AddCSLuaFile = _G.AddCSLuaFile or function() end
 _G.CLIENT = _G.CLIENT or false

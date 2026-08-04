@@ -1,6 +1,7 @@
 AddCSLuaFile!
 
 Controller = {}
+CVars = Moonpanel.CVarNames
 Controller.States = {}
 Controller.MaxLead = 10
 Controller.MaxArcStep = 2
@@ -235,7 +236,7 @@ Controller.ReadClientInput = (state, ply, cmd, originalButtons) ->
 		analogX = cmd\GetSideMove! / inputMax
 		analogY = -cmd\GetForwardMove! / inputMax
 		magnitude = math.sqrt analogX^2 + analogY^2
-		deadzoneConVar = GetConVar "moonpanel_gamepad_deadzone"
+		deadzoneConVar = GetConVar CVars.GamepadDeadzone
 		deadzone = deadzoneConVar and deadzoneConVar\GetFloat! or 0.16
 		if magnitude > deadzone
 			scaled = math.min(1, (magnitude - deadzone) /
@@ -243,12 +244,12 @@ Controller.ReadClientInput = (state, ply, cmd, originalButtons) ->
 			rawX = analogX / magnitude * scaled * 24
 			rawY = analogY / magnitude * scaled * 24
 			analog = true
-	sensitivityConVar = GetConVar(analog and "moonpanel_gamepad_sensitivity" or
-		"moonpanel_trace_sensitivity")
+	sensitivityConVar = GetConVar(analog and CVars.GamepadSensitivity or
+		CVars.TraceSensitivity)
 	sensitivity = sensitivityConVar and sensitivityConVar\GetFloat! or 1
 	xQ, yQ = state.panel\GetCanvas!\QuantizeDeltas rawX, rawY, sensitivity
 	if bit.band(originalButtons, IN_SPEED) ~= 0
-		boostConVar = GetConVar "moonpanel_trace_speed_boost"
+		boostConVar = GetConVar CVars.TraceSpeedBoost
 		boost = boostConVar and boostConVar\GetFloat! or 2
 		xQ *= boost
 		yQ *= boost

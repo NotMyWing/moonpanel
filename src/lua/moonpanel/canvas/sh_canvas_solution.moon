@@ -1,8 +1,9 @@
 CANVAS = Moonpanel.Canvas.Canvas.__base
+CVars = Moonpanel.CVarNames
 
 VERIFIER_PROFILE = if CreateConVar
 	CreateConVar(
-		"moonpanel_verifier_profile",
+		CVars.VerifierProfile,
 		"0",
 		FCVAR_ARCHIVE,
 		"Print Moonpanel verifier timings and Eraser search counters.",
@@ -14,7 +15,7 @@ else
 
 VERIFIER_SLICE_MS = if CreateConVar
 	CreateConVar(
-		"moonpanel_verifier_slice_ms",
+		CVars.VerifierSliceMs,
 		"1",
 		FCVAR_ARCHIVE,
 		"Maximum verifier CPU time per coroutine slice in milliseconds.",
@@ -26,7 +27,7 @@ else
 
 VERIFIER_MAX_MS = if CreateConVar
 	CreateConVar(
-		"moonpanel_verifier_max_ms",
+		CVars.VerifierMaxMs,
 		"500",
 		FCVAR_ARCHIVE,
 		"Maximum total server CPU time allowed for one verifier evaluation.",
@@ -38,7 +39,7 @@ else
 
 VERIFIER_MAX_WORK = if CreateConVar
 	CreateConVar(
-		"moonpanel_verifier_max_work",
+		CVars.VerifierMaxWork,
 		"250000",
 		FCVAR_ARCHIVE,
 		"Maximum logical work units allowed for one verifier evaluation.",

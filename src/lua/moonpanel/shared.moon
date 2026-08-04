@@ -4,7 +4,9 @@ export Moonpanel = _moonpanel
 AddCSLuaFile "canvas/sh_helpers.lua"
 AddCSLuaFile "canvas/editor/cl_helpers.lua"
 AddCSLuaFile "sh_colors.lua"
+AddCSLuaFile "sh_cvars.lua"
 include "sh_colors.lua"
+include "sh_cvars.lua"
 include "canvas/sh_helpers.lua"
 include "canvas/editor/cl_helpers.lua" if CLIENT
 

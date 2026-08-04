@@ -4,10 +4,11 @@ Moonpanel.Editor or= {}
 Editor = Moonpanel.Editor
 Canvas = Moonpanel.Canvas
 C = Editor.C
+CVars = Moonpanel.CVarNames
 
 WINDMILL_HOME = "https://windmill.thefifthmatt.com/"
 Editor.WindmillProxyEndpoint = CreateClientConVar(
-	"moonpanel_windmill_proxy",
+	CVars.WindmillProxy,
 	"https://windmill-proxy.pony.workers.dev/",
 	true,
 	false,

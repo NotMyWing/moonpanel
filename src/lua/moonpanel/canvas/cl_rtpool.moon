@@ -1,5 +1,6 @@
 MAX_RT_PAGES = 32
-maxPagesConVar = CreateClientConVar "moonpanel_rt_pool_max_pages", "16", true, false,
+CVars = Moonpanel.CVarNames
+maxPagesConVar = CreateClientConVar CVars.RTPoolMaxPages, "16", true, false,
 	"Maximum number of Moonpanel canvas render targets", 1, MAX_RT_PAGES
 
 createRT = (name) ->

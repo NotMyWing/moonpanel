@@ -4,10 +4,10 @@ TOOL.Command = nil
 TOOL.ConfigName = ""
 TOOL.AddToMenu = false
 
-TOOL.ClientConVar.Radius = "48"
-TOOL.ClientConVar.Height = "96"
-TOOL.ClientConVar.SeamYaw = "0"
-TOOL.ClientConVar.FitCells = "0"
+TOOL.ClientConVar.radius = "48"
+TOOL.ClientConVar.height = "96"
+TOOL.ClientConVar.seam_yaw = "0"
+TOOL.ClientConVar.fit_cells = "0"
 
 if SERVER
 	TOOL.LeftClick = (trace) =>
@@ -29,17 +29,17 @@ else
 	}
 	TOOL.BuildCPanel = (panel) ->
 		panel\AddControl "Header", { Text: "#Tool.moonpanel_pillar.name", Description: "#Tool.moonpanel_pillar.desc" }
-		panel\NumSlider "Radius", "moonpanel_pillar_Radius", 16, 256, 0
-		panel\NumSlider "Height", "moonpanel_pillar_Height", 32, 512, 0
-		panel\NumSlider "Seam yaw", "moonpanel_pillar_SeamYaw", -180, 180, 0
-		panel\CheckBox "Fit square cells", "moonpanel_pillar_FitCells"
+		panel\NumSlider "Radius", "moonpanel_pillar_radius", 16, 256, 0
+		panel\NumSlider "Height", "moonpanel_pillar_height", 32, 512, 0
+		panel\NumSlider "Seam yaw", "moonpanel_pillar_seam_yaw", -180, 180, 0
+		panel\CheckBox "Fit square cells", "moonpanel_pillar_fit_cells"
 	TOOL.DrawHUD = =>
 		return if Moonpanel\IsFocused @GetOwner!
 		trace = util.TraceLine util.GetPlayerTrace @GetOwner!
 		return unless trace.Hit and Moonpanel.Canvas.GetPillarMesh
-		radius = math.Clamp @GetClientNumber("Radius", 48), 16, 256
-		height = math.Clamp @GetClientNumber("Height", 96), 32, 512
-		if @GetClientNumber("FitCells", 0) ~= 0
+		radius = math.Clamp @GetClientNumber("radius", 48), 16, 256
+		height = math.Clamp @GetClientNumber("height", 96), 32, 512
+		if @GetClientNumber("fit_cells", 0) ~= 0
 			data = Moonpanel.Editor and Moonpanel.Editor.CurrentData
 			if data and data.Meta and data.Meta.Width > 0
 				height = math.Clamp math.pi * 2 * radius * data.Meta.Height /
@@ -47,7 +47,7 @@ else
 		segments = if radius >= 128 then 128 elseif radius >= 48 then 64 else 32
 		matrix = Matrix!
 		matrix\SetTranslation trace.HitPos
-		matrix\SetAngles Angle(0, @GetClientNumber("SeamYaw", 0), 0)
+		matrix\SetAngles Angle(0, @GetClientNumber("seam_yaw", 0), 0)
 		matrix\Scale Vector radius, radius, height
 		cam.Start3D!
 		render.SetMaterial PREVIEW_MATERIAL

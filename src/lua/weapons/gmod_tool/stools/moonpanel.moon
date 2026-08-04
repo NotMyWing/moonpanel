@@ -5,8 +5,8 @@ TOOL.ConfigName		= ""
 
 -- ------------------------------- Sending / Receiving ------------------------------- --
 
-TOOL.ClientConVar["Model"] = "models/hunter/plates/plate2x2.mdl"
-TOOL.ClientConVar["Type"] = 1
+TOOL.ClientConVar.model = "models/hunter/plates/plate2x2.mdl"
+TOOL.ClientConVar.type = 1
 TOOL.Reload = () =>
 TOOL.DrawHUD = () =>
 
@@ -62,7 +62,7 @@ if SERVER
             else
                 Ang = trace.HitNormal\Angle!
                 Ang.pitch = Ang.pitch + 90
-                model = @GetClientInfo "Model"
+                model = @GetClientInfo "model"
                 if not ((util.IsValidModel model) and (util.IsValidProp model))
                     return nil
 
@@ -131,7 +131,7 @@ else
             icon.Model = model
             icon\SetSize(64, 64)
             icon\SetTooltip(model)
-            modelPanel\AddPanel(icon, { ["moonpanel_Model"]: model })
+            modelPanel\AddPanel(icon, { ["moonpanel_model"]: model })
 
         modelPanel\SortByMember("Model", false)
         panel\AddPanel(modelPanel)
@@ -144,7 +144,7 @@ TOOL.Think = () =>
     if Moonpanel\IsFocused @GetOwner!
         return @ReleaseGhostEntity!
 
-    model = @GetClientInfo("Model")
+    model = @GetClientInfo("model")
 
     if (not IsValid(self.GhostEntity) or self.GhostEntity\GetModel! ~= model) then
         @MakeGhostEntity model, Vector(0, 0, 0), Angle(0, 0, 0)

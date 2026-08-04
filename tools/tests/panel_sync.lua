@@ -1,51 +1,18 @@
 local test = dofile('tools/tests/harness.lua')
-
-include = function() end
-table.Copy = table.Copy or function(value)
-  local output = {}
-  for key, child in pairs(value or {}) do output[key] = child end
-  return output
-end
-
-local sent = {}
-Moonpanel.Net = {
-  SendPanelData = function(ply, panel, data)
-    table.insert(sent, { ply = ply, panel = panel, revision = data.revision })
-    return true
-  end,
-  SendControlGrant = function() end,
-  PanelRequestDataFromPlayer = function() return true end,
-}
-Moonpanel.Canvas.SanitizeData = function(data)
-  return type(data) == 'table' and table.Copy(data) or nil
-end
-Moonpanel.IsFocused = function() return true end
-Moonpanel.SetFocused = function(_, ply, focused)
-  ply.focused = focused == true
-end
-
-IsValid = function(value) return type(value) == 'table' and value.valid ~= false end
-game = {
-  GetWorld = function()
-    return { world = true, IsPlayer = function() return false end }
-  end,
-}
-ENT = {}
+local sent = TEST_SENT
+dofile('dest/lua/moonpanel/sh_trace_session.lua')
 dofile('dest/lua/entities/moonpanel/init.lua')
 
-local function player()
-  return {
-    IsPlayer = function() return true end,
-  }
-end
-
+local function player() return {IsPlayer = function() return true end} end
 local function panel()
   return setmetatable({
-    __syncedPlayers = {},
-    __pendingSyncs = {},
-    syncData = nil,
+    __syncedPlayers = {}, __pendingSyncs = {},
     BuildPanelSyncData = function(self) return self.syncData end,
-  }, { __index = ENT })
+    GetController = function(self) return self.controller or game.GetWorld() end,
+    SetController = function(self, controller) self.controller = controller end,
+    SetErrored = function(self, value) self.errored = value == true end,
+    EntIndex = function() return 1 end,
+  }, {__index = ENT})
 end
 
 test.test('subsequent panel data assignments resync known players', function()
@@ -105,7 +72,7 @@ test.test('panel SetData evicts an active controller before import', function()
   local canvas = {
     CancelSolution = function() end,
     ImportData = function(self, data)
-      importedWhileActive = panelEntity.__traceSession ~= nil
+      importedWhileActive = Moonpanel.TraceSession.Get(panelEntity) ~= nil
       self.data = table.Copy(data)
     end,
     ExportData = function(self) return table.Copy(self.data) end,
@@ -116,9 +83,9 @@ test.test('panel SetData evicts an active controller before import', function()
   panelEntity.SetSolvedState = function() end
   panelEntity.SetPowered = function() end
   panelEntity.controller = controller
-  panelEntity.__traceSession = { controller = controller }
+  Moonpanel.TraceSession.Set(panelEntity, { controller = controller })
   panelEntity.EndTraceSession = function(self)
-    self.__traceSession = nil
+    Moonpanel.TraceSession.Set(self, nil)
     self.controller = game.GetWorld()
     return true
   end
@@ -127,6 +94,67 @@ test.test('panel SetData evicts an active controller before import', function()
   assert(not importedWhileActive, 'panel imported replacement before ending its trace')
   assert(controller.focused == false, 'active controller remained focused after panel edit')
   assert(panelEntity.controller.world == true, 'panel retained its active controller')
+end)
+
+test.test('terminal eraser delay latches errored after feedback', function()
+  local panelEntity = panel()
+  panelEntity.SetSolvedState = function(self, solved) self.solved = solved == true end
+  panelEntity.SetErrored = function(self, errored) self.errored = errored == true end
+  panelEntity.ExecutePendingSyncs = function() end
+  panelEntity.GetCanvas = function()
+    return { CancelSolution = function() end }
+  end
+  local result = {
+    success = false,
+    aborted = false,
+    feedback = { erasures = { { targetIndex = 1 } } },
+  }
+
+  SERVER = true
+  assert(panelEntity:ApplyTerminalResult(result), 'terminal result was rejected')
+  SERVER = nil
+  assert(not panelEntity.solved and not panelEntity.errored,
+    'errored became visible before eraser feedback finished')
+  assert(TEST_DELAYED_TIMER, 'eraser feedback did not schedule the terminal transition')
+  TEST_DELAYED_TIMER()
+  assert(not panelEntity.solved and panelEntity.errored,
+    'failed terminal result did not latch errored after the delay')
+end)
+
+test.test('Wire terminal result derives one path update from lifecycle state', function()
+  local outputs = {}
+  WireLib = {
+    TriggerOutput = function(_, name, value)
+      outputs[#outputs + 1] = { name = name, value = value }
+    end,
+  }
+  dofile('dest/lua/moonpanel/sv_wire.lua')
+  local panelEntity = panel()
+  panelEntity.WireOutputs = {}
+  panelEntity.powered, panelEntity.solved, panelEntity.errored = true, false, true
+  panelEntity.GetPowered = function(self) return self.powered end
+  panelEntity.GetSolvedState = function(self) return self.solved end
+  panelEntity.GetErrored = function(self) return self.errored end
+  panelEntity.GetCanvas = function()
+    return {
+      GetTracePath = function() return 'R R U' end,
+      GetSocketAtDataIndex = function() return nil end,
+    }
+  end
+
+  SERVER = true
+  Moonpanel.Wire.HandleResult(panelEntity, {
+    success = false, feedback = { erasures = {} }, snapshot = {},
+  })
+  SERVER = nil
+  local paths = 0
+  for _, output in ipairs(outputs) do
+    if output.name == 'Path' then
+      paths = paths + 1
+      assert(output.value == 'R R U', 'Wire path did not use terminal trace state')
+    end
+  end
+  assert(paths == 1, 'Wire terminal handling assigned Path more than once')
 end)
 
 test.run()

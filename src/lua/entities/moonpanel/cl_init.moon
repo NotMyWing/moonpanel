@@ -1,9 +1,7 @@
 include "shared.lua"
 
 ENT.InitializeSided = () =>
-    info = Moonpanel.Canvas.ResolveScreenInfo @, @GetModel!
-    @ScreenMatrix = Moonpanel.Canvas.BuildScreenMatrix info
-    @ScreenInfo = info
+    @ScreenMatrix, info = Moonpanel.Canvas.BuildScreenMatrix @, @GetModel!
     @Aspect = info.RatioX
     @Scale = info.RS
     @Origin = info.offset
@@ -114,8 +112,8 @@ ENT.TransformInputDeltas = (dX = 0, dY = 0) =>
     sample = 64
     localScale = (@Scale or 1)^2
 
-	pathfinder = @GetCanvas! and @GetCanvas!\GetPathFinder!
-	head = pathfinder and pathfinder.cursors and pathfinder.cursors[1]
+	canvas = @GetCanvas!
+	head = canvas and canvas\GetTraceCursor!
 	cx = head and head.x or resolution * 0.5
 	cy = head and head.y or resolution * 0.5
 
@@ -149,4 +147,4 @@ ENT.TransformInputDeltas = (dX = 0, dY = 0) =>
 ENT.GetResolution = () =>
     Moonpanel.Canvas.Resolution / @Aspect, Moonpanel.Canvas.Resolution
 
-ENT.IsSynchonized = => @__canvas\GetData! ~= nil
+ENT.IsSynchronized = => @__canvas\GetData! ~= nil

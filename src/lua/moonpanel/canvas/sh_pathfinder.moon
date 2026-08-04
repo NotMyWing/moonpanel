@@ -5,57 +5,25 @@ round = Helpers.round
 clamp = Helpers.clamp
 
 TRACE_UNITS = 4096
-UINT32 = 4294967296
-CRC_MASK = 4294967295
-CRC_POLYNOMIAL = 3988292384
-
-fallbackXor = (left, right) ->
-	left %= UINT32
-	right %= UINT32
-	result = 0
-	place = 1
-	for i = 1, 32
-		leftBit = left % 2
-		rightBit = right % 2
-		result += place if leftBit ~= rightBit
-		left = math.floor left / 2
-		right = math.floor right / 2
-		place *= 2
-	result
-
-bxor = if bit and bit.bxor
-	(left, right) -> bit.bxor(left, right) % UINT32
-elseif bit32 and bit32.bxor
-	(left, right) -> bit32.bxor(left, right) % UINT32
-else
-	fallbackXor
-
-CRC_TABLE = {}
-for byte = 0, 255
-	value = byte
-	for i = 1, 8
-		value = if value % 2 == 1
-			bxor math.floor(value / 2), CRC_POLYNOMIAL
-		else
-			math.floor value / 2
-	CRC_TABLE[byte] = value
-
+CRC_MASK = Helpers.CRC32Begin
 appendHash = (crc, value) ->
-	value = if "boolean" == type value
-		value and 1 or 0
-	elseif "number" == type value
-		math.floor(value) % UINT32
-	else
-		0
+	value = value and 1 or 0 if type(value) == "boolean"
+	Helpers.CRC32AppendNumber crc, value
+finishHash = Helpers.CRC32Finish
 
-	for i = 1, 4
-		byte = value % 256
-		index = bxor(crc % 256, byte)
-		crc = bxor math.floor(crc / 256), CRC_TABLE[index]
-		value = math.floor value / 256
-	crc
-
-finishHash = (crc) -> bxor crc, CRC_MASK
+historyIntent = (history, dx, dy) ->
+	pending = dx ~= nil
+	hx, hy = dx or 0, dy or 0
+	keep = pending and 2 or 3
+	for index = math.max(1, #history - keep + 1), #history
+		sample = history[index]
+		hx += sample[1]
+		hy += sample[2]
+	if math.abs(hx) * 5 < math.abs(hy)
+		hx = 0
+	elseif math.abs(hy) * 5 < math.abs(hx)
+		hy = 0
+	hx, hy
 
 logicalDelta = (a, b, wrapX, periodWidth) ->
 	dx = b.x - a.x
@@ -99,7 +67,7 @@ class Moonpanel.Canvas.TraceTopology
 		-- Keep authored node storage untouched. Symmetry may add logical gap
 		-- endpoints, but rebuilding a topology must never append them back into
 		-- the canvas node array and duplicate them on the next rebuild.
-		@nodes = [node for node in *(data.nodes or {})]
+		@nodes = [node for node in *(data.nodes or {}) when not node.invisible]
 		@barLength = math.max data.barLength or 1, 0.000001
 		@barWidth = math.max data.barWidth or 0, 0
 		@symmetry = data.symmetry or 0
@@ -131,7 +99,11 @@ class Moonpanel.Canvas.TraceTopology
 			neighbors = {}
 			for neighbor in *(adjacency[node] or {})
 				toId = @nodeIds[neighbor]
-				table.insert neighbors, toId if toId
+				-- Runtime paths are undirected. Invisible intersections remove
+				-- their own adjacency; reject stale inbound references left on
+				-- neighboring nodes instead of creating one-way phantom paths.
+				if toId and @_hasAdjacency(adjacency, neighbor, node)
+					table.insert neighbors, toId
 
 			table.sort neighbors
 			for toId in *neighbors
@@ -444,12 +416,7 @@ class Moonpanel.Canvas.TraceEngine
 		@touchingExit = false
 		@occlusionConstraint = nil
 		@lastConstraintDecisions = {}
-		@syncCompatibility!
-
-	beginAiming: =>
-		return false unless @phase == @@Phase.Idle or @phase == @@Phase.Feedback
-		@phase = @@Phase.Aiming
-		true
+		@syncCursors!
 
 	start: (startNodeId) =>
 		if "table" == type startNodeId
@@ -469,40 +436,14 @@ class Moonpanel.Canvas.TraceEngine
 		@active = nil
 		@history = {}
 		@touchingExit = false
-		@syncCompatibility!
+		@syncCursors!
 		true
 
 	getHistoryIntent: (dx, dy) =>
 		table.insert @history, { dx, dy }
 		while #@history > 3
 			table.remove @history, 1
-
-		hx, hy = 0, 0
-		for sample in *@history
-			hx += sample[1]
-			hy += sample[2]
-
-		if math.abs(hx) * 5 < math.abs(hy)
-			hx = 0
-		elseif math.abs(hy) * 5 < math.abs(hx)
-			hy = 0
-
-		hx, hy
-
-	previewHistoryIntent: (dx, dy) =>
-		history = [{ sample[1], sample[2] } for sample in *@history]
-		table.insert history, { dx, dy }
-		while #history > 3
-			table.remove history, 1
-		hx, hy = 0, 0
-		for sample in *history
-			hx += sample[1]
-			hy += sample[2]
-		if math.abs(hx) * 5 < math.abs(hy)
-			hx = 0
-		elseif math.abs(hy) * 5 < math.abs(hx)
-			hy = 0
-		hx, hy
+		historyIntent @history
 
 	motionIntent: (dx, dy, hx, hy) =>
 		return hx, hy unless @topology.surfaceKind == 1
@@ -516,7 +457,7 @@ class Moonpanel.Canvas.TraceEngine
 
 	resolveIntent: (dx, dy) =>
 		dx, dy = round(dx or 0), round(dy or 0)
-		hx, hy = @previewHistoryIntent dx, dy
+		hx, hy = historyIntent @history, dx, dy
 		intentX, intentY = @motionIntent dx, dy, hx, hy
 		budget = math.max math.abs(dx), math.abs(dy)
 		result = { :hx, :hy, :intentX, :intentY, :budget, axis: nil, direction: 0,
@@ -684,8 +625,7 @@ class Moonpanel.Canvas.TraceEngine
 
 	positionAtProgress: (edge, progressQ) =>
 		-- Returns {x, y} in canvas coordinates for a given progress along an edge.
-		-- Exact same calculation as syncCompatibility; this is the single authoritative
-		-- mapping from edge progress to canvas position.
+		-- Single authoritative mapping from edge progress to canvas position.
 		fromNode = @topology.nodes[edge.fromId]
 		toNode = @topology.nodes[edge.toId]
 		unless fromNode and toNode
@@ -831,11 +771,11 @@ class Moonpanel.Canvas.TraceEngine
 			-- predicting controller records the exact integer outcome; authority
 			-- and prediction replay consume that same decision transcript.
 			if actual > 0
-				if constraintDecisions ~= nil
-					constraintIndex += 1
-					if constrained = constraintDecisions[constraintIndex]
-						candidate = clamp math.floor(constrained), oldProgress, candidate
-						table.insert @lastConstraintDecisions, candidate
+				constraintIndex += 1
+				constrained = constraintDecisions and constraintDecisions[constraintIndex]
+				if constrained ~= nil
+					candidate = clamp math.floor(constrained), oldProgress, candidate
+					table.insert @lastConstraintDecisions, candidate
 				elseif @occlusionConstraint and controllingPly ~= nil
 					candidate = clamp math.floor(
 						@.occlusionConstraint(
@@ -876,7 +816,7 @@ class Moonpanel.Canvas.TraceEngine
 			(not @active.secondary or @active.secondary.isExit) and
 			@active.progressQ >= @active.primary.lengthQ and
 			(not @active.secondary or @active.progressQ >= @active.secondary.lengthQ) or false
-		@syncCompatibility!
+		@syncCursors!
 		changed
 
 	isExitPath: =>
@@ -902,7 +842,7 @@ class Moonpanel.Canvas.TraceEngine
 			@active = nil
 		@phase = @@Phase.Evaluating
 		@touchingExit = false
-		@syncCompatibility!
+		@syncCursors!
 		true
 
 	snapshot: =>
@@ -971,7 +911,7 @@ class Moonpanel.Canvas.TraceEngine
 			table.insert @history, { dx, dy }
 		while #@history > 3
 			table.remove @history, 1
-		@syncCompatibility!
+		@syncCursors!
 		true
 
 	hash: =>
@@ -995,26 +935,14 @@ class Moonpanel.Canvas.TraceEngine
 		else
 			hash = appendHash hash, 0
 
-		hash = appendHash hash, #@history
-		for sample in *@history
-			hash = appendHash hash, sample[1]
-			hash = appendHash hash, sample[2]
-
 		hash = appendHash hash, @touchingExit
 		finishHash hash
 
-	syncCompatibility: =>
-		@nodeStacks = {}
+	syncCursors: =>
 		@cursors = {}
 
 		for stackId, stackIds in ipairs @stacks
-			stack = {}
-			for nodeId in *stackIds
-				node = @topology.nodes[nodeId]
-				table.insert stack, node
-
-			@nodeStacks[stackId] = stack
-			last = stack[#stack]
+			last = @topology.nodes[stackIds[#stackIds]]
 			if last
 				@cursors[stackId] = { x: last.screenX, y: last.screenY }
 
@@ -1024,12 +952,7 @@ class Moonpanel.Canvas.TraceEngine
 				pos = @positionAtProgress(edge, @active.progressQ)
 				@cursors[stackId] = pos if pos else nil
 
-	-- Public API names used by networking/tests. Lower-case forms remain the
-	-- idiomatic internal calls, while these make the engine contract explicit.
-	Start: (startNodeId) => @start startNodeId
-	ApplySample: (dxQ, dyQ, boost = false, controllingPly = nil,
-		constraintDecisions = nil) =>
-		@applySample dxQ, dyQ, boost, controllingPly, constraintDecisions
+	-- Narrow queries used by the controller, Canvas, and pathfinder tests.
 	GetConstraintDecisions: => [value for value in *@lastConstraintDecisions]
 	GetHorizontalTravel: (direction, controllingPly = nil, boundaryLimit = 1) =>
 		@getHorizontalTravel direction, controllingPly, boundaryLimit
@@ -1066,7 +989,47 @@ class Moonpanel.Canvas.TraceEngine
 			if maximum > best or maximum == best and bestEdge and toId < bestEdge.toId
 				best, bestEdge = maximum, edge
 		direction * best
-	CanSubmit: => @canSubmit!
-	Snapshot: => @snapshot!
-	Restore: (snapshot) => @restore snapshot
-	Hash: => @hash!
+	GetPhase: => @phase
+	GetRevision: => @topology.revision
+	GetCursor: (index = 1) => @cursors and @cursors[index]
+	GetActiveAxis: =>
+		edge = @active and @active.primary
+		return unless edge
+		math.abs(edge.unitX) > math.abs(edge.unitY) and "x" or "y"
+	NeedsExitNudge: =>
+		@phase == @@Phase.Tracing and @active and @active.primary and
+			@active.primary.isExit and
+			(not @active.secondary or @active.secondary.isExit) and
+			not @touchingExit
+	IsTracing: => @phase == @@Phase.Tracing
+	SetFeedback: => @phase = @@Phase.Feedback
+	SetOcclusionConstraint: (constraint) => @occlusionConstraint = constraint
+	GetDebugState: =>
+		snapshot = @snapshot!
+		edgeCount = 0
+		for _, edges in pairs @topology.edges
+			edgeCount += 1 for _ in pairs edges
+		copyEdge = (edge) -> edge and {
+			fromId: edge.fromId, toId: edge.toId, kind: edge.kind, lengthQ: edge.lengthQ}
+		{
+			phase: @phase
+			hash: @hash!
+			canSubmit: @canSubmit!
+			touchingExit: @touchingExit
+			topology: {revision: @topology.revision, nodes: #@topology.nodes,
+				edges: edgeCount, starts: #@topology.starts,
+				exits: #@topology.exits, gaps: #@topology.gaps}
+			stacks: snapshot.stacks
+			cursors: [{x: cursor.x, y: cursor.y} for cursor in *@cursors]
+			history: snapshot.history
+			constraints: @GetConstraintDecisions!
+			active: @active and {primary: copyEdge(@active.primary),
+				secondary: copyEdge(@active.secondary), progressQ: @active.progressQ,
+				maxProgressQ: @active.maxProgressQ, retracting: @active.retracting}
+		}
+	Fork: =>
+		copy = Moonpanel.Canvas.TraceEngine @topology
+		snapshot = @snapshot!
+		copy\restore snapshot
+		copy\SetOcclusionConstraint @occlusionConstraint
+		copy

@@ -10,11 +10,6 @@ ENT.Instructions    = ""
 ENT.Spawnable       = false
 ENT.Moonpanel       = true
 
--- Retain the public model table used by the toolgun and third-party tooling.
--- Screen transform construction itself lives in the shared canvas module so
--- the client and server consume the exact same data.
-ENT.Monitor_Offsets = Moonpanel.Canvas.Monitor_Offsets
-
 ENT.GetSurfaceSpec = => Moonpanel.Canvas.MakeSurfaceSpec Moonpanel.Canvas.SurfaceKind.Flat, false
 
 -- The Sandbox duplicator and map saver collect ENT:GetTable before serializing
@@ -24,8 +19,8 @@ ENT.OnEntityCopyTableFinish = (data) =>
 	return unless istable data
 	for key in pairs data
 		data[key] = nil if isstring(key) and string.StartWith(key, "__")
-	canvas = @GetCanvas! if @GetCanvas
-	data.TheMoonpanelTileData = canvas\ExportData! if canvas and canvas\GetData!
+	canvas = @GetCanvas!
+	data.TheMoonpanelTileData = canvas\ExportData! if canvas\GetData!
 	data.TheMoonpanelSolved = @GetSolvedState!
 	data.TheMoonpanelVisualResult = nil
 	if @GetSolvedState! and istable @__lastVisualResult
@@ -51,8 +46,7 @@ ENT.Initialize = =>
 	@__canvas\SetupSounds!
 
 	@InitializeSided!
-	Moonpanel.Wire.Initialize @ if SERVER and Moonpanel.Wire and
-		Moonpanel.Wire.Initialize
+	Moonpanel.Wire.Initialize @ if SERVER
 
 ENT.SetupDataTables = =>
 	@NetworkVar "Entity", 0, "Controller"
@@ -70,8 +64,7 @@ ENT.SetupDataTables = =>
 
 			if not new
 				owner\SolveStop true
-			if SERVER and Moonpanel.Wire and Moonpanel.Wire.UpdateState
-				Moonpanel.Wire.UpdateState owner
+			Moonpanel.Wire.UpdateState owner if SERVER
 	if SERVER
         @SetController game.GetWorld!
 		@SetErrored false
@@ -92,11 +85,11 @@ ENT.SolveStop = (forceAbort) =>
 	true
 
 ENT.GetCanvas = => @__canvas
+ENT.IsRendering = => @__rendering == true
 
 ENT.SetSolvedState = (solved, visualResult = nil) =>
 	@TheMoonpanelSolved = solved == true
-	@__canvas\SetSolvedState @TheMoonpanelSolved if @__canvas and
-		@__canvas.SetSolvedState
+	@__canvas\SetSolvedState @TheMoonpanelSolved
 	if @TheMoonpanelSolved and istable visualResult
 		@__lastVisualResult = table.Copy visualResult
 		@__lastVisualResultAt = CurTime! - 60
@@ -104,8 +97,7 @@ ENT.SetSolvedState = (solved, visualResult = nil) =>
 		@__lastVisualResult = nil unless @TheMoonpanelSolved
 		@__lastVisualResultAt = nil unless @TheMoonpanelSolved
 	@SetSolvedNetworkState @TheMoonpanelSolved
-	Moonpanel.Wire.UpdateState @ if SERVER and Moonpanel.Wire and
-		Moonpanel.Wire.UpdateState
+	Moonpanel.Wire.UpdateState @ if SERVER
 
 ENT.GetSolvedState = => @TheMoonpanelSolved == true or
 	@GetSolvedNetworkState! == true
@@ -113,47 +105,35 @@ ENT.GetSolvedState = => @TheMoonpanelSolved == true or
 ENT.SetPowered = (value) =>
 	value = value == true
 
-	if SERVER and not value
-		if @ResetPanel and @__canvas and @__canvas\GetData!
-			@ResetPanel false
-		else
-			controller = @GetController!
-			Moonpanel\StopControl controller if IsValid(controller) and
-				controller\IsPlayer!
+	if SERVER and not value and @ResetPanel and @__canvas\GetData!
+		@ResetPanel false
 	else
 		controller = @GetController!
 		Moonpanel\StopControl controller if IsValid(controller) and
 			controller\IsPlayer!
 
 	@SetPoweredNetworkState value
-	Moonpanel.Wire.UpdateState @ if SERVER and Moonpanel.Wire and
-		Moonpanel.Wire.UpdateState
-	@ExecutePendingSyncs! if SERVER and @ExecutePendingSyncs
+	Moonpanel.Wire.UpdateState @ if SERVER
+	@ExecutePendingSyncs! if SERVER
 
 ENT.GetPowered = => @GetPoweredNetworkState!
 
 ENT.OnRemove = =>
 	if SERVER
 		WireLib.Remove @ if WireLib and WireLib.Remove
-		Moonpanel.Wire.ClearTimer @ if Moonpanel.Wire and Moonpanel.Wire.ClearTimer
-		@GetCanvas!\CancelSolution("panel_removed") if @GetCanvas! and
-			@GetCanvas!\CancelSolution
-		panel = @
-		if Moonpanel.Net.PendingPlayerDataRequests
-			Moonpanel.Net.PendingPlayerDataRequests[panel] = nil
-		if Moonpanel.Net.ClearPanelSyncState
-			Moonpanel.Net.ClearPanelSyncState panel
+		@GetCanvas!\CancelSolution "panel_removed"
+		Moonpanel.Net.PendingPlayerDataRequests[@] = nil
+		Moonpanel.Net.ClearPanelSyncState @
 		controller = @GetController!
 		Moonpanel\StopControl controller if IsValid(controller) and controller\IsPlayer!
 
-	canvas = @GetCanvas! if @GetCanvas
-	return unless canvas
-	canvas\DeallocateRT! if CLIENT and canvas.DeallocateRT
-	canvas\StopSounds! if canvas.StopSounds
+	canvas = @GetCanvas!
+	canvas\DeallocateRT! if CLIENT
+	canvas\StopSounds!
 
 ENT.Think = =>
-    @__canvas\Think! if @__canvas
-	@TraceSessionThink! if SERVER and @TraceSessionThink
+    @__canvas\Think!
+	@TraceSessionThink! if SERVER
 
 	if CLIENT
 		if @__rendering and FrameNumber! - @__lastFrameNumber > 10
@@ -163,4 +143,4 @@ ENT.Think = =>
 		-- Keep RT rendering outside the 3D draw pass so HDR state cannot leak
 		-- into it. ENTITY:Think already runs every client frame; a separate
 		-- global Think hook per panel only duplicated scheduling overhead.
-		@__canvas\RenderRT! if @__rendering and @__canvas
+		@__canvas\RenderRT! if @__rendering

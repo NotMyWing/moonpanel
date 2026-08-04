@@ -1,6 +1,6 @@
 {
 	"title": "The Moonpanel",
-	"description": "Moonpanel source code is licensed under Apache-2.0. The Witness-derived assets remain the property of Thekla, Inc. Credits: Thekla, Inc. and Jonathan Blow; TheFifthMatt for the inspiration behind this project and its later Windmill importer; Tyler Schrock for the Windmill importer.",
+	"description": "Moonpanel source code is licensed under Apache-2.0. The Witness-derived assets remain the property of Thekla, Inc. Credits: Thekla, Inc. and Jonathan Blow; TheFifthMatt for the inspiration behind this project and its later Windmill importer; Tyler Schrock for the Windmill importer; the WireMod contributors for the adapted editor-presence animation.",
 	"type": "tool",
 	"tags": [],
 	"ignore": [

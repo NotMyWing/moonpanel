@@ -1,6 +1,6 @@
 ColorUtils = {}
 
-ColorUtils.Rgb2Xyz = (sR, sG, sB) ->
+rgb2xyz = (sR, sG, sB) ->
 	if sR > 0.04045
 		sR = ((sR + 0.055) / 1.055) ^ 2.4
 	else
@@ -22,7 +22,7 @@ ColorUtils.Rgb2Xyz = (sR, sG, sB) ->
 
 	x * 100, y * 100, z * 100
 
-ColorUtils.Xyz2Rgb = (x, y, z) ->
+xyz2rgb = (x, y, z) ->
 	x /= 100
 	y /= 100
 	z /= 100
@@ -48,7 +48,7 @@ ColorUtils.Xyz2Rgb = (x, y, z) ->
 
 	r, g, b
 
-ColorUtils.Xyz2Lab = (x, y, z) ->
+xyz2lab = (x, y, z) ->
 	x /= 95.047
 	y /= 100
 	z /= 108.883
@@ -74,7 +74,7 @@ ColorUtils.Xyz2Lab = (x, y, z) ->
 
 	l, a, b
 
-ColorUtils.Lab2Xyz = (l, a, b) ->
+lab2xyz = (l, a, b) ->
 	y = (l + 16) / 116
 	x = a / 500 + y
 	z = y - b / 200
@@ -100,7 +100,7 @@ ColorUtils.Lab2Xyz = (l, a, b) ->
 
 	x, y, z
 
-ColorUtils.Lab2Lch = (l, a, b) ->
+lab2lch = (l, a, b) ->
 	h = math.atan2 b, a
 
 	if h > 0
@@ -112,7 +112,7 @@ ColorUtils.Lab2Lch = (l, a, b) ->
 
 	l, c, h
 
-ColorUtils.Lch2Lab = (l, c, h) ->
+lch2lab = (l, c, h) ->
 	hr = math.rad h
 
 	a = math.cos(hr) * c
@@ -120,112 +120,7 @@ ColorUtils.Lch2Lab = (l, c, h) ->
 
 	l, a, b
 
-lab2lch = ColorUtils.Lab2Lch
-xyz2lab = ColorUtils.Xyz2Lab
-rgb2xyz = ColorUtils.Rgb2Xyz
-xyz2rgb = ColorUtils.Xyz2Rgb
-lab2xyz = ColorUtils.Lab2Xyz
-lch2lab = ColorUtils.Lch2Lab
-
 ColorUtils.Rgb2Lch = (r, g, b) -> lab2lch xyz2lab rgb2xyz r, g, b
 ColorUtils.Lch2Rgb = (l, c, h) -> xyz2rgb lab2xyz lch2lab l, c, h
-
-concommand.Add "cinterp_tests", ->
-	with vgui.Create "DFrame"
-		\SetTitle "Interps"
-		\SetSize 600, 265
-		\MakePopup!
-		\Center!
-
-		funcs = {
-			["RGB"]: (cA, cB, value) ->
-				invValue = 1 - value
-
-				r = math.Round cA.r * invValue + cB.r * value
-				g = math.Round cA.g * invValue + cB.g * value
-				b = math.Round cA.b * invValue + cB.b * value
-
-				r, g, b
-
-			["HSV"]: (cA, cB, value) ->
-				invValue = 1 - value
-
-				cA = { ColorToHSV cA }
-				cB = { ColorToHSV cB }
-
-				h = cA[1] * invValue + cB[1] * value
-				s = cA[2] * invValue + cB[2] * value
-				v = cA[3] * invValue + cB[3] * value
-
-				color = HSVToColor h, s, v
-
-				color.r, color.g, color.b
-
-			["LCH"]: (cA, cB, value) ->
-				invValue = 1 - value
-
-				cA = { ColorUtils.Rgb2Lch cA.r, cA.g, cA.b }
-				cB = { ColorUtils.Rgb2Lch cB.r, cB.g, cB.b }
-
-				cA[1] = cA[1] * invValue + cB[1] * value
-				cA[2] = cA[2] * invValue + cB[2] * value
-				cA[3] = cA[3] * invValue + cB[3] * value
-
-				ColorUtils.Lch2Rgb cA[1], cA[2], cA[3]
-		}
-
-		startColor = Color 20, 80, 170
-		endColor = Color 226, 146, 10
-		steps = 1024
-
-		for name, func in pairs funcs
-			with \Add "Panel"
-				\Dock TOP
-				\SetTall 70
-				\DockMargin 0, 0, 0, 10
-
-				with \Add "DLabel"
-					\Dock TOP
-					\SetText " " .. name
-
-				with \Add "DPanel"
-					\Dock LEFT
-					\SetBackgroundColor Color 64, 64, 64
-					\DockPadding 2, 2, 2, 2
-					\InvalidateParent true
-					\SetWide \GetTall!
-
-					with \Add "DPanel"
-						\Dock FILL
-						\SetBackgroundColor startColor
-
-				with \Add "DPanel"
-					\Dock RIGHT
-					\SetBackgroundColor Color 64, 64, 64
-					\DockPadding 2, 2, 2, 2
-					\InvalidateParent true
-					\SetWide \GetTall!
-
-					with \Add "DPanel"
-						\Dock FILL
-						\SetBackgroundColor endColor
-
-				with \Add "DPanel"
-					\SetBackgroundColor Color 64, 64, 64
-					\DockMargin 2, 0, 2, 0
-					\DockPadding 2, 2, 2, 2
-					\Dock FILL
-
-					with \Add "Panel"
-						\Dock FILL
-
-						.Paint = (_, w, h) ->
-							stepSize = w / steps
-
-							for i = 0, steps
-								step = i / steps
-								r, g, b = func startColor, endColor, step
-								surface.SetDrawColor r, g, b
-								surface.DrawRect (i - 1) * stepSize, 0, stepSize + 1, h
 
 return ColorUtils

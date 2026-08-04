@@ -1,0 +1,19 @@
+{
+  "name": "five_erasers",
+  "panel": "five_erasers.txt",
+  "legacy": false,
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "the only route leaves every targetless eraser",
+      "traces": [],
+      "allSimpleTraces": {"from": [0, 2], "to": [3, 0], "count": 1},
+      "expected": {
+        "success": false,
+        "status": "complete",
+        "erasureCount": 0,
+        "remainingCount": 5
+      }
+    }
+  ]
+}

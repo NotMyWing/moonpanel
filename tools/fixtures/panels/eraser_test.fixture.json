@@ -1,23 +1,21 @@
 {
   "name": "eraser_test",
   "panel": "eraser_test.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {
-      "name": "both conflicting erasers cancel each other",
+      "name": "erasers cannot cancel each other",
       "traces": [
         [[0,3],[0,2],[0,1],[0,0],[1,0],[2,0],[3,0]]
       ],
       "expected": {
-        "success": true,
+        "success": false,
         "status": "complete",
-        "violations": [],
-        "erasures": [
-          {"eraserIndex": 9, "targetIndex": 23},
-          {"eraserIndex": 23, "targetIndex": 9}
-        ],
-        "remaining": [],
-        "constraintKinds": [],
+        "violations": [9, 23],
+        "erasures": [],
+        "remaining": [9, 23],
+        "constraintKinds": ["eraser_unnecessary"],
         "polyominoBackends": []
       }
     }

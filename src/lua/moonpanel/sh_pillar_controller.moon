@@ -1,6 +1,7 @@
 AddCSLuaFile!
 
 Controller = {}
+CVars = Moonpanel.CVarNames
 Controller.States = {}
 Controller.MaxLead = 10
 Controller.MaxArcStep = 2
@@ -15,7 +16,6 @@ Controller.CommandRetention = 512
 
 Moonpanel.PillarController = Controller
 -- Compatibility names are read by the existing debug and focus presentation.
-Moonpanel.PillarOrbits = Controller.States
 Moonpanel.PillarFocusAngles or= {}
 
 sign = (value) -> value > 0 and 1 or value < 0 and -1 or 0
@@ -25,7 +25,7 @@ tickInterval = ->
 
 Controller.GetPanel = (ply) ->
 	return false unless IsValid ply
-	panel = if CLIENT and Moonpanel.GetPredictedControl
+	panel = if CLIENT
 		Moonpanel\GetPredictedControl ply
 	else
 		ply\GetNW2Entity "TheMP Control"
@@ -58,12 +58,12 @@ Controller.MakeSeed = (panel, ply, sessionId) ->
 	halfWidth = math.max math.abs(mins.x), math.abs(maxs.x)
 	halfDepth = math.max math.abs(mins.y), math.abs(maxs.y)
 	radius = position\Distance panel\GetPillarAxisPoint(position)
-	pathfinder = panel\GetCanvas! and panel\GetCanvas!\GetPathFinder!
-	head = pathfinder and pathfinder.cursors and pathfinder.cursors[1]
+	pathfinder = panel\GetCanvas!\GetPillarTraceEngine!
+	head = pathfinder and pathfinder\GetCursor!
 	return unless head
 	{
 		:sessionId
-		revision: pathfinder.topology.revision
+		revision: pathfinder\GetRevision!
 		radius: Moonpanel.Canvas.QuantizePillarRadius radius,
 			Controller.RadiusQuantum
 		playerAngle: panel\GetPillarAngle position
@@ -79,8 +79,8 @@ Controller.Begin = (panel, ply, sessionId, seed = nil) ->
 	return false unless ply\GetMoveType! == MOVETYPE_WALK
 	seed or= Controller.MakeSeed panel, ply, sessionId
 	return false unless seed and seed.sessionId == sessionId
-	pathfinder = panel\GetCanvas! and panel\GetCanvas!\GetPathFinder!
-	return false unless pathfinder and seed.revision == pathfinder.topology.revision
+	pathfinder = panel\GetCanvas!\GetPillarTraceEngine!
+	return false unless pathfinder and seed.revision == pathfinder\GetRevision!
 	defaultMins, defaultMaxs = ply\GetHull!
 	state = {
 		:panel
@@ -101,14 +101,12 @@ Controller.Begin = (panel, ply, sessionId, seed = nil) ->
 	}
 	return false unless Controller.IsRadiusSafe state, state.radius
 	if SERVER
-		state.motionPathfinder = Moonpanel.Canvas.TraceEngine pathfinder.topology
-		return false unless state.motionPathfinder\restore pathfinder\snapshot!
-		state.motionPathfinder.occlusionConstraint = pathfinder.occlusionConstraint
+		state.motionPathfinder = pathfinder\Fork!
 	Controller.States[ply] = state
 	Moonpanel.PillarFocusAngles[ply] = Controller.GetFacingAngles panel, ply,
 		state.pitch
 	if SERVER
-		session = panel\GetTraceSession! if panel.GetTraceSession
+		session = panel\GetTraceSession!
 		if session and session.id == sessionId
 			session.orbitSeed = table.Copy seed
 			session.pillarProofs = state.proofs
@@ -135,7 +133,7 @@ Controller.UpdateAngles = (state, ply, pathfinder) ->
 	playerAngle = state.panel\GetPillarAngle ply\GetPos!
 	state.playerAngle = Moonpanel.Canvas.UnwrapPillarAngle playerAngle,
 		state.playerAngle
-	head = pathfinder and pathfinder.cursors and pathfinder.cursors[1]
+	head = pathfinder and pathfinder\GetCursor!
 	if head
 		headAngle = Moonpanel.Canvas.PillarTraceAngle head.x
 		state.ghostAngle = Moonpanel.Canvas.UnwrapPillarAngle headAngle,
@@ -228,10 +226,7 @@ Controller.ProbeGhostTravel = (state, ply, startAngle, requestedQ,
 	}
 
 Controller.ReadClientInput = (state, ply, cmd, originalButtons) ->
-	rawX, rawY = if Moonpanel.ConsumePillarMouseInput
-		Moonpanel\ConsumePillarMouseInput cmd
-	else
-		cmd\GetMouseX!, cmd\GetMouseY!
+	rawX, rawY = Moonpanel\ConsumePillarMouseInput cmd
 	digital = bit.band(originalButtons, bit.bor(IN_FORWARD, IN_BACK,
 		IN_MOVELEFT, IN_MOVERIGHT)) ~= 0
 	analog = false
@@ -241,7 +236,7 @@ Controller.ReadClientInput = (state, ply, cmd, originalButtons) ->
 		analogX = cmd\GetSideMove! / inputMax
 		analogY = -cmd\GetForwardMove! / inputMax
 		magnitude = math.sqrt analogX^2 + analogY^2
-		deadzoneConVar = GetConVar "moonpanel_gamepad_deadzone"
+		deadzoneConVar = GetConVar CVars.GamepadDeadzone
 		deadzone = deadzoneConVar and deadzoneConVar\GetFloat! or 0.16
 		if magnitude > deadzone
 			scaled = math.min(1, (magnitude - deadzone) /
@@ -249,12 +244,12 @@ Controller.ReadClientInput = (state, ply, cmd, originalButtons) ->
 			rawX = analogX / magnitude * scaled * 24
 			rawY = analogY / magnitude * scaled * 24
 			analog = true
-	sensitivityConVar = GetConVar(analog and "moonpanel_gamepad_sensitivity" or
-		"moonpanel_trace_sensitivity")
+	sensitivityConVar = GetConVar(analog and CVars.GamepadSensitivity or
+		CVars.TraceSensitivity)
 	sensitivity = sensitivityConVar and sensitivityConVar\GetFloat! or 1
 	xQ, yQ = state.panel\GetCanvas!\QuantizeDeltas rawX, rawY, sensitivity
 	if bit.band(originalButtons, IN_SPEED) ~= 0
-		boostConVar = GetConVar "moonpanel_trace_speed_boost"
+		boostConVar = GetConVar CVars.TraceSpeedBoost
 		boost = boostConVar and boostConVar\GetFloat! or 2
 		xQ *= boost
 		yQ *= boost
@@ -266,7 +261,8 @@ Controller.ResolveClientSample = (state, pathfinder, xQ, yQ) ->
 	if state.turnLatch
 		state.turnLatch.remaining -= 1
 		state.turnLatch = nil if state.turnLatch.remaining <= 0
-	unless pathfinder.active
+	activeAxis = pathfinder\GetActiveAxis!
+	unless activeAxis
 		if latch = state.turnLatch
 			sourceValue = latch.sourceAxis == "x" and xQ or yQ
 			reversing = sourceValue ~= 0 and
@@ -288,9 +284,8 @@ Controller.ResolveClientSample = (state, pathfinder, xQ, yQ) ->
 			sourceAxis: intent.axis
 			sourceDirection: intent.direction
 		}
-	elseif pathfinder.active and state.turnLatch
-		activeHorizontal = math.abs(pathfinder.active.primary.unitX) >
-			math.abs(pathfinder.active.primary.unitY)
+	elseif activeAxis and state.turnLatch
+		activeHorizontal = activeAxis == "x"
 		activeValue = activeHorizontal and xQ or yQ
 		state.turnLatch = nil if activeValue ~= 0
 	sampleAxis = intent.cornering and intent.pendingAxis or intent.axis
@@ -338,7 +333,7 @@ Controller.MakeFollowerMovement = (state, ply, cmd, maxSpeed, radiusSafe,
 			unwrappedHead = targetGhostAngle
 		else
 			pathfinder = if SERVER then state.motionPathfinder else
-				panel\GetCanvas!\GetPathFinder!
+				panel\GetCanvas!\GetPillarTraceEngine!
 			unwrappedPlayer, unwrappedHead = Controller.UpdateAngles state, ply,
 				pathfinder
 		if unwrappedHead
@@ -398,7 +393,7 @@ Controller.ProcessCommand = (ply, cmd, retainedButtons = 0,
 	return false unless panel
 	state = Controller.States[ply]
 	session = if CLIENT then Moonpanel.Net.TraceSessions[panel]
-	else panel\GetTraceSession! if panel.GetTraceSession
+	else panel\GetTraceSession!
 	return false unless state and session and state.panel == panel and
 		state.sessionId == session.id
 	if ply\GetMoveType! ~= MOVETYPE_WALK
@@ -411,9 +406,8 @@ Controller.ProcessCommand = (ply, cmd, retainedButtons = 0,
 		cmd\SetViewAngles viewAngles if viewAngles
 		return true
 	pathfinder = if SERVER then state.motionPathfinder else
-		panel\GetCanvas!\GetPathFinder!
-	return false unless pathfinder and pathfinder.phase ==
-		Moonpanel.Canvas.TraceEngine.Phase.Tracing
+		panel\GetCanvas!\GetPillarTraceEngine!
+	return false unless pathfinder and pathfinder\IsTracing!
 	commandNumber = cmd\CommandNumber!
 	if commandNumber ~= 0 and state.commands[commandNumber]
 		return Controller.ApplyCachedCommand state, ply, cmd,
@@ -461,9 +455,9 @@ Controller.ProcessCommand = (ply, cmd, retainedButtons = 0,
 			if puzzleLimit > 0
 				physicalRequestQ = direction * math.min(budget, puzzleLimit)
 				canvas = panel\GetCanvas!
+				head = pathfinder\GetCursor!
 				edgeAngle = canvas\GetBarLength! /
 					Moonpanel.Canvas.Resolution * 360
-				head = pathfinder.cursors and pathfinder.cursors[1]
 				if head
 					startAngle = state.ghostAngle
 					leadWorld = state.radius * math.rad(
@@ -504,7 +498,7 @@ Controller.ProcessCommand = (ply, cmd, retainedButtons = 0,
 		if CLIENT
 			changed = panel\GetCanvas!\ApplyTraceSample requestedXQ,
 				requestedYQ, false, context
-			constraints = panel\GetCanvas!\GetPathFinder!\GetConstraintDecisions!
+			constraints = panel\GetCanvas!\GetConstraintDecisions!
 		else
 			changed = pathfinder\applySample requestedXQ, requestedYQ, false,
 				context
@@ -513,6 +507,7 @@ Controller.ProcessCommand = (ply, cmd, retainedButtons = 0,
 		requestedXQ, requestedYQ = 0, 0
 		clampReason = "puzzle" if budget > 0 and clampReason == "none"
 	afterHash = pathfinder\hash!
+	head = pathfinder\GetCursor!
 
 	if CLIENT and changed
 		Moonpanel.Net.QueueTraceSample panel, requestedXQ, requestedYQ, false,
@@ -570,8 +565,7 @@ Controller.ProcessCommand = (ply, cmd, retainedButtons = 0,
 		acceptedGhost: worldInfo.acceptedPosition
 		contactNormal: state.lastHullTrace and state.lastHullTrace.normal
 		playerAngle: playerAngle
-		headAngle: pathfinder.cursors and pathfinder.cursors[1] and
-			Moonpanel.Canvas.PillarTraceAngle(pathfinder.cursors[1].x) or 0
+		headAngle: head and Moonpanel.Canvas.PillarTraceAngle(head.x) or 0
 		radius: state.radius
 		speedLimit: maxSpeed
 		:forwardMove

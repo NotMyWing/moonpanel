@@ -1,11 +1,12 @@
 Moonpanel.Debug or= {}
 DEBUG = Moonpanel.Debug
+CVars = Moonpanel.CVarNames
 
-enabled = CreateClientConVar "moonpanel_debug", "0", true, false,
+enabled = CreateClientConVar CVars.Debug, "0", true, false,
 	"Draw Moonpanel runtime diagnostics and occlusion rays"
-rayLifetime = CreateClientConVar "moonpanel_debug_ray_lifetime", "0.2", true, false,
+rayLifetime = CreateClientConVar CVars.DebugRayLifetime, "0.2", true, false,
 	"Lifetime of Moonpanel occlusion debug rays", 0.02, 2
-maxDistance = CreateClientConVar "moonpanel_debug_distance", "4096", true, false,
+maxDistance = CreateClientConVar CVars.DebugDistance, "4096", true, false,
 	"Maximum distance for Moonpanel 3D diagnostics", 128, 16384
 
 surface.CreateFont "MoonpanelDebug3D",
@@ -141,12 +142,6 @@ historyText = (history) ->
 		table.insert values, "#{sample[1]},#{sample[2]}"
 	table.concat values, " | "
 
-countEdges = (topology) ->
-	count = 0
-	for _, edges in pairs topology and topology.edges or {}
-		count += 1 for _ in pairs edges
-	count
-
 controllerText = (controller) ->
 	return "world" if controller == game.GetWorld!
 	return "none" unless IsValid controller
@@ -154,58 +149,50 @@ controllerText = (controller) ->
 		return "#{controller\Nick!} [#{controller\EntIndex!}]"
 	tostring controller
 
-soundText = (canvas) ->
-	return "off" unless canvas\GetSoundEnabled!
-	return "enabled/uninitialized" unless canvas.__sounds
-	total, playing = 0, 0
-	for _, sound in pairs canvas.__sounds
-		total += 1
-		playing += 1 if sound and sound.IsPlaying and sound\IsPlaying!
-	"#{playing}/#{total} playing"
-
 panelLines = (panel) ->
 	canvas = panel\GetCanvas!
 	data = canvas and canvas\GetData!
-	pathfinder = canvas and canvas\GetPathFinder!
-	topology = pathfinder and pathfinder.topology
-	definition = canvas and canvas\GetRuleDefinition!
+	debug = canvas and canvas\GetDebugState!
+	trace = debug and debug.trace
+	rule = debug and debug.rule
+	topology = trace and trace.topology
 	session = Moonpanel.Net.TraceSessions and Moonpanel.Net.TraceSessions[panel]
 	pendingSync = Moonpanel.Net.PendingPanelDataRequests and
 		Moonpanel.Net.PendingPanelDataRequests[panel]
-	follower = canvas and canvas\GetObserverFollower!
-	geometry = canvas and canvas.__geometry
-	rtAllocated = canvas and canvas.__rtAlloc and
-		Moonpanel.Canvas\IsRTAllocated(canvas.__rtAlloc) or false
+	follower = debug and debug.follower
+	geometry = debug and debug.geometry
+	rtAllocated = canvas and canvas\CanRender! or false
 	meta = data and data.Meta or {}
 
 	lines = {
 		{ "MOONPANEL ##{panel\EntIndex!}", CYAN }
 		{ "model  #{panel\GetModel! or "-"}", DIM }
 		{ "distance #{numberText(LocalPlayer!\EyePos!\Distance(panel\WorldSpaceCenter!), 1)}u", DIM }
-		{ "sync #{boolText(data ~= nil)}  powered #{boolText(panel\GetPowered!)}  local-power #{boolText(canvas and canvas.__powerState)}", data and GOOD or BAD }
-		{ "RT allocated #{boolText(rtAllocated)}  drawing #{boolText(panel.__rendering)}  dirty #{boolText(canvas and canvas.__rtDirty)}", rtAllocated and GOOD or WARN }
+		{ "sync #{boolText(data ~= nil)}  powered #{boolText(panel\GetPowered!)}  local-power #{boolText(debug and debug.power)}", data and GOOD or BAD }
+		{ "RT allocated #{boolText(rtAllocated)}  drawing #{boolText(panel\IsRendering!)}  dirty #{boolText(debug and debug.dirty)}", rtAllocated and GOOD or WARN }
+		{ "DPS #{numberText(debug and debug.drawRate, 1)} / FPS #{numberText(debug and debug.frameRate, 1)}", WHITE }
 		{ "grid #{meta.Width or "-"}x#{meta.Height or "-"}  symmetry #{meta.Symmetry or 0}  entities #{data and #(data.Entities or {}) or 0}", WHITE }
 		{ "geometry bar #{numberText(geometry and geometry.barWidth)} / #{numberText(geometry and geometry.barLength)}  margin #{numberText(geometry and geometry.margin)}", WHITE }
 	}
 
 	if topology
-		table.insert lines, { "topology rev #{topology.revision}  nodes #{#topology.nodes}  edges #{countEdges topology}  starts #{#topology.starts}  exits #{#topology.exits}  gaps #{#topology.gaps}", WHITE }
+		table.insert lines, { "topology rev #{topology.revision}  nodes #{topology.nodes}  edges #{topology.edges}  starts #{topology.starts}  exits #{topology.exits}  gaps #{topology.gaps}", WHITE }
 	else
 		table.insert lines, { "topology unavailable", BAD }
 
-	if definition
-		table.insert lines, { "rules rev #{definition.ruleRevision or 0}  clues #{#(definition.clues or {})}", WHITE }
+	if rule
+		table.insert lines, { "rules rev #{rule.revision or 0}  clues #{rule.clues or 0}", WHITE }
 	else
 		table.insert lines, { "rules unavailable", BAD }
 
-	if pathfinder
-		phase = phaseNames[pathfinder.phase] or tostring(pathfinder.phase)
-		table.insert lines, { "trace #{phase}  hash #{pathfinder\hash!}  submit #{boolText(pathfinder\canSubmit!)}  exit #{boolText(pathfinder.touchingExit)}", WHITE }
-		table.insert lines, { "route P #{routeText(pathfinder.stacks and pathfinder.stacks[1])}", DIM }
-		table.insert lines, { "route S #{routeText(pathfinder.stacks and pathfinder.stacks[2])}", DIM }
-		table.insert lines, { "heads P #{pointText(pathfinder.cursors and pathfinder.cursors[1])}  S #{pointText(pathfinder.cursors and pathfinder.cursors[2])}", DIM }
-		table.insert lines, { "intent #{historyText(pathfinder.history)}  constraints #{routeText(pathfinder\GetConstraintDecisions!)}", DIM }
-		if active = pathfinder.active
+	if trace
+		phase = phaseNames[trace.phase] or tostring(trace.phase)
+		table.insert lines, { "trace #{phase}  hash #{trace.hash}  submit #{boolText(trace.canSubmit)}  exit #{boolText(trace.touchingExit)}", WHITE }
+		table.insert lines, { "route P #{routeText(trace.stacks and trace.stacks[1])}", DIM }
+		table.insert lines, { "route S #{routeText(trace.stacks and trace.stacks[2])}", DIM }
+		table.insert lines, { "heads P #{pointText(trace.cursors and trace.cursors[1])}  S #{pointText(trace.cursors and trace.cursors[2])}", DIM }
+		table.insert lines, { "intent #{historyText(trace.history)}  constraints #{routeText(trace.constraints)}", DIM }
+		if active = trace.active
 			primary = active.primary
 			secondary = active.secondary
 			table.insert lines, { "active P #{primary and primary.fromId or "-"}->#{primary and primary.toId or "-"} #{primary and primary.kind or "-"}  q #{active.progressQ}/#{primary and primary.lengthQ or "-"}  max #{active.maxProgressQ or "-"}", WARN }
@@ -214,9 +201,10 @@ panelLines = (panel) ->
 			table.insert lines, { "active none", DIM }
 
 	if panel.MoonpanelPillar
-		orbit = Moonpanel.PillarOrbits and Moonpanel.PillarOrbits[LocalPlayer!]
-		if orbit and orbit.panel == panel and pathfinder
-			head = pathfinder.cursors and pathfinder.cursors[1]
+		orbit = Moonpanel.PillarController and
+			Moonpanel.PillarController\GetState LocalPlayer!
+		if orbit and orbit.panel == panel and trace
+			head = trace.cursors and trace.cursors[1]
 			playerAngle = panel\GetPillarAngle LocalPlayer!\GetPos!
 			headAngle = head and Moonpanel.Canvas.PillarTraceAngle(head.x) or 0
 			rawError = head and Moonpanel.Canvas.PillarAlignmentError(
@@ -241,11 +229,10 @@ panelLines = (panel) ->
 		table.insert lines, { "session none  state-request attempts #{pendingSync and pendingSync.attempts or 0}", DIM }
 
 	if follower
-		table.insert lines, { "follower reached #{follower.reachedSequence or 0}/#{follower.targetSequence or 0}  settled #{boolText(follower\hasReached!)}", WHITE }
+		table.insert lines, { "follower reached #{follower.reachedSequence or 0}/#{follower.targetSequence or 0}  settled #{boolText(follower.settled)}", WHITE }
 
-	presentation = canvas and canvas.__presentation
-	table.insert lines, { "presentation active #{boolText(presentation and presentation\isActive!)}  result #{boolText(presentation and presentation.result)}  solver #{boolText(canvas and canvas.__solutionCoroutine)}", DIM }
-	table.insert lines, { "sound #{canvas and soundText(canvas) or "-"}", DIM }
+	table.insert lines, { "presentation active #{boolText(debug and debug.presentation)}  result #{boolText(debug and debug.result)}  solver #{boolText(debug and debug.solving)}", DIM }
+	table.insert lines, { "sound #{debug and debug.sound or "-"}", DIM }
 
 	if state = DEBUG.Occlusion[panel]
 		edge = state.edge
@@ -258,7 +245,7 @@ panelLines = (panel) ->
 	lines
 
 drawPanelDebug = (panel) ->
-	return unless IsValid(panel) and panel.GetCanvas
+	return unless IsValid panel
 	transform = panel\GetScreenTransform!
 	return unless transform
 	panelWidth = Moonpanel.Canvas.Resolution / (panel.Aspect or 1)
@@ -324,10 +311,10 @@ setEnabled = (state) ->
 		DEBUG.Occlusion = setmetatable {}, { __mode: "k" }
 		DEBUG.Rays = {}
 
-cvars.AddChangeCallback "moonpanel_debug", ((_, _, value) ->
+cvars.AddChangeCallback CVars.Debug, ((_, _, value) ->
 	setEnabled tonumber(value) ~= 0), "Moonpanel Runtime Debug"
 
 concommand.Add "moonpanel_debug_toggle", ->
-	RunConsoleCommand "moonpanel_debug", enabled\GetBool! and "0" or "1"
+	RunConsoleCommand CVars.Debug, enabled\GetBool! and "0" or "1"
 
 timer.Simple 0, -> setEnabled enabled\GetBool!

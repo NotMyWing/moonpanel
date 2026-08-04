@@ -42,6 +42,56 @@ MATERIALS = {
 }
 Editor.MATERIALS = MATERIALS
 
+-- Adapted from WireMod's Expression 2 "in editor" animation by the WireMod
+-- contributors (Apache-2.0). Moonpanel substitutes randomized clue particles.
+activeEditors = {}
+clueMaterials = {
+	MATERIALS.Color, MATERIALS.Sun, MATERIALS.Eraser,
+	MATERIALS.Triangle, MATERIALS.Polyomino, MATERIALS.Hexagon
+}
+clueSprites = {}
+
+Editor.SetPresence = (_, ply, open) ->
+	return unless IsValid ply
+	activeEditors[ply] = open == true or nil
+
+hook.Add "EntityRemoved", "Moonpanel Editor Presence", (entity) ->
+	activeEditors[entity] = nil
+
+timer.Create "Moonpanel Editor Presence", 0.65, 0, ->
+	for ply in pairs activeEditors
+		continue unless IsValid ply
+		bone = ply\LookupBone("ValveBiped.Bip01_Head1") or
+			ply\LookupBone("ValveBiped.HC_Head_Bone") or 0
+		position = ply\GetBonePosition bone
+		continue unless position
+		table.insert clueSprites, {
+			material: clueMaterials[math.random #clueMaterials]
+			position: position + Vector(math.random(-7, 7), math.random(-7, 7), 15)
+			color: Moonpanel.Canvas.ColorValues[math.random 2, 9]
+			born: CurTime!
+			rotation: math.random 0, 359
+			spin: math.random(-90, 90)
+		}
+
+hook.Add "PostDrawTranslucentRenderables", "Moonpanel Editor Presence",
+	(_, skybox) ->
+		return if skybox
+		now = CurTime!
+		for index = #clueSprites, 1, -1
+			sprite = clueSprites[index]
+			life = (now - sprite.born) / 2.2
+			if life >= 1
+				table.remove clueSprites, index
+				continue
+			color = sprite.color
+			render.SetMaterial sprite.material
+			position = sprite.position + Vector(0, 0, life * 40)
+			size = Lerp life, 9, 13
+			render.DrawQuadEasy position, (EyePos! - position)\GetNormalized!,
+				size, size, Color(color.r, color.g, color.b, (1 - life) * 230),
+				sprite.rotation + (now - sprite.born) * sprite.spin
+
 Helpers = Moonpanel.Helpers
 deepCopy = Helpers.deepCopy
 clearChildren = Helpers.clearChildren
@@ -55,8 +105,12 @@ include "cl_windmill.lua"
 
 isEmpty = (entry) -> not entry or not entry.Type
 
+displayDocumentPath = (path) ->
+	string.gsub string.StripExtension(path), "^moonpanel/", ""
+
 styledButton = (parent, text, callback, width) ->
 	button = with parent\Add "DButton"
+		.Label = text
 		\SetText ""
 		\SetTall 30
 		\SetWide width if width
@@ -64,7 +118,7 @@ styledButton = (parent, text, callback, width) ->
 		.Paint = (_, w, h) ->
 			background = if _.Depressed then C.accentDim elseif _.Hovered then C.hover else C.raised
 			draw.RoundedBox 4, 0, 0, w, h, background
-			draw.SimpleText text, "MoonpanelEditorBody", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
+			draw.SimpleText _.Label or text, "MoonpanelEditorBody", w / 2, h / 2, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
 	button
 
 addLabel = (parent, text, font = "MoonpanelEditorBody", color = C.text, tall = 20) ->
@@ -75,6 +129,32 @@ addLabel = (parent, text, font = "MoonpanelEditorBody", color = C.text, tall = 2
 		\SetFont font
 		\SetTextColor color
 		\SetText text
+
+styleDocumentNode = (node) ->
+	return unless IsValid node
+	node\SetTall 24
+	label = node.Label
+	return unless IsValid label
+	label\SetFont "MoonpanelEditorBody"
+	label\SetTextColor C.text
+	performLayout = node.PerformLayout
+	node.PerformLayout = (_) ->
+		performLayout _
+		if IsValid _.Expander
+			lineHeight = _\GetLineHeight!
+			_.Expander\SetY math.floor((lineHeight - _.Expander\GetTall!) / 2)
+	node.Paint = (_, w, h) ->
+		selected = label\IsSelected!
+		background = if selected then C.accentDim elseif label.Hovered then C.hover else C.inset
+		draw.RoundedBox 3, 1, 1, math.max(1, w - 2), h - 2, background
+		draw.RoundedBox 2, 1, 1, 3, h - 2, C.accent if selected
+
+styleSavedNode = (node) ->
+	styleDocumentNode node
+	node.OnNodeAdded = (_, child) ->
+		styleSavedNode child
+		text = child\GetText!
+		child\SetText string.StripExtension text if text
 
 ----
 -- Status, title, recovery
@@ -88,45 +168,55 @@ Editor.SetStatus = (text, tone = C.muted) =>
 
 Editor.UpdateTitle = =>
 	return unless IsValid @Frame
-	path = @Document.currentPath
+	path = @Document\GetPath!
+	source = @Document\GetSource!
 	name = path and string.StripExtension(string.GetFileFromFilename(path)) or "Untitled"
-	@Frame\SetTitle "Moonpanel Editor - #{name}#{@Document\IsDirty! and " *" or ""}"
+	if source.kind == "builtin"
+		name = source.title or source.id or "Built-in panel"
+	windowTitle = "Moonpanel Editor - #{name}#{@Document\IsDirty! and " *" or ""}"
+	@Frame\SetTitle windowTitle
 	if IsValid @FileStateLabel
-		state = if @Document\IsDirty! then "Unsaved changes" elseif path then "Saved" else "Untitled panel"
-		@FileStateLabel\SetText (path and "#{state}  •  #{path}" or state)
+		state = if source.kind == "builtin"
+			if @Document\IsDirty! then "Built-in panel • Unsaved changes" else "Built-in panel • Read-only"
+		elseif @Document\IsDirty! then "Unsaved changes" elseif path then "Saved" else "Untitled panel"
+		location = if source.kind == "builtin" then source.id elseif path then path
+		@FileStateLabel\SetText (location and "#{state}  •  #{location}" or state)
 		@FileStateLabel\SetTextColor @Document\IsDirty! and C.warning or C.success
+	if IsValid @SaveButton
+		@SaveButton.Label = source.kind == "builtin" and "Save As" or "Save"
 	@UndoButton\SetEnabled @Document\CanUndo! if IsValid @UndoButton
 	@RedoButton\SetEnabled @Document\CanRedo! if IsValid @RedoButton
 
 Editor.ScheduleRecovery = =>
+	return unless @Document and @Document\IsDirty!
 	timer.Create "Moonpanel Editor Recovery", 1, 1, ->
-		if Editor.Document
-			ok, reason = Editor.Document\WriteRecovery!
-			Editor\SetStatus reason, C.danger unless ok
+		return unless Editor.Document and Editor.Document\IsDirty!
+		ok, reason = Editor.Document\WriteRecovery!
+		Editor\SetStatus reason, C.danger unless ok
 
 ----
 -- Document / canvas sync
 ----
 
 Editor.GetEffectiveSurfaceSpec = (data) =>
-	data or= @Document and @Document\GetData! or @CurrentData or Moonpanel.Canvas.SampleData
+	data or= @Document and @Document\GetData! or Moonpanel.EditorDocument.FreshPanel!
 	kind = @SurfaceSpec and @SurfaceSpec.kind or Moonpanel.Canvas.SurfaceKind.Flat
 	continuous = data and data.Meta and data.Meta.Continuous == true
 	Moonpanel.Canvas.MakeSurfaceSpec kind, continuous
 
 Editor.SyncCanvas = (rebuild = true) =>
-	@CurrentData = @Document\GetData!
-	@OpenedFile = @Document.currentPath
+	data = @Document\GetData!
+	@OpenedFile = @Document\GetPath!
 	@RefreshBrushValidity! if @RefreshBrushValidity
 	if IsValid @FrameCanvas
-		@FrameCanvas\GetCanvas!\SetSurfaceSpec @GetEffectiveSurfaceSpec(@CurrentData)
-		@FrameCanvas\ImportData @CurrentData
+		@FrameCanvas\GetCanvas!\SetSurfaceSpec @GetEffectiveSurfaceSpec(data)
+		@FrameCanvas\ImportData data
 		@FrameCanvas\SetSelectedSocketIndex nil
 	@UpdateTitle!
 	@RebuildSidebar! if rebuild
 
 Editor.CommitData = (label, data, mergeKey, rebuild = true) =>
-	@Document\BeginEdit label, mergeKey unless @Document.transaction
+	@Document\BeginEdit label, mergeKey unless @Document\IsEditing!
 	changed = @Document\CommitEdit data
 	if changed
 		@SyncCanvas rebuild
@@ -205,11 +295,10 @@ Editor.CanvasRelease = =>
 	@GestureDragged = false
 	return unless @GestureActive
 
-	if @_gestureCanvasExport
-		@Document\CommitEdit @FrameCanvas\ExportData!
+	if @_gestureCanvasExport and @Document\CommitEdit @FrameCanvas\ExportData!
 		@SyncCanvas (@sidebarTab == "panel")
 		@ScheduleRecovery!
-	else
+	elseif not @_gestureCanvasExport
 		@Document\CancelEdit!
 	@GestureActive = false
 	@_gestureCanvasExport = false
@@ -217,6 +306,10 @@ Editor.CanvasRelease = =>
 
 Editor.CanvasRightClick = (socket) =>
 	return if @TestMode or not socket
+	entity = socket\GetEntity!
+	if not entity or entity\IsBase!
+		@SetActiveMode "erase"
+		return true
 	@PickupClue socket
 
 Editor.CanTargetSocket = (socket) =>
@@ -270,7 +363,8 @@ Editor.Undo = =>
 	@ExitTestMode! if @TestMode
 	ok, label = @Document\Undo!
 	if ok
-		@SyncCanvas!
+		@SyncCanvas false
+		@RefreshAppearanceControls! if @RefreshAppearanceControls
 		@ScheduleRecovery!
 		@SetStatus "Undo: #{label}", C.text
 
@@ -278,7 +372,8 @@ Editor.Redo = =>
 	@ExitTestMode! if @TestMode
 	ok, label = @Document\Redo!
 	if ok
-		@SyncCanvas!
+		@SyncCanvas false
+		@RefreshAppearanceControls! if @RefreshAppearanceControls
 		@ScheduleRecovery!
 		@SetStatus "Redo: #{label}", C.text
 
@@ -287,12 +382,25 @@ Editor.Redo = =>
 ----
 
 Editor.Save = (path, callback) =>
-	path or= @Document.currentPath
+	return @ShowSaveAs callback if @Document\IsReadOnly!
+	path or= @Document\GetPath!
 	return @ShowSaveAs callback unless path
 	ok, reason = @Document\Save path
 	if ok
 		@OpenedFile = path
-		@Document\WriteRecovery!
+		@Document\WriteRecovery true
+		@AddRecent path
+		@UpdateTitle!
+		@SetStatus "Saved #{path}", C.success
+	else @SetStatus reason, C.danger
+	callback ok if callback
+	ok
+
+Editor.SaveAs = (path, callback) =>
+	ok, reason = @Document\SaveAs path
+	if ok
+		@OpenedFile = path
+		@Document\WriteRecovery true
 		@AddRecent path
 		@UpdateTitle!
 		@SetStatus "Saved #{path}", C.success
@@ -307,7 +415,7 @@ Editor.ShowSaveAs = (callback) =>
 			return
 		name = string.StripExtension name
 		name = string.gsub name, "[^%w_%-]", "_"
-		Editor\Save "moonpanel/#{name}.txt", callback
+		Editor\SaveAs "moonpanel/#{name}.txt", callback
 	cancel = -> callback false if callback
 	Derma_StringRequest "Save Moonpanel", "Save relative to data/moonpanel:", "untitled",
 		accept, cancel, "Save", "Cancel"
@@ -323,10 +431,10 @@ Editor.WithDirtyGuard = (action) =>
 Editor.NewPanel = =>
 	@ExitTestMode! if @TestMode
 	@WithDirtyGuard ->
-		Editor.Document\Replace Moonpanel.Canvas.SampleData, resetHistory: true, markSaved: true, clearPath: true
+		Editor.Document\Replace Moonpanel.EditorDocument.FreshPanel!,
+			resetHistory: true, markSaved: true, clearPath: true
 		Editor\RefreshBrushValidity!
 		Editor\SyncCanvas!
-		Editor\ScheduleRecovery!
 		Editor\SetStatus "New panel", C.text
 
 Editor.OpenFile = (path) =>
@@ -342,8 +450,31 @@ Editor.OpenFile = (path) =>
 		Editor\RefreshBrushValidity!
 		Editor\AddRecent path
 		Editor\SyncCanvas!
-		Editor.Document\WriteRecovery!
 		Editor\SetStatus "Opened #{path}", C.success
+
+Editor.OpenBuiltIn = (id) =>
+	@ExitTestMode! if @TestMode
+	data, entry = Editor\LoadBuiltInPanel id
+	unless data
+		@SetStatus entry or "Could not read built-in panel", C.danger
+		return false
+	@WithDirtyGuard ->
+		with Editor
+			.Document\Replace data,
+				resetHistory: true
+				markSaved: true
+				clearPath: true
+				source: {
+					kind: "builtin"
+					id: entry.id
+					title: entry.title
+					category: entry.category
+				}
+			\RefreshBrushValidity!
+			\SyncCanvas!
+			\AddRecent "builtin:#{entry.id}"
+			\SetStatus "Opened built-in #{entry.title}", C.success
+	true
 
 Editor.ImportJsonDialog = =>
 	@ExitTestMode! if @TestMode
@@ -353,7 +484,7 @@ Editor.ImportJsonDialog = =>
 			Editor\SetStatus "Invalid JSON", C.danger
 			return
 		Editor\WithDirtyGuard ->
-			Editor.Document\Replace Moonpanel.Canvas.SanitizeData(raw), resetHistory: true, clearPath: true
+			Editor.Document\Replace raw, resetHistory: true, clearPath: true
 			Editor\RefreshBrushValidity!
 			Editor\SyncCanvas!
 			Editor\ScheduleRecovery!
@@ -379,24 +510,61 @@ Editor.AddRecent = (path) =>
 		table.remove @RecentFiles
 	cookie.Set "moonpanel_editor_recent", table.concat(@RecentFiles, "|") if cookie
 
+builtinRecentId = (entry) ->
+	candidate = string.sub(entry, 1, 8) == "builtin:" and string.sub(entry, 9) or entry
+	for builtin in *Editor\GetBuiltInPanels!
+		return builtin.id if candidate == builtin.id or
+			entry == "thewitness/#{builtin.id}" or
+			entry == "thewitness/#{builtin.id}.txt" or
+			entry == "data_static/moonpanel/presets/thewitness/#{builtin.id}.txt"
+	nil
+
 Editor.LoadRecent = =>
 	return if @RecentFiles
 	@RecentFiles = {}
 	stored = cookie and cookie.GetString("moonpanel_editor_recent", "") or ""
-	for path in string.gmatch stored, "[^|]+"
-		table.insert @RecentFiles, path if file.Exists path, "DATA"
+	for entry in string.gmatch stored, "[^|]+"
+		if id = builtinRecentId entry
+			table.insert @RecentFiles, "builtin:#{id}"
+		elseif file.Exists entry, "DATA"
+			table.insert @RecentFiles, entry
 
 Editor.UpdateDocuments = =>
 	return unless IsValid @DocumentList
 	@LoadRecent!
+	@RefreshBuiltInPanels! if @RefreshBuiltInPanels
 	@DocumentList\Clear!
 	recent = @DocumentList\AddNode "Recent"
-	for path in *@RecentFiles
-		with recent\AddNode string.StripExtension string.GetFileFromFilename path
-			.FilePath = path
-	with @DocumentList\AddNode "Saved panels"
-		\MakeFolder "moonpanel", "DATA", true
-		\SetExpanded true
+	styleDocumentNode recent
+	for entry in *@RecentFiles
+		if id = builtinRecentId entry
+			node = with recent\AddNode "thewitness/#{id}"
+				.BuiltInId = id
+				\SetIcon "icon16/page_white_star.png"
+			styleDocumentNode node
+		else
+			node = with recent\AddNode displayDocumentPath entry
+				.FilePath = entry
+				\SetIcon "icon16/page_white.png"
+			styleDocumentNode node
+	saved = @DocumentList\AddNode "Saved panels"
+	styleSavedNode saved
+	saved\MakeFolder "moonpanel", "DATA", true
+	saved\SetExpanded true
+	builtins = @GetBuiltInPanels!
+	if #builtins > 0
+		root = @DocumentList\AddNode "Built-in panels"
+		styleDocumentNode root
+		root\SetExpanded true
+		categoryNodes = {}
+		for entry in *builtins
+			unless categoryNodes[entry.category]
+				categoryNodes[entry.category] = root\AddNode entry.categoryTitle
+				styleDocumentNode categoryNodes[entry.category]
+			node = with categoryNodes[entry.category]\AddNode entry.title
+				.BuiltInId = entry.id
+				\SetIcon "icon16/page_white_star.png"
+			styleDocumentNode node
 
 ----
 -- Test mode
@@ -490,7 +658,7 @@ Editor.BuildTopBar = (parent) =>
 	with topButton parent, "Documents", (-> Editor\ToggleDocuments!), 92
 		\DockMargin 8, 4, 10, 4
 	topButton parent, "New", (-> Editor\NewPanel!), 52
-	topButton parent, "Save", (-> Editor\Save!), 56
+	@SaveButton = topButton parent, "Save", (-> Editor\Save!), 64
 	@UndoButton = topButton parent, "Undo", (-> Editor\Undo!), 58
 	@RedoButton = topButton parent, "Redo", (-> Editor\Redo!), 58
 
@@ -529,21 +697,51 @@ Editor.BuildDocuments = (parent) =>
 		\SetWrap true
 	row = with parent\Add "DPanel"
 		\Dock TOP
-		\DockMargin 8, 4, 8, 6
-		\SetTall 30
+		\DockMargin 10, 4, 10, 8
+		\SetTall 32
 		.Paint = nil
-	with styledButton row, "Import JSON", (-> Editor\ImportJsonDialog!), 104
-		\Dock LEFT
-	with styledButton row, "Windmill", (-> Editor\ShowWindmillImporter!), 86
-		\Dock LEFT
-	with styledButton row, "Refresh", (-> Editor\UpdateDocuments!), 76
-		\Dock RIGHT
+
+	importButton = with styledButton row, "Import", (-> Editor\ImportJsonDialog!)
+		.ActionTooltip = "Import a panel from JSON"
+	windmillButton = with styledButton row, "Windmill", (-> Editor\ShowWindmillImporter!)
+		.ActionTooltip = "Import a panel from The Witness or Windmill"
+	refreshButton = with styledButton row, "Refresh", (-> Editor\UpdateDocuments!)
+		.ActionTooltip = "Reload the document list"
+
+	with Editor
+		\AttachTextTooltip importButton, importButton.ActionTooltip
+		\AttachTextTooltip windmillButton, windmillButton.ActionTooltip
+		\AttachTextTooltip refreshButton, refreshButton.ActionTooltip
+
+	row.PerformLayout = (_, w, h) ->
+		gap = 6
+		buttonWidth = math.floor((w - gap * 2) / 3)
+		with importButton
+			\SetPos 0, 0
+			\SetSize buttonWidth, h
+		with windmillButton
+			\SetPos buttonWidth + gap, 0
+			\SetSize buttonWidth, h
+		with refreshButton
+			\SetPos (buttonWidth + gap) * 2, 0
+			\SetSize w - (buttonWidth + gap) * 2, h
+
 	@DocumentList = with parent\Add "DTree"
 		\Dock FILL
-		\DockMargin 6, 0, 6, 6
+		\DockMargin 10, 0, 10, 8
+		\SetLineHeight 24
+		\SetIndentSize 18
+		\SetPaintBackground false
+		.Paint = (_, w, h) ->
+			draw.RoundedBox 4, 0, 0, w, h, C.inset
+			surface.SetDrawColor C.border
+			surface.DrawOutlinedRect 0, 0, w - 1, h - 1
 		.DoClick = (_, node) ->
-			path = node.FilePath or (node.GetFileName and node\GetFileName!)
-			Editor\OpenFile path if path and path ~= ""
+			if node.BuiltInId
+				Editor\OpenBuiltIn node.BuiltInId
+			else
+				path = node.FilePath or (node.GetFileName and node\GetFileName!)
+				Editor\OpenFile path if path and path ~= ""
 
 ----
 -- Canvas
@@ -555,9 +753,8 @@ Editor.BuildCanvas = (parent) =>
 		surface.SetDrawColor 31, 36, 44, 180
 		surface.DrawLine x, 0, x, h for x = 0, w, 32
 		surface.DrawLine 0, y, w, y for y = 0, h, 32
-	@FrameCanvas = with parent\Add "DMoonCanvas"
+	@FrameCanvas = with parent\Add "DMoonCanvasEditor"
 		\GetCanvas!\SetSurfaceSpec @GetEffectiveSurfaceSpec(@Document\GetData!)
-		\SetPlayMode false
 		\ImportData @Document\GetData!
 		.DoEditorPress = (_, socket) -> Editor\CanvasPress socket
 		.DoEditorDrag = (_, socket) -> Editor\CanvasDrag socket
@@ -621,17 +818,18 @@ Editor.BuildBody = (parent) =>
 
 		if compact
 			panelWidth = documentsVisible and docWidth or sidebarWidth
+			canvasX = math.min panelWidth, w
 			Editor.FileDrawer\SetVisible documentsVisible
 			Editor.Sidebar\SetVisible not documentsVisible
-			Editor.CanvasHolder\SetPos 0, 0
-			Editor.CanvasHolder\SetSize w, h
+			Editor.CanvasHolder\SetPos canvasX, 0
+			Editor.CanvasHolder\SetSize math.max(1, w - canvasX), h
 			if documentsVisible
 				Editor.FileDrawer\SetPos 0, 0
-				Editor.FileDrawer\SetSize math.min(panelWidth, w), h
+				Editor.FileDrawer\SetSize canvasX, h
 				Editor.FileDrawer\MoveToFront!
 			else
 				Editor.Sidebar\SetPos 0, 0
-				Editor.Sidebar\SetSize math.min(panelWidth, w), h
+				Editor.Sidebar\SetSize canvasX, h
 				Editor.Sidebar\MoveToFront!
 		else
 			x = 0
@@ -661,8 +859,8 @@ Editor.Open = (surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) =>
 		return @Frame
 
 	document = @EnsureDocument!
-	data, loaded, metadata = document\LoadOnDemand!
-	@StoredDataLoaded, @CurrentData, @OpenedFile = true, data, document.currentPath
+	_, loaded, metadata = document\LoadOnDemand!
+	@OpenedFile = document\GetPath!
 
 	@InitBrushes!
 
@@ -687,6 +885,7 @@ Editor.Open = (surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) =>
 		.OnKeyCodePressed = (_, code) -> Editor\HandleKey code
 		.OnSizeChanged = -> timer.Create "Moonpanel Editor Layout Save", 0.4, 1, -> Editor\SaveLayoutCookies!
 		.OnClose = =>
+			Moonpanel.Net.SendEditorClosed!
 			Editor\ExitTestMode! if Editor.TestMode
 			Editor\CanvasRelease!
 			Editor\ScheduleRecovery! if Editor.Document and Editor.Document\IsDirty!
@@ -724,6 +923,6 @@ Editor.Open = (surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) =>
 Editor.BeginGesture = (label) =>
 	return if @GestureActive
 	@Document\BeginEdit label
-	@GestureActive, @GestureChanged = true, false
+	@GestureActive = true
 
-concommand.Add "moonpanel_editor", -> Moonpanel.Editor\Open!
+concommand.Add "moonpanel_editor", -> Moonpanel.Net.RequestEditorOpen!

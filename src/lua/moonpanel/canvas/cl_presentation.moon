@@ -61,12 +61,16 @@ class Moonpanel.Canvas.TracePresentation
 
 	setFocusHint: (focused, now = CurTime!) =>
 		focused = focused == true
-		return false if @focusHint == focused
-		@focusHint = focused
+		return false if @focusActive == focused
+		@focusActive = focused
 		if focused
-			@hintStartedAt = now
-			@lastScintCycle = -1
+			unless @focusHintConsumed
+				@focusHint = true
+				@hintStartedAt = now
+				@lastScintCycle = -1
 		else
+			@focusHint = false
+			@focusHintConsumed = false
 			@hintStartedAt = 0
 		true
 
@@ -80,10 +84,13 @@ class Moonpanel.Canvas.TracePresentation
 			}
 
 	reset: (reason = "reset") =>
+		focused = @focusActive == true
+		consumed = @focusHintConsumed == true
 		@attemptKey = nil
 		@startedAt = 0
 		@result = nil
 		@resultAt = 0
+		@resultScint = nil
 		@exitState = false
 		@exitFrom = 0
 		@exitTarget = 0
@@ -91,8 +98,10 @@ class Moonpanel.Canvas.TracePresentation
 		@queuedCues = {}
 		@firedCues = {}
 		@lastScintCycle = -1
-		@focusHint = false
-		@hintStartedAt = 0
+		@focusActive = focused
+		@focusHintConsumed = consumed
+		@focusHint = focused and not consumed
+		@hintStartedAt = @focusHint and CurTime! or 0
 		@lastResetReason = reason
 		true
 
@@ -108,6 +117,8 @@ class Moonpanel.Canvas.TracePresentation
 
 	beginAttempt: (attemptKey, now = CurTime!) =>
 		@reset "new-attempt"
+		@focusHintConsumed = @focusActive
+		@focusHint = false
 		@attemptKey = copyAttemptKey attemptKey
 		@startedAt = now
 		@exitChangedAt = now
@@ -136,14 +147,33 @@ class Moonpanel.Canvas.TracePresentation
 			table.insert @queuedCues, "PathCompleteStop"
 		true
 
+	getScintState: (startElapsed, starts = false) =>
+		return nil unless startElapsed >= 0.5
+		scintTime = startElapsed - 0.5
+		cycle = math.floor scintTime / 2
+		power = 0.75^cycle
+		return nil if power < 0.15
+		progress = (scintTime - cycle * 2) / 2
+		{
+			cycle: cycle
+			power: power
+			progress: progress
+			alpha: (1 - progress) * power
+			starts: starts == true
+		}
+
 	applyResult: (result = {}, now = CurTime!, elapsed = 0, silent = false) =>
+		resultElapsed = math.max 0, elapsed or 0
+		@resultAt = now - resultElapsed
+		@resultScint = nil
+		if @attemptKey
+			@resultScint = @getScintState @resultAt - @startedAt
 		@result = {
 			aborted: result.aborted == true
 			success: result.success == true
 			feedback: copyFeedback result.feedback
 			eventSerial: result.eventSerial or 0
 		}
-		@resultAt = now - math.max(0, elapsed or 0)
 		if @exitState
 			@exitFrom = @getExitBlend now
 			@exitTarget = 0
@@ -222,20 +252,17 @@ class Moonpanel.Canvas.TracePresentation
 
 		scintPending = not @result and startElapsed < 0.5
 		if not @result and startElapsed >= 0.5
-			scintTime = startElapsed - 0.5
-			cycle = math.floor scintTime / 2
-			cycleTime = scintTime - cycle * 2
-			scintPower = 0.75^cycle
-			scintPending = scintPower >= 0.15
-			if scintPower >= 0.15
-				frame.scint = scintPower
-				frame.scintPower = scintPower
-				frame.scintStarts = not @attemptKey
-				frame.scintProgress = cycleTime / 2
-				frame.scintAlpha = (1 - frame.scintProgress) * scintPower
+			scint = @getScintState startElapsed, not @attemptKey
+			scintPending = scint ~= nil
+			if scint
+				frame.scint = scint.power
+				frame.scintPower = scint.power
+				frame.scintStarts = scint.starts
+				frame.scintProgress = scint.progress
+				frame.scintAlpha = scint.alpha
 				frame.needsAnimation = true
-				if cycle ~= @lastScintCycle
-					@lastScintCycle = cycle
+				if scint.cycle ~= @lastScintCycle
+					@lastScintCycle = scint.cycle
 					table.insert @queuedCues, frame.scintStarts and "StartScint" or "Scint"
 
 		exitBlend = @getExitBlend now
@@ -251,6 +278,14 @@ class Moonpanel.Canvas.TracePresentation
 			return frame, @drainCues!
 
 		elapsed = math.max 0, now - @resultAt
+		if @resultScint and elapsed < 0.25
+			progress = math.min 1, @resultScint.progress + elapsed / 2
+			frame.scint = @resultScint.power
+			frame.scintPower = @resultScint.power
+			frame.scintProgress = progress
+			frame.scintAlpha = (1 - progress) * @resultScint.power *
+				(1 - smoothstep elapsed / 0.25)
+			frame.needsAnimation = frame.scintAlpha > 0
 		feedback = @result.feedback
 		hasEraser = #feedback.erasures > 0
 		errorPulse = (index) ->

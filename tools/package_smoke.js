@@ -75,9 +75,20 @@ function run() {
 		'lua/entities/moonpanel/init.lua',
 		'lua/entities/moonpanel/cl_init.lua',
 		'materials/moonpanel/common/color.png',
-		'sound/moonpanel/presets/default/panel_scint_endpoint.ogg',
+		'sound/moonpanel/presets/default/panel_scint_endpoint.wav',
 	];
 	for (const file of required) assert(paths.has(file), `Package is missing required runtime file: ${file}`);
+	const builtinPanels = files.filter((file) =>
+		file.path.startsWith('data_static/moonpanel/presets/thewitness/') &&
+		file.path.endsWith('.txt'));
+	assert(builtinPanels.length === 41,
+		`Built-in panel set is incomplete: expected 41 files, found ${builtinPanels.length}`);
+	for (const name of ['path_complete', 'presence', 'solving']) {
+		const file = files.find((entry) =>
+			entry.path === `sound/moonpanel/panel_${name}_loop.wav`);
+		assert(file && file.contents.includes(Buffer.from('smpl')),
+			`Looping sound is missing WAV loop points: ${name}`);
+	}
 	for (const file of paths) {
 		assert(!file.startsWith('test/'), `Generated test data leaked into the addon package: ${file}`);
 		assert(!file.endsWith('.moon'), `MoonScript source leaked into the addon package: ${file}`);
@@ -92,12 +103,14 @@ function run() {
 	const wire = read('lua/moonpanel/sv_wire.lua');
 	assert(/CreateInputs/.test(wire) && /TurnOff/.test(wire) && /Reset/.test(wire), 'Wire inputs are missing');
 	assert(/SolvedPulse/.test(wire) && /FailedPulse/.test(wire) && /Path/.test(wire), 'Wire outputs are missing');
-	assert(/panel\.ResetPanel and panel(?::|\\)ResetPanel/.test(wire), 'Wire reset bypasses the panel lifecycle API');
 	const entity = read('lua/entities/moonpanel/init.lua');
+	assert(/ResetPanel/.test(entity), 'Wire reset bypasses the panel lifecycle API');
 	assert(/WireDupeInfo/.test(entity) && /BuildDupeInfo/.test(entity) && /ApplyDupeInfo/.test(entity), 'Wire duplication metadata hooks are missing');
 	assert(/WireLib\.Restored/.test(entity), 'Wire map-restore hook is missing');
 	const e2 = read('lua/entities/gmod_wire_expression2/core/custom/moonpanel.lua');
-	assert(/RegisterExtension\("moonpanel"/.test(e2) && /moonpanelData/.test(e2), 'Moonpanel E2 extension is missing');
+	assert(/RegisterExtension\("moonpanel"/.test(e2) &&
+		/moonpanelPowered/.test(e2) && /moonpanelReset/.test(e2),
+		'Moonpanel E2 extension is missing its typed API');
 
 	const configuredGma = args.temporary ? null : (args.gma || process.env.MOONPANEL_GMA);
 	const configuredManifest = args.temporary ? null : (args.manifest || process.env.MOONPANEL_MANIFEST);

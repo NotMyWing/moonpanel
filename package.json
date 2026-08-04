@@ -18,16 +18,16 @@
     "rebuild": "gulp rebuild",
     "watch": "gulp watch",
     "clean": "gulp clean",
-    "package:gma": "npm run build && node tools/gma.js create --input dest --output artifacts/moonpanel.gma --manifest artifacts/moonpanel.manifest.json",
-    "package:zip": "npm run build && gulp packageZip",
+    "package:gma": "npm run rebuild && node tools/gma.js create --input dest --output artifacts/moonpanel.gma --manifest artifacts/moonpanel.manifest.json",
+    "package:zip": "npm run rebuild && gulp packageZip",
     "verify:package": "node tools/package_smoke.js --require-gma --gma artifacts/moonpanel.gma --manifest artifacts/moonpanel.manifest.json",
-    "test": "npm run build && node tools/sanity.js && node tools/package_smoke.js --temporary"
+    "test": "npm run rebuild && node tools/sanity.js && node tools/package_smoke.js --temporary"
   },
   "devDependencies": {
     "del": "^6.0.0",
     "gulp": "^4.0.2",
     "gulp-zip": "^5.0.2",
-    "luamin": "^1.0.4",
+    "lua-format": "^1.6.1-b",
     "through2": "^4.0.2"
   }
 }

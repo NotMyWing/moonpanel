@@ -1,8 +1,9 @@
 CANVAS = Moonpanel.Canvas.Canvas.__base
+CVars = Moonpanel.CVarNames
 
 VERIFIER_PROFILE = if CreateConVar
 	CreateConVar(
-		"moonpanel_verifier_profile",
+		CVars.VerifierProfile,
 		"0",
 		FCVAR_ARCHIVE,
 		"Print Moonpanel verifier timings and Eraser search counters.",
@@ -14,7 +15,7 @@ else
 
 VERIFIER_SLICE_MS = if CreateConVar
 	CreateConVar(
-		"moonpanel_verifier_slice_ms",
+		CVars.VerifierSliceMs,
 		"1",
 		FCVAR_ARCHIVE,
 		"Maximum verifier CPU time per coroutine slice in milliseconds.",
@@ -26,7 +27,7 @@ else
 
 VERIFIER_MAX_MS = if CreateConVar
 	CreateConVar(
-		"moonpanel_verifier_max_ms",
+		CVars.VerifierMaxMs,
 		"500",
 		FCVAR_ARCHIVE,
 		"Maximum total server CPU time allowed for one verifier evaluation.",
@@ -38,7 +39,7 @@ else
 
 VERIFIER_MAX_WORK = if CreateConVar
 	CreateConVar(
-		"moonpanel_verifier_max_work",
+		CVars.VerifierMaxWork,
 		"250000",
 		FCVAR_ARCHIVE,
 		"Maximum logical work units allowed for one verifier evaluation.",
@@ -57,7 +58,7 @@ Moonpanel.Canvas.VerifierState or= {
 acquireVerifier = (canvas) ->
 	return true unless SERVER
 	state = Moonpanel.Canvas.VerifierState
-	player = canvas.__playData and canvas.__playData.controller
+	player = canvas\GetAttemptController!
 	return false unless IsValid(player) and player\IsPlayer!
 	return false if state.activeByCanvas[canvas] or state.activeByPlayer[player]
 	return false if state.total >= 2
@@ -113,13 +114,15 @@ printVerifierProfile = (report, budget = nil) ->
 		" states=", tostring counters.eraserStatesExplored or 0
 		" pruned=", tostring counters.prunedEraserStates or 0
 		" branches=", tostring counters.eraserBranches or 0
-		" pruned_branches=", tostring counters.prunedEraserBranches or 0
-		" duplicates=", tostring counters.duplicateEraserStates or 0
 		" depth=", tostring counters.maxRecursiveDepth or 0
 		" revalidations=", tostring counters.fullRegionRevalidations or 0
 		" poly_calls=", tostring counters.polyominoSolverCalls or 0
 		" poly_hits=", tostring counters.polyominoCacheHits or 0
 		" poly_misses=", tostring counters.polyominoCacheMisses or 0
+		" report_cache=", tostring counters.exactReportCacheHits or 0
+		" facts_cache=", tostring counters.traceFactsCacheHits or 0
+		" persistent_poly=", tostring counters.polyominoPersistentCacheHits or 0
+		" persistent_eraser=", tostring counters.eraserPersistentCacheHits or 0
 		" work=", tostring(budget and budget.total or 0)
 		" yields=", tostring(budget and budget.yields or 0)
 		" slice_ms=", milliseconds(budget and budget.sliceSeconds or 0)
@@ -162,22 +165,6 @@ CANVAS.SolutionCoroutineThink = =>
 	if coroutine.status(@__solutionCoroutine) == "dead"
 		@__solutionCoroutine = nil
 
-CANVAS.BuildSolutionContext = =>
-	return unless @__pathFinder and @__ruleDefinition
-	snapshot = @__pathFinder\snapshot!
-	facts = Moonpanel.Canvas.RuleEngine.BuildFacts @__ruleDefinition, snapshot
-	facts.traceHash = @__pathFinder\hash!
-	facts
-
-CANVAS.ValidateSolution = (context, options = {}) =>
-	return unless context and context.definition
-	options.traceHash or= context.traceHash
-	profile = verifierProfilingEnabled!
-	options.developmentProfile = true if profile and options.developmentProfile == nil
-	report = Moonpanel.Canvas.RuleEngine.Evaluate context.definition, context.snapshot, options
-	printVerifierProfile report if profile
-	report
-
 CANVAS.CreateSolutionCoroutine = =>
 	return if not @__playData or not @__playData.endTime
 	return unless @__pathFinder and @__ruleDefinition
@@ -206,6 +193,7 @@ CANVAS.CreateSolutionCoroutine = =>
 		}
 		report = Moonpanel.Canvas.RuleEngine.Evaluate @__ruleDefinition, snapshot, {
 			:traceHash
+			cache: @__ruleCache
 			checkpoint: (amount) -> budget\checkpoint amount
 			developmentProfile: profile
 		}
@@ -219,7 +207,6 @@ CANVAS.CreateSolutionCoroutine = =>
 			else
 				print message
 		@__lastRuleReport = report
-		@__solutionData = Moonpanel.Canvas.RuleEngine.BuildFacts @__ruleDefinition, snapshot
 
 		feedback = Moonpanel.Canvas.RuleEngine.FeedbackManifest report
 
@@ -229,14 +216,3 @@ CANVAS.CreateSolutionCoroutine = =>
 			:feedback
 			ruleReport: report
 		}
-
-CANVAS.IsTraced = (socket) =>
-	return unless @__solutionData and socket
-	index = @GetSocketDataIndex socket
-	index and @__solutionData.traced[index]
-
-CANVAS.GetAreaNum = (socket) =>
-	return unless @__solutionData and socket
-	index = @GetSocketDataIndex socket
-	faceId = @__ruleDefinition and @__ruleDefinition.faceBySocket[index]
-	faceId and @__solutionData.regionByFace[faceId]

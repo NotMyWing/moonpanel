@@ -2,61 +2,68 @@ receive = Moonpanel.Net.Receive
 flowTypes = Moonpanel.Net.FlowTypes
 startFlow = Moonpanel.Net.StartFlow
 
+applyTraceSamples = (canvas, samples, controller = nil) ->
+	for sample in *samples
+		canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
+			controller, sample.constraints
+
 Moonpanel.Net.PendingPanelDataRequests or= {}
 -- Predicted sessions never survive addon reload. Keeping this table through
 -- autoreload can make InputMouseApply consume the player's camera forever.
 Moonpanel.Net.TraceSessions = {}
-Moonpanel.Net.PendingTraceStarts = {}
+pendingTraceStarts = {}
+CVars = Moonpanel.CVarNames
 
-Moonpanel.Net.SyncClickerState = ->
+Moonpanel.Net.SyncClickerState = (focused = nil) ->
 	ply = LocalPlayer!
 	return unless IsValid ply
-	focused = Moonpanel\IsFocused ply
-	predictedControl = if Moonpanel.GetPredictedControl
-		Moonpanel\GetPredictedControl ply
-	else
-		nil
+	focused = Moonpanel\IsFocused(ply) if focused == nil
+	predictedControl = Moonpanel\GetPredictedControl ply
 	activeGame = IsEntity(predictedControl) and IsValid(predictedControl) and
 		predictedControl.Moonpanel
 	gui.EnableScreenClicker focused and not activeGame
 
-serverAuthoritativeTrace = CreateClientConVar "moonpanel_server_authoritative_trace", "0", true, false,
+serverAuthoritativeTrace = CreateClientConVar CVars.ServerAuthoritativeTrace, "0", true, false,
 	"Disable clientside trace prediction and display server updates only"
 
 Moonpanel.IsServerAuthoritativeTrace = => serverAuthoritativeTrace\GetBool!
 
 validPanel = (panel) ->
-	IsValid(panel) and panel.Moonpanel and panel.GetCanvas and
-	panel.IsSynchonized and panel\IsSynchonized!
+	IsValid(panel) and panel.Moonpanel and panel\IsSynchronized!
 
-Moonpanel.Net.ClearTraceSession = (panel) ->
-	if session = Moonpanel.Net.TraceSessions[panel]
-		if session.controller == LocalPlayer! and Moonpanel.EndPillarOrbit
-			Moonpanel\EndPillarOrbit LocalPlayer!
+localSession = (panel) ->
+	session = Moonpanel.Net.TraceSessions[panel]
+	return unless session and session.controller == LocalPlayer!
+	session
+
+releaseSession = (panel) ->
+	session = Moonpanel.Net.TraceSessions[panel]
+	Moonpanel\EndPillarOrbit LocalPlayer! if session and
+		session.controller == LocalPlayer!
 	Moonpanel.Net.TraceSessions[panel] = nil
-	Moonpanel.Net.PendingTraceStarts[panel] = nil
-	if IsValid(panel)
-		panel\SetController game.GetWorld! if panel.SetController
+	panel\SetController game.GetWorld! if IsValid panel
 	Moonpanel.Net.SyncClickerState!
+
+clearTraceSession = (panel) ->
+	releaseSession panel
+	pendingTraceStarts[panel] = nil
 	true
 
-Moonpanel.Net.PredictTraceStart = (panel, x, y) ->
+predictTraceStart = (panel, x, y) ->
 	return false if Moonpanel\IsServerAuthoritativeTrace!
 	return false unless validPanel panel
 
 	existingSession = Moonpanel.Net.TraceSessions[panel]
 	if existingSession
 		return false unless existingSession.terminal
-		Moonpanel.Net.ClearTraceSession panel
+		clearTraceSession panel
 
 	return false if Moonpanel.Net.TraceSessions[panel] or
-		Moonpanel.Net.PendingTraceStarts[panel]
+		pendingTraceStarts[panel]
 
 	ply = LocalPlayer!
 	canvas = panel\GetCanvas!
-	pathfinder = canvas and canvas\GetPathFinder!
-
-	return false unless IsValid(ply) and canvas and pathfinder
+	return false unless IsValid(ply) and canvas
 	return false unless ply\Alive! and Moonpanel\IsFocused ply
 	return false unless panel\GetPowered!
 
@@ -68,26 +75,22 @@ Moonpanel.Net.PredictTraceStart = (panel, x, y) ->
 	return false if compatibility and not compatibility.playable
 
 	phases = Moonpanel.Canvas.TraceEngine.Phase
-	return false unless pathfinder.phase == phases.Idle or
-		pathfinder.phase == phases.Feedback
+	phase = canvas\GetTracePhase!
+	return false unless phase == phases.Idle or phase == phases.Feedback
 
 	node = canvas\FindStartNode x, y, 32
 	return false unless node
 
-	oldSnapshot = pathfinder\snapshot!
+	oldSnapshot = canvas\GetTraceSnapshot!
 	oldPlayData = canvas\GetPlayDataSnapshot!
 	return false unless canvas\Start ply, node.id
 
-	pathfinder = canvas\GetPathFinder!
-	return false unless pathfinder
-
-	ruleDefinition = canvas\GetRuleDefinition!
 	currentTime = RealTime!
 
 	Moonpanel.Net.TraceSessions[panel] = {
 		id: 0
-		revision: pathfinder.topology.revision
-		ruleRevision: ruleDefinition and ruleDefinition.ruleRevision or 0
+		revision: canvas\GetTraceRevision!
+		ruleRevision: canvas\GetRuleRevision! or 0
 		controller: ply
 		nextSequence: 0
 		pending: {}
@@ -100,7 +103,7 @@ Moonpanel.Net.PredictTraceStart = (panel, x, y) ->
 		nextFlush: currentTime + 0.05
 	}
 
-	Moonpanel.Net.PendingTraceStarts[panel] = {
+	pendingTraceStarts[panel] = {
 		nodeId: node.id
 		snapshot: oldSnapshot
 		playData: oldPlayData
@@ -118,24 +121,24 @@ newerSerial = (value, previous) ->
 Moonpanel.Net.PanelRequestControl = (entity, x = 0, y = 0) ->
 	requestX = math.Clamp math.Round(x), 0, 65535
 	requestY = math.Clamp math.Round(y), 0, 65535
-	Moonpanel.Net.PredictTraceStart entity, requestX, requestY
+	predictTraceStart entity, requestX, requestY
 	startFlow flowTypes.PanelRequestControl
 	net.WriteEntity entity
 	net.WriteUInt requestX, 16
 	net.WriteUInt requestY, 16
-	sensitivity = GetConVar("moonpanel_trace_sensitivity")
+	sensitivity = GetConVar(CVars.TraceSensitivity)
 	net.WriteUInt math.Clamp(math.Round(
 		(sensitivity and sensitivity\GetFloat! or 1) * 1000), 50, 8000), 14
-	gamepadSensitivity = GetConVar("moonpanel_gamepad_sensitivity")
+	gamepadSensitivity = GetConVar(CVars.GamepadSensitivity)
 	net.WriteUInt math.Clamp(math.Round(
 		(gamepadSensitivity and gamepadSensitivity\GetFloat! or 1) * 1000), 50, 8000), 14
-	deadzone = GetConVar("moonpanel_gamepad_deadzone")
+	deadzone = GetConVar(CVars.GamepadDeadzone)
 	net.WriteUInt math.Clamp(math.Round(
 		(deadzone and deadzone\GetFloat! or 0.16) * 1000), 0, 950), 10
 	net.SendToServer!
 
 Moonpanel.Net.PanelRequestData = (panel, callback, force = false) ->
-	return false unless IsValid(panel) and panel.Moonpanel and panel.GetCanvas
+	return false unless IsValid(panel) and panel.Moonpanel
 	request = Moonpanel.Net.PendingPanelDataRequests[panel]
 	unless istable request
 		request = {
@@ -161,7 +164,7 @@ Moonpanel.Net.PanelRequestData = (panel, callback, force = false) ->
 Moonpanel.Net.MaintainPanelDataRequests = ->
 	return unless Moonpanel.Initialized
 	for panel in pairs Moonpanel.Net.PendingPanelDataRequests
-		if not IsValid(panel) or not panel.Moonpanel or not panel.GetCanvas
+		if not IsValid(panel) or not panel.Moonpanel
 			Moonpanel.Net.PendingPanelDataRequests[panel] = nil
 			continue
 		canvas = panel\GetCanvas!
@@ -172,8 +175,8 @@ Moonpanel.Net.MaintainPanelDataRequests = ->
 
 Moonpanel.Net.QueueTraceSample = (panel, xQ, yQ, boost = false,
 	constraintDecisions = {}, commandNumber = 0) ->
-	session = Moonpanel.Net.TraceSessions[panel]
-	return false unless session and session.controller == LocalPlayer!
+	session = localSession panel
+	return false unless session
 
 	session.nextSequence += 1
 	constraints = {}
@@ -187,20 +190,20 @@ Moonpanel.Net.QueueTraceSample = (panel, xQ, yQ, boost = false,
 		boost: boost == true
 		commandNumber: math.max 0, math.floor commandNumber or 0
 		hash: if Moonpanel\IsServerAuthoritativeTrace! then 0 else
-			panel\GetCanvas!\GetPathFinder!\hash!
+			panel\GetCanvas!\GetTraceHash!
 		:constraints
 	}
 	table.insert session.pending, sample
 	table.insert session.unsent, sample
 	true
 
-Moonpanel.Net.FlushTraceSamples = (panel) ->
-	session = Moonpanel.Net.TraceSessions[panel]
-	return unless session and session.controller == LocalPlayer!
+flushTraceSamples = (panel) ->
+	session = localSession panel
+	return unless session
 	return if session.provisional
 	return if #session.unsent == 0
 
-	count = math.min 12, #session.unsent
+	count = math.min Moonpanel.Net.TraceBatchMax, #session.unsent
 	first = session.unsent[1]
 	startFlow flowTypes.TraceInputBatch
 	net.WriteEntity panel
@@ -208,16 +211,7 @@ Moonpanel.Net.FlushTraceSamples = (panel) ->
 	net.WriteUInt session.revision, 32
 	net.WriteUInt session.ruleRevision or 0, 32
 	net.WriteUInt first.sequence, 32
-	net.WriteUInt count, 4
-	for i = 1, count
-		sample = session.unsent[i]
-		net.WriteInt sample.xQ, 16
-		net.WriteInt sample.yQ, 16
-		net.WriteBool sample.boost
-		net.WriteUInt sample.commandNumber or 0, 32
-		net.WriteUInt #sample.constraints, 2
-		for decision in *sample.constraints
-			net.WriteUInt decision, 32
+	Moonpanel.Net.WriteTraceSamples session.unsent, count
 	net.WriteUInt session.unsent[count].hash, 32
 	net.SendToServer!
 
@@ -226,19 +220,19 @@ Moonpanel.Net.FlushTraceSamples = (panel) ->
 	session.nextFlush = RealTime! + 0.05
 
 Moonpanel.Net.SendTraceAction = (panel, action) ->
-	session = Moonpanel.Net.TraceSessions[panel]
-	return false unless session and session.controller == LocalPlayer!
+	session = localSession panel
+	return false unless session
 	if session.provisional
 		session.pendingAction = action
 		Moonpanel.Net.SyncClickerState!
 		return true
-	if session.controller == LocalPlayer! and not session.terminal
+	if not session.terminal
 		session.terminal = true
 		session.visualApplied = true
 		session.aborted = action == 0
 	Moonpanel.Net.SyncClickerState!
 	while #session.unsent > 0
-		Moonpanel.Net.FlushTraceSamples panel
+		flushTraceSamples panel
 	startFlow flowTypes.TraceAction
 	net.WriteEntity panel
 	net.WriteUInt session.id, 32
@@ -248,10 +242,7 @@ Moonpanel.Net.SendTraceAction = (panel, action) ->
 	net.WriteUInt action, 2
 	net.SendToServer!
 	unless Moonpanel\IsServerAuthoritativeTrace!
-		if action == 1
-			panel\GetCanvas!\End false
-		else
-			panel\GetCanvas!\End true
+		panel\GetCanvas!\End action ~= 1
 	true
 
 Moonpanel.Net.SendFocusExit = ->
@@ -262,41 +253,35 @@ hook.Add "Think", "TheMP Trace Network", ->
 	now = RealTime!
 	for panel, session in pairs Moonpanel.Net.TraceSessions
 		unless validPanel panel
-			if session.controller == LocalPlayer! and Moonpanel.EndPillarOrbit
-				Moonpanel\EndPillarOrbit LocalPlayer!
-			Moonpanel.Net.TraceSessions[panel] = nil
+			releaseSession panel
 			continue
+		canvas = nil
+		if session.observer
+			canvas = panel\GetCanvas!
+			unless canvas
+				releaseSession panel
+				continue
 
 		if session.controller == LocalPlayer! and not session.provisional and
 				#session.unsent > 0 and
 				now >= session.nextFlush
-			Moonpanel.Net.FlushTraceSamples panel
+			flushTraceSamples panel
 
 		if session.observer
-			canvas = panel\GetCanvas!
-			follower = canvas\GetObserverFollower!
-			while session.presentationEvents[1] and follower and
-					follower\hasReached session.presentationEvents[1].sequence
+			while session.presentationEvents[1] and
+					canvas\HasObserverReached session.presentationEvents[1].sequence
 				event = table.remove session.presentationEvents, 1
 				canvas\SetPresentationExit event.exitPath
-			if session.visualResult and follower and
-					follower\hasReached session.visualResult.finalSequence
+			if session.visualResult and
+					canvas\HasObserverReached session.visualResult.finalSequence
 				canvas\ApplyVisualResult session.visualResult
 				session.visualApplied = true
 				session.visualResult = nil
-			if session.terminal and session.visualApplied
-				pathfinder = canvas\GetPathFinder!
-				pathfinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback if pathfinder
+		if session.terminal and session.visualApplied
+			if session.observer
+				canvas\SetTraceFeedback!
 				canvas\SetObserverFollower nil
-				Moonpanel.Net.SyncClickerState!
-				Moonpanel.Net.TraceSessions[panel] = nil
-				panel\SetController game.GetWorld!
-		elseif session.controller == LocalPlayer! and session.terminal and session.visualApplied
-			Moonpanel.Net.TraceSessions[panel] = nil
-			panel\SetController game.GetWorld!
-			Moonpanel.Net.SyncClickerState!
-
-	Moonpanel.Net.SyncClickerState!
+			releaseSession panel
 
 receive flowTypes.TraceControlGrant, ->
 	panel = net.ReadEntity!
@@ -308,58 +293,33 @@ receive flowTypes.TraceControlGrant, ->
 	lastSequence = net.ReadUInt 32
 	snapshot = net.ReadTable!
 	orbitSeed = net.ReadBool! and net.ReadTable! or nil
-	pathfinder = panel\GetCanvas!\GetPathFinder!
-	definition = panel\GetCanvas!\GetRuleDefinition!
-	return unless pathfinder and revision == pathfinder.topology.revision
-	return unless definition and ruleRevision == definition.ruleRevision
+	canvas = panel\GetCanvas!
+	return unless revision == canvas\GetTraceRevision!
+	return unless ruleRevision == canvas\GetRuleRevision!
 	existing = Moonpanel.Net.TraceSessions[panel]
 	provisional = existing and existing.provisional and existing.controller == LocalPlayer!
 	provisionalSamples = provisional and existing.unsent or nil
 	provisionalAction = provisional and existing.pendingAction or nil
 	if existing and existing.id == sessionId
 		if controller ~= LocalPlayer! or Moonpanel\IsServerAuthoritativeTrace!
-			oldExitPath = pathfinder\isExitPath!
-			pathfinder\restore snapshot
-			follower = panel\GetCanvas!\GetObserverFollower!
-			unless follower
-				follower = Moonpanel.Canvas.ObserverTraceFollower pathfinder.topology
-				follower\reset snapshot, true, lastSequence
-				panel\GetCanvas!\SetObserverFollower follower
-			else
-				follower\setTarget snapshot, lastSequence
+			oldExitPath = canvas\IsExitPath!
+			canvas\ApplyObserverSnapshot snapshot, lastSequence
 			existing.serverSequence = lastSequence
-			existing.serverHash = pathfinder\hash!
-			if oldExitPath ~= pathfinder\isExitPath!
+			existing.serverHash = canvas\GetTraceHash!
+			if oldExitPath ~= canvas\IsExitPath!
 				table.insert existing.presentationEvents, {
 					sequence: lastSequence
-					exitPath: pathfinder\isExitPath!
+					exitPath: canvas\IsExitPath!
 				}
 		return
-	if existing and not provisional and existing.controller == LocalPlayer! and Moonpanel.EndPillarOrbit
+	if existing and not provisional and existing.controller == LocalPlayer!
 		Moonpanel\EndPillarOrbit LocalPlayer!
-	return unless pathfinder\restore snapshot
-	canvas = panel\GetCanvas!
 	importedPlay = canvas\GetPlayDataSnapshot!
 	lateJoin = lastSequence > 0 or importedPlay and
 		importedPlay.sessionId == sessionId
-	canvas\SetPlayData {
-		startTime: lateJoin and importedPlay and importedPlay.startTime or CurTime!
-		endTime: lateJoin and importedPlay and importedPlay.endTime or nil
-		:controller
-		touchingExit: snapshot.touchingExit == true
-		sessionId: sessionId
-	}
-	unless provisional
-		canvas\BeginPresentation { :sessionId, :revision }, lateJoin
-	canvas\SetPresentationExit pathfinder\isExitPath!, lateJoin
-
-	local follower
-	if controller ~= LocalPlayer! or Moonpanel\IsServerAuthoritativeTrace!
-		follower = Moonpanel.Canvas.ObserverTraceFollower pathfinder.topology
-		follower\reset snapshot, true, lastSequence
-		canvas\SetObserverFollower follower
-	else
-		canvas\SetObserverFollower nil
+	observer = controller ~= LocalPlayer! or Moonpanel\IsServerAuthoritativeTrace!
+	canvas\ImportTraceSession controller, sessionId, revision, snapshot,
+		lastSequence, lateJoin, observer, importedPlay, not provisional
 
 	Moonpanel.Net.TraceSessions[panel] = {
 		id: sessionId
@@ -372,33 +332,25 @@ receive flowTypes.TraceControlGrant, ->
 		observer: controller ~= LocalPlayer! or Moonpanel\IsServerAuthoritativeTrace!
 		serverSequence: lastSequence
 		presentationEvents: {}
-		:follower
 		nextFlush: RealTime! + 0.05
 	}
 	if panel.MoonpanelPillar and controller == LocalPlayer!
 		unless Moonpanel\BeginPillarOrbit panel, controller, sessionId, orbitSeed
-			Moonpanel.Net.TraceSessions[panel] = nil
-			panel\SetController game.GetWorld!
+			releaseSession panel
 			Moonpanel.Net.SendFocusExit!
 			return
 	elseif controller == LocalPlayer! and Moonpanel.PillarFocusAngles
 		Moonpanel.PillarFocusAngles[controller] = nil
 	panel\SetController controller
 	Moonpanel.Net.SyncClickerState!
-	playData = canvas\GetPlayDataSnapshot!
-	playData.controller = controller
-	canvas\SetPlayData playData
-	Moonpanel.Net.SyncClickerState!
 	if provisional
-		for sample in *provisionalSamples
-			canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
-				controller, sample.constraints
+		applyTraceSamples canvas, provisionalSamples, controller
 		sequenceIndex = 1
 		for sample in *Moonpanel.Net.TraceSessions[panel].unsent
-			sample.hash = pathfinder\hash!
+			sample.hash = canvas\GetTraceHash!
 			Moonpanel.Net.TraceSessions[panel].pending[sequenceIndex].hash = sample.hash
 			sequenceIndex += 1
-		Moonpanel.Net.PendingTraceStarts[panel] = nil
+		pendingTraceStarts[panel] = nil
 		if provisionalAction
 			Moonpanel.Net.TraceSessions[panel].pendingAction = nil
 			Moonpanel.Net.SendTraceAction panel, provisionalAction
@@ -406,22 +358,20 @@ receive flowTypes.TraceControlGrant, ->
 receive flowTypes.TraceControlReject, ->
 	panel = net.ReadEntity!
 	reason = net.ReadUInt 4
-	return unless panel and panel.Moonpanel and panel\GetCanvas!
+	return unless IsValid(panel) and panel.Moonpanel
 	session = Moonpanel.Net.TraceSessions[panel]
-	pending = Moonpanel.Net.PendingTraceStarts[panel]
+	pending = pendingTraceStarts[panel]
 	return unless pending
 	if session and not session.provisional
-		Moonpanel.Net.PendingTraceStarts[panel] = nil
+		pendingTraceStarts[panel] = nil
 		return
 	return unless session and session.provisional
 	canvas = panel\GetCanvas!
-	pathfinder = canvas\GetPathFinder!
 	canvas\ResetRuntime "start-rejected"
-	pathfinder\restore pending.snapshot if pending.snapshot
+	canvas\RestoreTraceSnapshot pending.snapshot if pending.snapshot
 	canvas\SetPlayData pending.playData or {}
-	canvas\SetPresentationExit pathfinder\isExitPath!, true
-	Moonpanel.Net.ClearTraceSession panel
-	Moonpanel.Net.SyncClickerState!
+	canvas\SetPresentationExit canvas\IsExitPath!, true
+	clearTraceSession panel
 	MsgC Color(255, 150, 80), "[Moonpanel] predicted trace start rejected (reason ",
 		tostring(reason), ")\n"
 
@@ -431,38 +381,17 @@ receive flowTypes.TraceObserverAdvance, ->
 	session = Moonpanel.Net.TraceSessions[panel]
 	sessionId = net.ReadUInt 32
 	firstSequence = net.ReadUInt 32
-	count = net.ReadUInt 4
-	samples = {}
-	invalidConstraints = false
-	for i = 1, count
-		xQ = net.ReadInt 16
-		yQ = net.ReadInt 16
-		boost = net.ReadBool!
-		commandNumber = net.ReadUInt 32
-		constraintCount = net.ReadUInt 2
-		invalidConstraints = true if constraintCount > 2
-		constraints = {}
-		for decision = 1, constraintCount
-			table.insert constraints, net.ReadUInt 32
-		table.insert samples, { :xQ, :yQ, :boost, :commandNumber, :constraints }
+	samples, count, malformed = Moonpanel.Net.ReadTraceSamples!
 	serverHash = net.ReadUInt 32
 	return unless session and session.id == sessionId
 	isLocalController = session.controller == LocalPlayer!
 	return if isLocalController and not Moonpanel\IsServerAuthoritativeTrace!
-	return unless count > 0 and count <= 12
-	return if invalidConstraints
+	return if malformed
 	return unless firstSequence == session.serverSequence + 1
 
 	canvas = panel\GetCanvas!
-	pathfinder = canvas\GetPathFinder!
-	oldExitPath = pathfinder\isExitPath!
-	for sample in *samples
-		if isLocalController and not Moonpanel\IsServerAuthoritativeTrace!
-			canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
-				nil, sample.constraints
-		else
-			pathfinder\applySample sample.xQ, sample.yQ, sample.boost,
-				nil, sample.constraints
+	oldExitPath = canvas\IsExitPath!
+	applyTraceSamples canvas, samples, nil
 	finalSequence = firstSequence + count - 1
 	session.serverSequence = finalSequence
 	session.serverHash = serverHash
@@ -470,10 +399,10 @@ receive flowTypes.TraceObserverAdvance, ->
 		while session.pending[1] and session.pending[1].sequence <= finalSequence
 			table.remove session.pending, 1
 		unless Moonpanel\IsServerAuthoritativeTrace!
-			return unless pathfinder\hash! == serverHash
+			return unless canvas\GetTraceHash! == serverHash
 			return
 	else
-		clientHash = pathfinder\hash!
+		clientHash = canvas\GetTraceHash!
 		if clientHash ~= serverHash
 			MsgC Color(255, 120, 40),
 				"[Moonpanel] observer trace desync: session ",
@@ -481,13 +410,12 @@ receive flowTypes.TraceObserverAdvance, ->
 				" client ", tostring(clientHash), " server ",
 				tostring(serverHash), " revision ", tostring(session.revision), "\n"
 			return
-	if oldExitPath ~= pathfinder\isExitPath!
+	if oldExitPath ~= canvas\IsExitPath!
 		table.insert session.presentationEvents, {
 			sequence: finalSequence
-			exitPath: pathfinder\isExitPath!
+			exitPath: canvas\IsExitPath!
 		}
-	if follower = canvas\GetObserverFollower!
-		follower\setTarget pathfinder\snapshot!, finalSequence
+	canvas\ApplyObserverSnapshot canvas\GetTraceSnapshot!, finalSequence
 
 receive flowTypes.TraceAck, ->
 	panel = net.ReadEntity!
@@ -508,12 +436,11 @@ receive flowTypes.TraceResyncSnapshot, ->
 	snapshot = net.ReadTable!
 	session = Moonpanel.Net.TraceSessions[panel]
 	return unless session and session.id == sessionId and validPanel(panel)
-	pathfinder = panel\GetCanvas!\GetPathFinder!
-	clientHash = pathfinder\hash!
-	return unless pathfinder\restore snapshot
+	canvas = panel\GetCanvas!
+	clientHash = canvas\GetTraceHash!
+	return unless canvas\RestoreTraceSnapshot snapshot
 	session.serverSequence = lastSequence
-	if Moonpanel.PillarController and Moonpanel.PillarController.ClearCommands and
-			session.controller == LocalPlayer!
+	if session.controller == LocalPlayer!
 		Moonpanel.PillarController.ClearCommands LocalPlayer!
 
 	if Moonpanel\IsServerAuthoritativeTrace! and session.controller == LocalPlayer!
@@ -525,11 +452,10 @@ receive flowTypes.TraceResyncSnapshot, ->
 			if sample.sequence > lastSequence
 				table.insert replay, sample
 		for sample in *replay
-			pathfinder\applySample sample.xQ, sample.yQ, sample.boost,
+			canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
 				session.controller, sample.constraints
-			sample.hash = pathfinder\hash!
+			sample.hash = canvas\GetTraceHash!
 		session.pending = replay
-	panel\GetCanvas!\MarkRenderDirty! if panel\GetCanvas!\MarkRenderDirty
 	MsgC Color(255, 160, 40), "[Moonpanel] prediction recovery: session ",
 		tostring(sessionId), " sequence ", tostring(lastSequence), " client ",
 		tostring(clientHash), " server ", tostring(serverHash), " revision ",
@@ -540,34 +466,28 @@ receive flowTypes.TraceResult, ->
 	sessionId = net.ReadUInt 32
 	aborted = net.ReadBool!
 	if session = Moonpanel.Net.TraceSessions[panel]
-		if session.id == sessionId
-			if session.controller == LocalPlayer!
-				Moonpanel\EndPillarOrbit LocalPlayer! if Moonpanel.EndPillarOrbit
-				pathfinder = panel\GetCanvas!\GetPathFinder! if validPanel panel
-				if pathfinder
-					if aborted
-						pathfinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback
-					elseif not Moonpanel\IsServerAuthoritativeTrace! and
-						pathfinder.phase == Moonpanel.Canvas.TraceEngine.Phase.Tracing
-						pathfinder\beginEvaluation!
-				panel\SetController game.GetWorld! if validPanel panel
-				Moonpanel.Net.SyncClickerState!
-			Moonpanel.Net.PendingTraceStarts[panel] = nil
-			session.terminal = true
-			session.aborted = aborted
-			session.visualApplied = true if session.controller == LocalPlayer!
-			if session.controller ~= LocalPlayer!
+			if session.id == sessionId
+				Moonpanel\EndPillarOrbit LocalPlayer! if session.controller == LocalPlayer!
+				canvas = panel\GetCanvas! if validPanel panel
+			if canvas
+				if aborted
+					canvas\SetTraceFeedback!
+				elseif not Moonpanel\IsServerAuthoritativeTrace! and
+					canvas\GetTracePhase! == Moonpanel.Canvas.TraceEngine.Phase.Tracing
+					canvas\BeginTraceEvaluation!
+				pendingTraceStarts[panel] = nil
 				session.terminal = true
 				session.aborted = aborted
+				session.visualApplied = true if session.controller == LocalPlayer!
 	Moonpanel.Net.SyncClickerState!
 
 receive flowTypes.PanelRequestDataFromPlayer, ->
 	entity = net.ReadEntity!
-	return unless IsValid(entity) and entity.Moonpanel and entity.GetCanvas
+	return unless IsValid(entity) and entity.Moonpanel
 	data = if Moonpanel.Editor and Moonpanel.Editor.GetCurrentData
 		Moonpanel.Editor\GetCurrentData!
 	else
-		Moonpanel.Canvas.SampleData
+		Moonpanel.EditorDocument.FreshPanel!
 	json = Moonpanel.Canvas.SerializeData data
 	compressed = util.Compress json
 	return unless compressed
@@ -584,8 +504,8 @@ receive flowTypes.PanelRequestData, ->
 	return unless istable data
 	request = Moonpanel.Net.PendingPanelDataRequests[panel]
 	Moonpanel.Net.PendingPanelDataRequests[panel] = nil
-	canvas = panel\GetCanvas! if panel.Moonpanel and panel.GetCanvas
-	return unless canvas and canvas.ImportNetworkState
+	return unless panel.Moonpanel
+	canvas = panel\GetCanvas!
 	canvas\ImportNetworkState panel, data
 	request.callback panel, data if istable(request) and isfunction(request.callback)
 
@@ -593,11 +513,9 @@ receive flowTypes.PanelResetPresentation, ->
 	panel = net.ReadEntity!
 	serial = net.ReadUInt 32
 	snapshot = net.ReadTable!
-	return unless IsValid(panel) and panel.Moonpanel and panel.GetCanvas and
-		istable(snapshot)
+	return unless IsValid(panel) and panel.Moonpanel and istable(snapshot)
 	canvas = panel\GetCanvas!
-	canvas\BeginResetPresentation snapshot, serial if canvas and
-		canvas.BeginResetPresentation
+	canvas\BeginResetPresentation snapshot, serial
 
 receive flowTypes.TraceVisualResult, ->
 	panel = net.ReadEntity!
@@ -609,14 +527,13 @@ receive flowTypes.TraceVisualResult, ->
 		isnumber(result.ruleRevision) and isnumber(result.reportHash) and
 		istable(result.snapshot) and istable(result.feedback)
 	canvas = panel\GetCanvas!
-	pathfinder = canvas\GetPathFinder!
-	return unless pathfinder and result.revision == pathfinder.topology.revision
+	return unless result.revision == canvas\GetTraceRevision!
 	return unless newerSerial result.eventSerial, canvas\GetVisualEventSerial!
-	canvas\SetSolvedState result.solved == true if canvas.SetSolvedState
 	session = Moonpanel.Net.TraceSessions[panel]
 	return unless session and session.id == result.sessionId and
 		session.revision == result.revision and
 		session.ruleRevision == result.ruleRevision
+	canvas\SetSolvedState result.solved == true
 	canvas\SetVisualEventSerial result.eventSerial
 	session.terminal = true
 	unless panel\GetPowered!
@@ -625,8 +542,8 @@ receive flowTypes.TraceVisualResult, ->
 		Moonpanel.Net.SyncClickerState!
 		return
 	if session.controller == LocalPlayer! and not Moonpanel\IsServerAuthoritativeTrace!
-		pathfinder.phase = Moonpanel.Canvas.TraceEngine.Phase.Feedback
-		localHash = pathfinder\hash!
+		canvas\SetTraceFeedback!
+		localHash = canvas\GetTraceHash!
 		localReport = canvas\GetLastRuleReport!
 		reportMatches = localReport and localReport.status == "complete" and
 			localReport.ruleRevision == result.ruleRevision and
@@ -637,7 +554,7 @@ receive flowTypes.TraceVisualResult, ->
 		local geometryMatches
 		if localHash == result.finalHash
 			geometryMatches = true
-			result.snapshot = pathfinder\snapshot!
+			result.snapshot = canvas\GetTraceSnapshot!
 		else
 			geometryMatches = false
 			MsgC Color(255, 160, 40),
@@ -658,16 +575,31 @@ receive flowTypes.TraceVisualResult, ->
 					tostring(localReport.ruleRevision), " server revision ",
 					tostring(result.ruleRevision), " client status ",
 					tostring(localReport.status), "\n"
-			canvas\CancelSolution "server-result" if canvas.CancelSolution
-			canvas\ApplyVisualResult result, 0, localReport ~= nil or
-				canvas\GetPredictedVisual! ~= nil
+			canvas\CancelSolution "server-result"
+			canvas\ApplyVisualResult result, 0,
+				localReport ~= nil or predicted ~= nil, false
 			session.visualApplied = true
-	elseif session.controller == LocalPlayer! and Moonpanel\IsServerAuthoritativeTrace!
-		session.visualResult = result
 	else
 		session.visualResult = result
 	Moonpanel.Net.SyncClickerState!
 
 receive flowTypes.EditorOpen, ->
-	surfaceKind = net.ReadUInt 1
-	Moonpanel.Editor\Open surfaceKind if Moonpanel.Editor and Moonpanel.Editor.Open
+	ply, surfaceKind = net.ReadEntity!, net.ReadUInt(1)
+	Moonpanel.Editor\SetPresence ply, true if Moonpanel.Editor and
+		Moonpanel.Editor.SetPresence
+	if ply == LocalPlayer!
+		Moonpanel.Editor\Open surfaceKind if Moonpanel.Editor and Moonpanel.Editor.Open
+
+Moonpanel.Net.RequestEditorOpen = (surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) ->
+	startFlow flowTypes.EditorOpen
+	net.WriteUInt surfaceKind, 1
+	net.SendToServer!
+
+Moonpanel.Net.SendEditorClosed = ->
+	startFlow flowTypes.EditorStatus
+	net.SendToServer!
+
+receive flowTypes.EditorStatus, ->
+	ply = net.ReadEntity!
+	Moonpanel.Editor\SetPresence ply, false if Moonpanel.Editor and
+		Moonpanel.Editor.SetPresence

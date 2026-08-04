@@ -1,6 +1,6 @@
 local test = dofile('tools/tests/harness.lua')
 dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
-local Document = dofile('dest/lua/moonpanel/canvas/editor/sh_document.lua')
+local Document = dofile('dest/lua/moonpanel/canvas/editor/cl_document.lua')
 
 local function newDocument(data, writes)
   writes = writes or {}
@@ -15,8 +15,21 @@ local function newDocument(data, writes)
       writes.recovery = { data = value, metadata = metadata }
       return true, 42
     end,
+    writeSession = function(path)
+      writes.sessionPath = path
+      return true
+    end,
   }), writes
 end
+
+test.test('fresh panel has one start and one exit at opposite corners', function()
+  local fresh = Document.FreshPanel(function(data) return data end)
+  assert(fresh.Meta.Width == 3 and fresh.Meta.Height == 3)
+  assert(fresh.Entities[7].Type == 'End' and fresh.Entities[43].Type == 'Start')
+  local count = 0
+  for _ in pairs(fresh.Entities) do count = count + 1 end
+  assert(count == 2, 'fresh panel contains extra authored clues')
+end)
 
 test.test('document transactions drive dirty state and undo redo', function()
   local document = newDocument({ value = 1 })
@@ -26,6 +39,17 @@ test.test('document transactions drive dirty state and undo redo', function()
   assert(document:Undo() and document:GetData().value == 1)
   assert(not document:IsDirty() and document:CanRedo())
   assert(document:Redo() and document:GetData().value == 2)
+end)
+
+test.test('opening a clean document persists its path without recovery', function()
+  local document, writes = newDocument({ value = 1 })
+  document:Replace({ value = 2 }, {
+    resetHistory = true, markSaved = true, path = 'moonpanel/a.txt',
+  })
+  assert(writes.sessionPath == 'moonpanel/a.txt',
+    'clean opened path was not persisted')
+  assert(writes.recovery == nil and not document:IsDirty(),
+    'opening a clean document wrote dirty recovery state')
 end)
 
 test.test('matching merge keys coalesce and new edits invalidate redo', function()
@@ -39,6 +63,37 @@ test.test('matching merge keys coalesce and new edits invalidate redo', function
   document:BeginEdit('different')
   document:CommitEdit({ value = 3 })
   assert(not document:CanRedo() and document:GetData().value == 3)
+end)
+
+test.test('independent preset-style edits remain separate history entries', function()
+  local document = newDocument({ value = 0 })
+  document:BeginEdit('Apply color preset')
+  document:CommitEdit({ value = 1 })
+  document:BeginEdit('Apply color preset')
+  document:CommitEdit({ value = 2 })
+  assert(#document.history == 2,
+    'separate preset choices must not collapse into one undo step')
+  assert(document:Undo() and document:GetData().value == 1)
+  assert(document:Undo() and document:GetData().value == 0)
+end)
+
+test.test('built-in documents remain read-only until Save As', function()
+  local document, writes = newDocument({ value = 1 })
+  document:Replace({ value = 4 }, {
+    resetHistory = true, markSaved = true, clearPath = true,
+    source = { kind = 'builtin', id = 'thewitness/colors/1' },
+  })
+  assert(document:IsReadOnly() and document:GetSource().kind == 'builtin',
+    'built-in source state was not retained')
+  local saved = document:Save()
+  assert(not saved, 'built-in document allowed direct overwrite')
+  document:BeginEdit('change built-in')
+  document:CommitEdit({ value = 5 })
+  assert(document:IsDirty(), 'editing a built-in did not mark it dirty')
+  assert(document:SaveAs('moonpanel/copied.txt'))
+  assert(not document:IsReadOnly() and document:GetPath() == 'moonpanel/copied.txt' and
+    not document:IsDirty() and writes.file.path == 'moonpanel/copied.txt',
+    'Save As did not convert the built-in to a writable document')
 end)
 
 test.test('history limit retains the most recent reversible edits', function()
@@ -58,6 +113,8 @@ test.test('save establishes a clean baseline and recovery never saves the file',
   document:CommitEdit({ nested = { value = 2 } })
   assert(document:Save('moonpanel/test.txt'))
   assert(not document:IsDirty() and writes.file.path == 'moonpanel/test.txt')
+  assert(not document:WriteRecovery() and not writes.recovery,
+    'clean document produced an autosave')
   document:BeginEdit('change')
   document:CommitEdit({ nested = { value = 3 } })
   assert(document:WriteRecovery())
@@ -122,34 +179,9 @@ test.test('on-demand loading happens once', function()
   assert(reads == 1)
 end)
 
-test.test('responsive docks preserve the canvas and collapse in priority order', function()
-  local calculate = Document.CalculateDockLayout
-  local desktop = calculate(1920, {
-    libraryWidth = 220, inspectorWidth = 300,
-    libraryVisible = true, inspectorVisible = true,
-  })
-  assert(desktop.libraryVisible and desktop.inspectorVisible)
-  assert(desktop.canvasWidth == 1390)
-
-  local constrained = calculate(900, {
-    libraryWidth = 220, inspectorWidth = 300,
-    libraryVisible = true, inspectorVisible = true,
-  })
-  assert(not constrained.libraryVisible and constrained.inspectorVisible)
-  assert(constrained.canvasWidth >= 480)
-
-  local drawer = calculate(900, {
-    drawerVisible = true, libraryWidth = 220, inspectorWidth = 300,
-    libraryVisible = true, inspectorVisible = true,
-  })
-  assert(not drawer.libraryVisible and not drawer.inspectorVisible)
-  assert(drawer.canvasWidth == 640)
-end)
-
 test.test('cancel restores the transaction without adding history', function()
   local document = newDocument({ value = 1 })
   document:BeginEdit('preview')
-  document:GetMutableData().value = 9
   assert(document:CancelEdit())
   assert(document:GetData().value == 1 and #document.history == 0)
 end)

@@ -1,13 +1,5 @@
 local test = dofile('tools/tests/harness.lua')
 
-istable = function(value) return type(value) == 'table' end
-table.Copy = function(value)
-  if type(value) ~= 'table' then return value end
-  local output = {}
-  for key, child in pairs(value) do output[key] = table.Copy(child) end
-  return output
-end
-
 dofile('dest/lua/moonpanel/canvas/sh_surface.lua')
 dofile('dest/lua/moonpanel/canvas/sh_continuous_topology.lua')
 dofile('dest/lua/moonpanel/canvas/sh_pathfinder.lua')
@@ -205,15 +197,22 @@ test.test('seam pairs cover intersection and vertical path rows', function()
   assert(pairs[5].left == 29 and pairs[5].right == 35)
 end)
 
-test.test('one-sided and duplicate seam clues are compatible', function()
+test.test('one-sided seam clues are compatible', function()
   local data = panel(3)
   data.Entities[1] = { Type = 'Start' }
   data.Entities[7] = {}
+  local result = Moonpanel.Canvas.GetSurfaceCompatibility(data,
+    Moonpanel.Canvas.MakeSurfaceSpec('pillar', true))
+  assert(result.playable and #result.errors == 0)
+end)
+
+test.test('identical duplicate seam clues are rejected', function()
+  local data = panel(3)
   data.Entities[8] = { Type = 'Disjoint', Data = { Gap = 1 } }
   data.Entities[14] = { Type = 'Disjoint', Data = { Gap = 1 } }
   local result = Moonpanel.Canvas.GetSurfaceCompatibility(data,
     Moonpanel.Canvas.MakeSurfaceSpec('pillar', true))
-  assert(result.playable and #result.errors == 0)
+  assert(not result.playable and result.errors[1].code == 'continuous_seam_conflict')
 end)
 
 test.test('conflicting seam clues block without mutation', function()
@@ -242,14 +241,14 @@ test.test('pillar exits are restricted to the physical top and bottom', function
   assert(result.playable, 'top boundary pillar exit was rejected')
 end)
 
-test.test('canonicalization moves right-only clues and removes duplicates', function()
+test.test('canonicalization moves right-only clues without hiding duplicates', function()
   local data = panel(3)
   data.Entities[7] = { Type = 'Start' }
   data.Entities[8] = { Type = 'Hexagon', Data = { RuleColor = 1 } }
   data.Entities[14] = { Type = 'Hexagon', Data = { RuleColor = 1 } }
   local output = Moonpanel.Canvas.CanonicalizeContinuousData(data)
   assert(output.Entities[1].Type == 'Start' and output.Entities[7].Type == nil)
-  assert(output.Entities[8].Type == 'Hexagon' and output.Entities[14].Type == nil)
+  assert(output.Entities[8].Type == 'Hexagon' and output.Entities[14].Type == 'Hexagon')
   assert(data.Entities[7].Type == 'Start', 'input was mutated')
 end)
 

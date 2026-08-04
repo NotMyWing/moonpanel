@@ -1,29 +1,4 @@
-AddCSLuaFile = function() end
-
-TEST_NOW = 0
-TEST_FRAME_TIME = 1 / 60
-CurTime = function() return TEST_NOW end
-RealTime = CurTime
-FrameTime = function() return TEST_FRAME_TIME end
-
-math.Clamp = math.Clamp or function(value, minimum, maximum)
-  return math.max(minimum, math.min(maximum, value))
-end
-
-bit = bit or {
-  bxor = assert(load('return function(a, b) return (a ~ b) & 0xffffffff end'))(),
-}
-
-Moonpanel = {
-  Canvas = {
-    Symmetry = {
-      None = 0,
-      Vertical = 1,
-      Horizontal = 2,
-      Rotational = 3,
-    },
-  },
-}
+dofile('tools/tests/bootstrap.lua')
 
 local Harness = {
   tests = {},

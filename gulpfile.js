@@ -23,6 +23,10 @@ const MODEL_GLOBS = [
 	'src/models/**/*',
 ];
 
+const STATIC_DATA_GLOBS = [
+	'src/data_static/**/*',
+];
+
 const METADATA_GLOBS = [
 	'src/addon.json',
 ];
@@ -114,7 +118,7 @@ function moon() {
 		.pipe(compileMoonscript())
 		.pipe(optimizeLua())
 		.pipe(discourageLuaMod())
-		// .pipe(minifyLua())
+		.pipe(minifyLua())
 		.pipe(atomicDest('dest'));
 }
 moon.description = "Compiles moonscript files.";
@@ -168,6 +172,16 @@ function model() {
 model.description = "Copies model files.";
 
 /**
+ * Copies immutable addon-shipped data. Garry's Mod mounts this through GAME;
+ * it is deliberately kept separate from the writable DATA realm.
+ */
+function staticData() {
+	return gulp.src(STATIC_DATA_GLOBS, { base: 'src', since: gulp.lastRun(staticData) })
+		.pipe(atomicDest('dest'));
+}
+staticData.description = "Copies immutable static data files.";
+
+/**
  * Copies metadata files.
  */
 function metadata() {
@@ -195,7 +209,7 @@ packageZip.description = "Packages the compiled addon as a zip.";
 /**
  * Generates and moves assets.
  */
-const assets = gulp.parallel(materials, sound, model, metadata);
+const assets = gulp.parallel(materials, sound, model, staticData, metadata);
 assets.description = "Generates and copies assets.";
 
 /**
@@ -207,6 +221,7 @@ function watchAssets() {
 			...MATERIAL_GLOBS,
 			...SOUND_GLOBS,
 			...MODEL_GLOBS,
+			...STATIC_DATA_GLOBS,
 			...METADATA_GLOBS,
 		]
 		, assets
@@ -237,6 +252,7 @@ rebuild.description = "Deletes the output tree, then performs a clean build.";
 
 exports.clean = clean;
 exports.materials = materials;
+exports.staticData = staticData;
 exports.assets = assets;
 exports.watchAssets = watchAssets;
 exports.packageZip = packageZip;

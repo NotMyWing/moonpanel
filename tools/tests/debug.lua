@@ -1,81 +1,7 @@
 local test = dofile('tools/tests/harness.lua')
-
-isnumber = function(value) return type(value) == 'number' end
-istable = function(value) return type(value) == 'table' end
-isfunction = function(value) return type(value) == 'function' end
-Color = function(r, g, b, a) return { r = r, g = g, b = b, a = a or 255 } end
-Vector = function(x, y, z) return { x = x, y = y, z = z } end
-
-local disabledConVar = {
-  GetBool = function() return false end,
-  GetFloat = function() return 4096 end,
-  GetInt = function() return 1 end,
-}
-CreateClientConVar = function() return disabledConVar end
-GetConVar = function() return disabledConVar end
-RunConsoleCommand = function() end
-MsgC = function() end
-
-surface = {
-  CreateFont = function() end,
-  SetFont = function() end,
-  GetTextSize = function(text) return #text * 8, 18 end,
-  SetDrawColor = function() end,
-  DrawRect = function() end,
-}
-draw = { RoundedBox = function() end, SimpleText = function() end }
-render = { DrawLine = function() end }
-hook = { Add = function() end, Remove = function() end }
-cvars = { AddChangeCallback = function() end }
-concommand = { Add = function() end }
-timer = { Simple = function() end }
-ents = { FindByClass = function() return {} end }
-cam = { Start3D2D = function() end, End3D2D = function() end }
-TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP = 0, 0
-EyePos = function() return { DistToSqr = function() return 0 end } end
-
-local world = {}
-game = { GetWorld = function() return world end }
-IsValid = function(value) return value ~= nil and value ~= world end
-
-local playerPosition = {
-  Distance = function() return 128 end,
-}
-local localPlayer = { EyePos = function() return playerPosition end }
-LocalPlayer = function() return localPlayer end
-
-Moonpanel.Net = {
-  TraceSessions = {},
-  PendingPanelDataRequests = {},
-}
-Moonpanel.Canvas.IsRTAllocated = function() return true end
+local data, canvas, panel, world = dofile('tools/tests/debug_fixture.lua')
 
 dofile('dest/lua/moonpanel/cl_debug.lua')
-
-local data = {
-  Meta = { Width = 3, Height = 3, Symmetry = 0 },
-  Entities = {},
-}
-local canvas = {
-  __powerState = true,
-  __rtAlloc = {},
-  __rtDirty = false,
-  __geometry = { barWidth = 12, barLength = 100, margin = 20 },
-  GetData = function() return data end,
-  GetPathFinder = function() return nil end,
-  GetRuleDefinition = function() return nil end,
-  GetObserverFollower = function() return nil end,
-  GetSoundEnabled = function() return false end,
-}
-local panel = {
-  __rendering = true,
-  EntIndex = function() return 42 end,
-  GetModel = function() return 'models/test.mdl' end,
-  GetCanvas = function() return canvas end,
-  GetPowered = function() return true end,
-  GetController = function() return world end,
-  WorldSpaceCenter = function() return {} end,
-}
 
 local function joined(lines)
   local values = {}
@@ -112,20 +38,32 @@ test.test('active observer diagnostics cover trace, follower, and occlusion stat
     canSubmit = function() return false end,
     GetConstraintDecisions = function() return { 1024 } end,
   }
-  canvas.GetPathFinder = function() return pathfinder end
-  canvas.GetRuleDefinition = function()
-    return { ruleRevision = 456, clues = { {} } }
-  end
-  canvas.GetObserverFollower = function()
+  canvas.GetPillarTraceEngine = function() return pathfinder end
+  canvas.GetTraceDiagnostics = function()
     return {
-      reachedSequence = 8, targetSequence = 10,
-      hasReached = function() return false end,
+      phase = pathfinder.phase, hash = pathfinder:hash(), canSubmit = pathfinder:canSubmit(),
+      touchingExit = pathfinder.touchingExit,
+      topology = { revision = topology.revision, nodes = #topology.nodes, edges = 2,
+        starts = #topology.starts, exits = #topology.exits, gaps = #topology.gaps },
+      stacks = pathfinder.stacks, cursors = pathfinder.cursors, history = pathfinder.history,
+      constraints = pathfinder:GetConstraintDecisions(), active = pathfinder.active,
     }
   end
-  canvas.__presentation = {
-    result = nil,
-    isActive = function() return true end,
-  }
+  canvas.GetDebugState = function()
+    return { trace = canvas.GetTraceDiagnostics(), rule = { revision = 456, clues = 1 },
+      geometry = { barWidth = 4, barLength = 25, margin = 0 },
+      follower = { reachedSequence = 8, targetSequence = 10, settled = false },
+      power = true, dirty = false, solving = false, presentation = true,
+      result = false, sound = '0/0 playing' }
+  end
+  canvas.IsPresentationActive = function() return true end
+  canvas.HasVisualResult = function() return false end
+  canvas.IsSolving = function() return false end
+  canvas.GetGeometry = function() return { barWidth = 4, barLength = 25, margin = 0 } end
+  canvas.IsPowerState = function() return true end
+  canvas.IsRenderDirty = function() return false end
+  canvas.CanRender = function() return true end
+  canvas.GetSoundStatus = function() return '0/0 playing' end
   Moonpanel.Net.TraceSessions[panel] = {
     id = 7, controller = {}, nextSequence = 10, revision = 123,
     pending = {}, unsent = {}, serverHash = 987,

@@ -1,18 +1,15 @@
 # The Moonpanel
 
-Puzzle panels, written in moon language. As inspired by The Witness, a game by Thekla Inc.
-Initially written for Starfall/StarfallEx, now a separate addon.
+A Garry's Mod addon for Witness-style puzzle panels. It is written in
+MoonScript and compiled to Lua.
 
-If you don't understand the puzzle mechanics, then perhaps you should play The Witness.
+The project started as a Starfall/StarfallEx experiment and grew into its own
+addon. The Witness is the obvious inspiration. [You should play The Witness](https://store.steampowered.com/app/210970/The_Witness/).
 
-## Getting Started
+## Development
 
-TBA.
-
-## Build and package
-
-Install Node.js, npm, LuaJIT, and LuaRocks. Install MoonScript through
-LuaRocks, then install the project dependencies and run the test suite:
+Install Node.js, LuaJIT, LuaRocks, and MoonScript. Then install the Node
+dependencies and run the tests:
 
 ```sh
 luarocks install moonscript
@@ -20,8 +17,8 @@ npm ci
 npm test
 ```
 
-`npm test` compiles the addon into `dest/`, runs the Lua and LuaJIT tests,
-and checks a temporary GMA package.
+`npm test` rebuilds `dest/`, runs the Lua and LuaJIT suites, and smoke-tests a
+temporary GMA package.
 
 Create the distributable files with:
 
@@ -31,49 +28,44 @@ npm run package:zip
 npm run verify:package
 ```
 
-The GMA, ZIP, and manifest are written to `artifacts/`. The GMA writer is
-implemented in Node and does not require Garry's Mod or `gmad`. To also check
-the archive with an installed official `gmad`, set `MOONPANEL_GMAD` when
-running `npm run verify:package`.
+The GMA, ZIP, and manifest go in `artifacts/`. The GMA writer is implemented
+in Node, so it does not need Garry's Mod or `gmad`. If `gmad` is installed,
+set `MOONPANEL_GMAD` when running `npm run verify:package` to check the archive
+with it too.
 
-For live development, use `npm run watch`. It updates files in place using
-atomic writes. If generated output is stale, `npm run rebuild` removes and
-recreates `dest/` before building.
+For live development, use `npm run watch`. It rebuilds generated files in
+place. If `dest/` gets stale, run `npm run rebuild`.
 
-## Built With
+## Tools
 
 * [Node.js](https://nodejs.org/)
 * [LuaJIT](https://luajit.org/)
 * [LuaRocks](https://luarocks.org/)
 * [Moonscript](https://moonscript.org)
 
-## Contributing
-
-TBA.
-
-## Authors
+## People
 
 * **NotMyWing** - [NotMyWing](https://github.com/NotMyWing)
 
-## License
+## Code and assets
 
-Moonpanel source code is licensed under the Apache License, Version 2.0, as
-declared in `package.json`. Redistributions and derivatives must retain the
-copyright, license, and attribution notices, and modified files must identify
-their changes. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+Moonpanel's code is Apache 2.0; see [`LICENSE`](LICENSE).
 
-All The Witness-derived visual assets, audio assets, and other original game
-content are strictly credited to Thekla, Inc. They remain the property of
-Thekla, Inc. and are not relicensed under the Apache License.
+Some code and assets came from other projects. See
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the list. The Witness
+assets belong to Thekla and are not relicensed here.
 
-## Acknowledgments
+## Credits
 
-* **Thekla, Inc. and Jonathan Blow** - *The Witness, its puzzle language, original visual and audio assets, and the primary inspiration for this project.*
-* [TheFifthMatt](https://windmill.thefifthmatt.com/) - *The existence of The Windmill inspired this project and its later dedicated importer.*
-* [Tyler Schrock](https://github.com/Tschrock) - *The Windmill importer.*
-* [Soojin Nam](https://github.com/sjnam/lua-dancing-links) - *Lua Dancing Links*
-* [thegrb93 and contributors](https://github.com/thegrb93/StarfallEx/) - *StarfallEX and the panel rendering codebase*
-* [BytewaveMLP](https://github.com/BytewaveMLP) - *Buildscript*
+* **Thekla, Inc. and Jonathan Blow** — The Witness and the puzzle language that
+  started this whole thing.
+* [TheFifthMatt](https://windmill.thefifthmatt.com/) — The Windmill.
+* [Tyler Schrock](https://github.com/Tschrock) — The Windmill importer.
+* [thegrb93 and contributors](https://github.com/thegrb93/StarfallEx/) — The
+  StarfallEx panel code this grew out of.
+* [WireMod contributors](https://github.com/wiremod/wire) — The editor-presence
+  animation we adapted.
+* [BytewaveMLP](https://github.com/BytewaveMLP) — Buildscript work.
 
 ## WireMod and Expression 2
 

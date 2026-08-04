@@ -1,0 +1,16 @@
+Moonpanel.CVarNames = Moonpanel.CVarNames or {
+	TraceSensitivity: "moonpanel_trace_sensitivity"
+	GamepadDeadzone: "moonpanel_gamepad_deadzone"
+	GamepadSensitivity: "moonpanel_gamepad_sensitivity"
+	TraceSpeedBoost: "moonpanel_trace_speed_boost"
+	ServerAuthoritativeTrace: "moonpanel_server_authoritative_trace"
+	Debug: "moonpanel_debug"
+	DebugRayLifetime: "moonpanel_debug_ray_lifetime"
+	DebugDistance: "moonpanel_debug_distance"
+	RTPoolMaxPages: "moonpanel_rt_pool_max_pages"
+	WindmillProxy: "moonpanel_windmill_proxy"
+	VerifierProfile: "moonpanel_verifier_profile"
+	VerifierSliceMs: "moonpanel_verifier_slice_ms"
+	VerifierMaxMs: "moonpanel_verifier_max_ms"
+	VerifierMaxWork: "moonpanel_verifier_max_work"
+}

@@ -1,0 +1,5 @@
+{
+  "workspace.ignoreDir": [
+    "src/lua/entities/gmod_wire_expression2"
+  ]
+}

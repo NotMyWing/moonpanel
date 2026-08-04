@@ -40,13 +40,15 @@ class Moonpanel.Canvas.Entities.End extends Moonpanel.Canvas.Entities.BaseInters
                 --invis = Moonpanel.EntityTypes.Invisible
 
                 socket = @GetSocket!
-				canvas = socket\GetCanvas!
-				if Moonpanel.Canvas.UsesVerticalBoundaryExits(canvas\GetSurfaceSpec!)
-					height = canvas\GetData!.Meta.Height
-					return { x: 0, y: -1 } if socket\GetY! == 1
-					return { x: 0, y: 1 } if socket\GetY! == height + 1
-					return false
-
+                canvas = socket\GetCanvas!
+                width, height = canvas\GetDimensions!
+                if width == 1 and socket\GetY! == 1
+                    return { x: 0, y: -1 }
+                if width == 1 and socket\GetY! == height + 1
+                    return { x: 0, y: 1 }
+                if Moonpanel.Canvas.UsesVerticalBoundaryExits(canvas\GetSurfaceSpec!)
+                    return { x: 0, y: -1 } if socket\GetY! == 1
+                    return { x: 0, y: 1 } if socket\GetY! == height + 1
                 left = socket\GetLeft!
                 right = socket\GetRight!
                 top = socket\GetAbove!
@@ -181,9 +183,7 @@ class Moonpanel.Canvas.Entities.IntersectionInvisible extends Moonpanel.Canvas.E
     @CanonicalType = "Invisible"
 
     Render: =>
-        return unless CLIENT
-        return unless @GetCanvas!\GetEditorGeometryVisible!
-
+        return unless CLIENT and @GetCanvas!\GetEditorGeometryVisible!
         socket = @GetSocket!
         origin = socket\GetRenderOrigin!
         size = math.max socket\GetRadius! * 2, 6
@@ -195,11 +195,9 @@ class Moonpanel.Canvas.Entities.IntersectionInvisible extends Moonpanel.Canvas.E
         return unless node
 
         node.invisible = true
-        for neighbor in *table.Copy node.neighbors
-            for i, other in ipairs neighbor.neighbors
-                if other == node
-                    table.remove neighbor.neighbors, i
-                    break
+        for neighbor in *node.neighbors
+            for i = #neighbor.neighbors, 1, -1
+                table.remove neighbor.neighbors, i if neighbor.neighbors[i] == node
 
         node.neighbors = {}
 

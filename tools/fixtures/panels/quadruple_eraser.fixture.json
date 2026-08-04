@@ -1,0 +1,20 @@
+{
+  "name": "quadruple_eraser",
+  "panel": "quadruple_eraser.txt",
+  "legacy": false,
+  "topologyRevision": 1,
+  "tests": [
+    {
+      "name": "the only route rejects targetless erasers",
+      "traces": [],
+      "allSimpleTraces": {"from": [0, 2], "to": [2, 0], "count": 1},
+      "expected": {
+        "success": false,
+        "status": "complete",
+        "erasureCount": 0,
+        "remainingCount": 4,
+        "constraintKinds": ["eraser_unsatisfied"]
+      }
+    }
+  ]
+}

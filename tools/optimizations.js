@@ -55,7 +55,7 @@ class OptimizationsTransform extends Transform {
 
 		this.tablesRegExp = {};
 		TABLES.forEach((table) => {
-			this.tablesRegExp[table] = new RegExp(`([\\s\\(\\)]|^)${table}\\.([A-Za-z_][A-za-z0-9_]+)`, "g");
+			this.tablesRegExp[table] = new RegExp(`([\\s\\(\\)]|^)${table}\\.([A-Za-z_][A-Za-z0-9_]+)`, "g");
 		});
 	}
 

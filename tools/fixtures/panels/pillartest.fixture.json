@@ -1,6 +1,7 @@
 {
   "name": "pillartest",
   "panel": "pillartest.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {

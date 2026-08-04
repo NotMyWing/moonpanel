@@ -5,35 +5,32 @@
   "topologyRevision": 1,
   "tests": [
     {
-      "name": "tracing from the left start through the exit erases both erroring suns",
+      "name": "one premature cancellation leaves one eraser unnecessary",
       "traces": [
         [[0,3],[0,2],[0,1],[0,0],[1,0],[2,0],[3,0]]
       ],
       "expected": {
-        "success": true,
+        "success": false,
         "status": "complete",
-        "violations": [29, 85],
-        "erasures": [
-          {"eraserIndex": 25, "targetIndex": 29},
-          {"eraserIndex": 57, "targetIndex": 85}
-        ],
-        "remaining": [],
-        "constraintKinds": [],
+        "violations": [29, 57, 85],
+        "erasures": [{"eraserIndex": 25, "targetIndex": 29}],
+        "remaining": [57],
+        "constraintKinds": ["eraser_unnecessary"],
         "polyominoBackends": []
       }
     },
     {
-      "name": "satisfied suns remain intact while unused erasers fail",
+      "name": "satisfied suns leave erasers unnecessary amid unrelated failures",
       "traces": [
         [[0,3],[1,3],[1,2],[1,1],[2,1],[3,1],[3,0]]
       ],
       "expected": {
         "success": false,
         "status": "complete",
-        "violations": [25, 57],
+        "violations": [6, 17, 25, 57, 81],
         "erasures": [],
-        "remaining": [25, 57],
-        "constraintKinds": ["eraser_unsatisfied", "eraser_unsatisfied"],
+        "remaining": [6, 17, 25, 57, 81],
+        "constraintKinds": ["dot", "stars", "eraser_unnecessary", "stars", "eraser_unnecessary"],
         "polyominoBackends": []
       }
     },

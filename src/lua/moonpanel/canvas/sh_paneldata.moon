@@ -6,8 +6,17 @@ tableOrEmpty = Helpers.tableOrEmpty
 num = Helpers.num
 bool = Helpers.bool
 copyColor = Helpers.copyColor
-Canvas.SchemaVersion = 7
+flatIndex = Helpers.flatIndex
+Canvas.SchemaVersion = 8
 Canvas.DefaultDisjointLength = 0.4
+
+isDisabledCellColor = (value) ->
+	return false unless value
+	value = copyColor value
+	default = Canvas.DefaultColors.Cell
+	return true if value.a == 0
+	value.r == default.r and value.g == default.g and
+		value.b == default.b and value.a == default.a
 
 DEFAULT_BAR_WIDTHS = {
 	0.055
@@ -86,17 +95,11 @@ Canvas.EntityTypeMap = {
 	[10]: "Invisible"
 }
 
-Canvas.ColorValues = {
-	[Moonpanel.Color.Black]:   { r: 0,   g: 0,   b: 0   }
-	[Moonpanel.Color.White]:   { r: 255, g: 255, b: 255 }
-	[Moonpanel.Color.Cyan]:    { r: 0,   g: 210, b: 255 }
-	[Moonpanel.Color.Magenta]: { r: 255, g: 0,   b: 210 }
-	[Moonpanel.Color.Yellow]:  { r: 255, g: 230, b: 0   }
-	[Moonpanel.Color.Red]:     { r: 255, g: 64,  b: 64  }
-	[Moonpanel.Color.Green]:   { r: 72,  g: 220, b: 72  }
-	[Moonpanel.Color.Blue]:    { r: 64,  g: 96,  b: 255 }
-	[Moonpanel.Color.Orange]:  { r: 255, g: 140, b: 32  }
-}
+Canvas.ColorValues = [{
+	r: definition.r
+	g: definition.g
+	b: definition.b
+} for definition in *Moonpanel.ColorDefinitions]
 
 -- These are the canonical panel-wide appearance defaults. Keep them as plain
 -- tables so shared data can be serialized without depending on Color userdata.
@@ -134,22 +137,13 @@ Canvas.ColorPresets = {
 		Finished: { r: 230, g: 230, b: 230, a: 255 }
 		Errored: { r: 220, g: 64, b: 64, a: 255 }
 	}
-}
-
--- Sound presets deliberately contain only their family-specific overrides.
--- The ordinary Moonpanel sounds remain the default set, and a preset may
--- inherit any cue it does not provide. This keeps shared donor cues shared
--- instead of multiplying identical files across every preset directory.
-Canvas.SoundCueRoles = {
-	"Start"
-	"StartScint"
-	"Scint"
-	"FinishTracing"
-	"AbortFinishTracing"
-	"Failure"
-	"PotentialFailure"
-	"Success"
-	"Abort"
+	"Swamp 1": {
+		Background: { r: 44, g: 55, b: 0, a: 255 }
+		Cell: { r: 74, g: 93, b: 1, a: 255 }
+		Untraced: { r: 95, g: 105, b: 52, a: 255 }
+		Traced: { r: 149, g: 171, b: 110, a: 255 }
+		Finished: { r: 157, g: 160, b: 21, a: 255 }
+	}
 }
 
 Canvas.DefaultSoundPreset = "Default"
@@ -173,7 +167,7 @@ Canvas.ResolveSoundPreset = (name) ->
 	}
 	output
 
-Canvas.WindmillEntityTypeMap = {
+windmillEntityTypes = {
 	[3]: "Start"
 	[4]: "End"
 	[5]: "Disjoint"
@@ -185,7 +179,7 @@ Canvas.WindmillEntityTypeMap = {
 	[11]: "Triangle"
 }
 
-Canvas.WindmillDefaultEntityColors = {
+windmillDefaultColors = {
 	Color: Moonpanel.Color.Black
 	Hexagon: Moonpanel.Color.Black
 	Triangle: Moonpanel.Color.Orange
@@ -200,7 +194,10 @@ Canvas.ResolveColorPreset = (name) ->
 
 	output = {}
 	for role in *Canvas.ColorRoles
-		output[role] = copyColor preset[role], Canvas.DefaultColors[role]
+		if role == "Cell"
+			output[role] = copyColor preset[role] if preset[role]
+		else
+			output[role] = copyColor preset[role], Canvas.DefaultColors[role]
 	output
 
 colorId = (value, fallback = Moonpanel.Color.Black) ->
@@ -318,9 +315,6 @@ entitySocketType = (typeName) ->
 		when "Hexagon"
 			"PathOrIntersection"
 
-flatIndex = (gridX, gridY, width) ->
-	Helpers.flatIndex width, gridX, gridY
-
 legacyTypeName = (typeValue) ->
 	if isstring typeValue
 		typeValue
@@ -391,7 +385,7 @@ Canvas.LegacyToCanvasData = (tileData) ->
 			Height: height
 			Symmetry: symmetryType
 			SymmetryOptions: {
-				Colorful: bool symmetry.Colorful
+				Colorful: bool (symmetry.Colorful or tile.ColorfulSymmetry)
 				Traces: {}
 			}
 		}
@@ -412,24 +406,52 @@ Canvas.LegacyToCanvasData = (tileData) ->
 	traces = tableOrEmpty symmetry.Traces
 	for i = 1, 2
 		trace = tableOrEmpty traces[i]
-		traceColor = colorId trace.Color, i == 1 and Moonpanel.Color.White or Moonpanel.Color.Yellow
 		output.Meta.SymmetryOptions.Traces[i] = {
-			Color: traceColor
-			ColorValue: Canvas.ColorValues[traceColor]
 			Invisible: bool trace.Invisible
 		}
+		if trace.Color ~= nil
+			traceColor = colorId trace.Color
+			output.Meta.SymmetryOptions.Traces[i].Color = traceColor
+			output.Meta.SymmetryOptions.Traces[i].RuleColor = traceColor
+		if trace.ColorValue ~= nil
+			output.Meta.SymmetryOptions.Traces[i].ColorValue = copyColor trace.ColorValue
 
 	copyLegacyGrid output, tileData.Cells, width, width, height,
-		(x, y, w) -> flatIndex x * 2, y * 2, w
+		(x, y, w) -> flatIndex w, x * 2, y * 2
 
 	copyLegacyGrid output, tileData.Intersections, width, width + 1, height + 1,
-		(x, y, w) -> flatIndex (x - 1) * 2 + 1, (y - 1) * 2 + 1, w
+		(x, y, w) -> flatIndex w, (x - 1) * 2 + 1, (y - 1) * 2 + 1
 
 	copyLegacyGrid output, tileData.HPaths, width, width, height + 1,
-		(x, y, w) -> flatIndex x * 2, (y - 1) * 2 + 1, w
+		(x, y, w) -> flatIndex w, x * 2, (y - 1) * 2 + 1
 
 	copyLegacyGrid output, tileData.VPaths, width, width + 1, height,
-		(x, y, w) -> flatIndex (x - 1) * 2 + 1, y * 2, w
+		(x, y, w) -> flatIndex w, (x - 1) * 2 + 1, y * 2
+
+	if tile.ColorfulSymmetry
+		traceColors = {}
+		seenTraceColors = {}
+		entityCount = (width * 2 + 1) * (height * 2 + 1)
+		for index = 1, entityCount
+			entity = output.Entities[index]
+			if entity and entity.Type == "Hexagon" and entity.Data and entity.Data.RuleColor and
+				entity.Data.RuleColor > Moonpanel.Color.White and
+				not seenTraceColors[entity.Data.RuleColor]
+				seenTraceColors[entity.Data.RuleColor] = true
+				table.insert traceColors, entity.Data.RuleColor
+		for i, color in ipairs traceColors
+			break if i > 2
+			output.Meta.SymmetryOptions.Traces[i].RuleColor = color
+			output.Meta.SymmetryOptions.Traces[i].Color = color
+		for index = 1, entityCount
+			entity = output.Entities[index]
+			if entity and entity.Type == "Hexagon" and entity.Data and
+				entity.Data.TraceRole == nil and entity.Data.RuleColor
+				for traceId = 1, 2
+					trace = output.Meta.SymmetryOptions.Traces[traceId]
+					if trace and trace.RuleColor == entity.Data.RuleColor
+						entity.Data.TraceRole = traceId
+						break
 
 	Canvas.SanitizeData output
 
@@ -463,7 +485,7 @@ Canvas.WindmillToCanvasData = (storage) ->
 
 	colorFor = (entry, typeName, forceWhite = false) ->
 		return Moonpanel.Color.White if forceWhite
-		math.floor tonumber(entry.color) or Canvas.WindmillDefaultEntityColors[typeName] or Moonpanel.Color.Black
+		math.floor tonumber(entry.color) or windmillDefaultColors[typeName] or Moonpanel.Color.Black
 
 	entityData = (entry, typeName, forceWhite = false) ->
 		color = colorFor entry, typeName, forceWhite
@@ -506,7 +528,7 @@ Canvas.WindmillToCanvasData = (storage) ->
 	output = nil
 	put = (entry, gridX, gridY, forceWhite = false) ->
 		entry = tableOrEmpty entry
-		typeName = Canvas.WindmillEntityTypeMap[tonumber entry.type]
+		typeName = windmillEntityTypes[tonumber entry.type]
 		return unless typeName
 		data = entityData entry, typeName, forceWhite and typeName == "Hexagon"
 		return if data == nil
@@ -581,12 +603,15 @@ Canvas.SanitizeData = (data) ->
 	traceInput = tableOrEmpty (tableOrEmpty meta.SymmetryOptions).Traces
 	for i = 1, 2
 		trace = tableOrEmpty traceInput[i]
-		traceColor = colorId trace.Color, i == 1 and Moonpanel.Color.White or Moonpanel.Color.Yellow
 		output.Meta.SymmetryOptions.Traces[i] = {
-			Color: traceColor
-			ColorValue: copyColor trace.ColorValue, Canvas.ColorValues[traceColor]
 			Invisible: bool trace.Invisible
 		}
+		if trace.RuleColor ~= nil or trace.Color ~= nil
+			output.Meta.SymmetryOptions.Traces[i].RuleColor = colorId trace.RuleColor or trace.Color
+		if trace.ColorValue ~= nil
+			output.Meta.SymmetryOptions.Traces[i].ColorValue = copyColor trace.ColorValue
+		if trace.CompletionColorValue
+			output.Meta.SymmetryOptions.Traces[i].CompletionColorValue = copyColor trace.CompletionColorValue
 
 	output.Dim = {
 		BarLength: math.Clamp normalizeDimPercent(dim.BarLength, 25), 1, 100
@@ -602,13 +627,19 @@ Canvas.SanitizeData = (data) ->
 
 	output.Colors = {
 		Untraced: copyColor colors.Untraced, Canvas.DefaultColors.Untraced
-		Traced: copyColor colors.Traced, Canvas.DefaultColors.Traced
+		Traced: copyColor colors.Traced,
+			((tableOrEmpty (tableOrEmpty meta.SymmetryOptions).Traces)[1] or {}).ColorValue or
+			Canvas.DefaultColors.Traced
 		Finished: copyColor colors.Finished, Canvas.DefaultColors.Finished
 		Errored: copyColor colors.Errored, Canvas.DefaultColors.Errored
 		Background: copyColor colors.Background, Canvas.DefaultColors.Background
 		Vignette: copyColor colors.Vignette, Canvas.DefaultColors.Vignette
-		Cell: copyColor colors.Cell, Canvas.DefaultColors.Cell
 	}
+	-- Before schema 8, the global Cell default and transparent sentinel were
+	-- written even when the optional backdrop was disabled. Migrate those old
+	-- values away, but preserve every Cell value authored by current panels.
+	output.Colors.Cell = copyColor colors.Cell if colors.Cell and
+		(inputVersion >= 8 or not isDisabledCellColor colors.Cell)
 
 	sounds = tableOrEmpty input.Sounds
 	soundPreset = tostring sounds.Preset or Canvas.DefaultSoundPreset
@@ -618,10 +649,12 @@ Canvas.SanitizeData = (data) ->
 	entities = tableOrEmpty input.Entities
 	output.Entities = {}
 	output.Extensions = {}
-	for key, value in pairs tableOrEmpty input.Extensions
-		extensionName = tostring key
-		continue if extensionName == "HollowDot"
-		output.Extensions[extensionName] = value == true
+	extensions = tableOrEmpty input.Extensions
+	for extensionName in *{
+			"FourTriangle", "MidpointTerminals", "VoidTopology",
+			"InvisibleDot", "NegativeDot"
+		}
+		output.Extensions[extensionName] = true if extensions[extensionName] == true
 
 	count = (output.Meta.Width * 2 + 1) * (output.Meta.Height * 2 + 1)
 	for i = 1, count
@@ -651,7 +684,7 @@ Canvas.SanitizeData = (data) ->
 							entity.Data.RuleColor ~= Moonpanel.Color.Black
 						for traceId = 1, 2
 							trace = output.Meta.SymmetryOptions.Traces[traceId]
-							if trace and trace.Color == entity.Data.RuleColor
+							if trace and (trace.RuleColor or trace.Color) == entity.Data.RuleColor
 								entity.Data.TraceRole = traceId
 								break
 				if typeName == "Triangle" and entity.Data.Count == 4

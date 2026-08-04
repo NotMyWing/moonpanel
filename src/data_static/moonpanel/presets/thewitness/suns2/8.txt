@@ -1,0 +1,127 @@
+{
+	"Tile": {
+		"Width": 3.0,
+		"Height": 3.0
+	},
+	"Intersections": {
+		"1": {
+			"2": {
+				"Type": 2.0,
+				"Attributes": []
+			}
+		},
+		"4": {
+			"2": {
+				"Type": 1.0,
+				"Attributes": []
+			}
+		}
+	},
+	"HPaths": [],
+	"Dimensions": {
+		"InnerScreenRatio": 0.8402061855670104,
+		"BarWidth": 0.04860824742268042,
+		"MaxBarLength": 0.4175257731958763
+	},
+	"Colors": {
+		"Untraced": {
+			"r": 71.0,
+			"b": 67.0,
+			"a": 255.0,
+			"g": 67.0
+		},
+		"Background": {
+			"r": 26.0,
+			"b": 33.0,
+			"a": 255.0,
+			"g": 30.0
+		},
+		"Finished": {
+			"r": 240.0,
+			"b": 240.0,
+			"a": 255.0,
+			"g": 0.0
+		},
+		"Vignette": {
+			"r": 255.0,
+			"b": 255.0,
+			"a": 200.0,
+			"g": 255.0
+		},
+		"Traced": {
+			"r": 255.0,
+			"b": 255.0,
+			"a": 255.0,
+			"g": 240.0
+		},
+		"Cell": {
+			"r": 112.0,
+			"b": 60.0,
+			"a": 255.0,
+			"g": 90.0
+		},
+		"Errored": {
+			"r": 0.0,
+			"b": 0.0,
+			"a": 255.0,
+			"g": 0.0
+		}
+	},
+	"VPaths": [],
+	"Cells": [
+		[
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			{
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 9.0
+				}
+			},
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			}
+		],
+		{
+			"1": {
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 9.0
+				}
+			},
+			"3": {
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 9.0
+				}
+			}
+		},
+		[
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 2.0
+				}
+			},
+			{
+				"Type": 6.0,
+				"Attributes": {
+					"Color": 9.0
+				}
+			},
+			{
+				"Type": 8.0,
+				"Attributes": {
+					"Color": 1.0
+				}
+			}
+		]
+	]
+}

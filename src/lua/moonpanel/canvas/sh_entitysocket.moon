@@ -3,11 +3,9 @@ AddCSLuaFile!
 Moonpanel.Canvas.Sockets = {}
 
 class Moonpanel.Canvas.Sockets.BaseSocket
-    new: (@__canvas, @__id) =>
+    new: (@__canvas, @__id, @__dataIndex) =>
 
     __setCoordinates: (width) =>
-        data = @__canvas\GetData!
-
         @__x = ((@__id - 1) % width) + 1
         @__y = math.floor((@__id - 1) / width) + 1
 
@@ -30,25 +28,22 @@ class Moonpanel.Canvas.Sockets.BaseSocket
 		@__canvas\RebuildPathFinderCache! unless @__canvas\IsBulkImporting!
 
 	GetEntity: => @__entity
+	GetDataIndex: => @__dataIndex
 
     GetCanvas: => @__canvas
 
-    SetY: (@__y) =>
     GetY: => @__y
 
-    SetX: (@__x) =>
     GetX: => @__x
 
     GetSocketType: => @__class.SocketType
-
-    IsTraced: => @__canvas\IsTraced @
 
 class Moonpanel.Canvas.Sockets.IntersectionSocket extends Moonpanel.Canvas.Sockets.BaseSocket
     @SocketType = Moonpanel.Canvas.SocketType.Intersection
     @BaseEntity = Moonpanel.Canvas.Entities.BaseIntersection
 
-    new: (canvas, id) =>
-        super canvas, id
+    new: (canvas, id, dataIndex) =>
+        super canvas, id, dataIndex
 
         data = canvas\GetData!
         @__setCoordinates data.Meta.Width + 1
@@ -91,8 +86,8 @@ class Moonpanel.Canvas.Sockets.CellSocket extends Moonpanel.Canvas.Sockets.BaseS
     @SocketType = Moonpanel.Canvas.SocketType.Cell
     @BaseEntity = Moonpanel.Canvas.Entities.BaseCell
 
-    new: (canvas, id) =>
-        super canvas, id
+    new: (canvas, id, dataIndex) =>
+        super canvas, id, dataIndex
 
         data = canvas\GetData!
         @__setCoordinates data.Meta.Width
@@ -115,7 +110,6 @@ class Moonpanel.Canvas.Sockets.CellSocket extends Moonpanel.Canvas.Sockets.BaseS
         return @__cachedHitBox if @__cachedHitBox
 
         ro = @GetRenderOrigin!
-        data = @__canvas\GetData!
 
         horizontalLength = @GetCanvas!\GetBarLength!
         verticalLength = @GetCanvas!\GetVerticalBarLength!
@@ -153,16 +147,6 @@ class Moonpanel.Canvas.Sockets.PathSocket extends Moonpanel.Canvas.Sockets.BaseS
         @__cachedRenderOrigin = (nodeA\GetRenderOrigin! + nodeB\GetRenderOrigin!) / 2
         @__cachedRenderOrigin
 
-    GetIntersectionPair: =>
-        if @__horizontal
-            left = @__canvas\GetIntersectionSocketAt @__x, @__y
-            right = @__canvas\GetIntersectionSocketAt @__x + 1, @__y
-            return left, right
-        else
-            top = @__canvas\GetIntersectionSocketAt @__x, @__y
-            bottom = @__canvas\GetIntersectionSocketAt @__x, @__y + 1
-            return top, bottom
-
     GetAbove: =>
         if @__horizontal
             @__canvas\GetCellSocketAt @__x, @__y - 1
@@ -191,7 +175,6 @@ class Moonpanel.Canvas.Sockets.PathSocket extends Moonpanel.Canvas.Sockets.BaseS
         return @__cachedHitBox if @__cachedHitBox
 
         ro = @GetRenderOrigin!
-        data = @__canvas\GetData!
 
         barLength = if @__horizontal
             @GetCanvas!\GetBarLength!

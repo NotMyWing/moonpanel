@@ -15,8 +15,7 @@ WireMod is optional. Moonpanel works without it.
 | --- | --- |
 | `Powered` | Whether the panel is powered. |
 | `Solved` | Whether the panel is solved. With erasers, this changes after the eraser feedback finishes. |
-| `Errored` | Whether the most recent terminal evaluation reported an error. |
-| `Success` | Legacy numeric success output. It follows the historical eraser delay. |
+| `Errored` | Whether the most recent terminal evaluation failed; with erasers, it latches after feedback. |
 | `SolvedPulse` | One pulse for a successful terminal evaluation. |
 | `FailedPulse` | One pulse for an unsuccessful terminal evaluation. |
 | `AbortedPulse` | One pulse when an active trace is aborted. |
@@ -32,8 +31,7 @@ saves.
 WireMod loads the optional Moonpanel E2 extension, which provides:
 
 `moonpanelPowered`, `moonpanelSolved`, `moonpanelErrored`, `moonpanelPath`,
-`moonpanelRevision`, `moonpanelWidth`, `moonpanelHeight`, `moonpanelCell`,
-`moonpanelData`, and owner-checked `moonpanelReset`.
+`moonpanelRevision`, `moonpanelWidth`, `moonpanelHeight`, and owner-checked
+`moonpanelReset`.
 
-`moonpanelData` is limited to 8192 characters. `moonpanelReset` clears the
-current run without changing the puzzle layout.
+`moonpanelReset` clears the current run without changing the puzzle layout.

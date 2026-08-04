@@ -3,10 +3,8 @@ return unless CLIENT
 Moonpanel.Editor or= {}
 Editor = Moonpanel.Editor
 
-Editor.SavePath = "moonpanel/autosave.txt"
-Editor.RecoveryMetaPath = "moonpanel/autosave.meta.txt"
-Editor.StoredDataLoaded = false
-
+savePath = "moonpanel/autosave.txt"
+recoveryMetaPath = "moonpanel/autosave.meta.txt"
 writePanel = (path, data) ->
 	file.CreateDir "moonpanel"
 	serialized = Moonpanel.Canvas.SerializeData data
@@ -15,14 +13,21 @@ writePanel = (path, data) ->
 	true
 
 readRecoveryMetadata = ->
-	return {} unless file.Exists Editor.RecoveryMetaPath, "DATA"
-	contents = file.Read Editor.RecoveryMetaPath, "DATA"
+	return {} unless file.Exists recoveryMetaPath, "DATA"
+	contents = file.Read recoveryMetaPath, "DATA"
 	return {} unless contents
 	util.JSONToTable(contents) or {}
+
+writeRecoveryMetadata = (path, dirty, source) ->
+	meta = { :path, dirty: dirty == true, timestamp: os.time! }
+	meta.source = source if source and source.kind
+	file.Write recoveryMetaPath, util.TableToJSON(meta)
+	meta.timestamp
 
 Editor.EnsureDocument = =>
 	return @Document if @Document
 
+	fallbackData, @CurrentData = @CurrentData, nil
 	@Document = Moonpanel.EditorDocument.New nil, {
 		historyLimit: 128
 		activeTool: @ActiveTool or "place"
@@ -32,61 +37,33 @@ Editor.EnsureDocument = =>
 				data = Moonpanel.Canvas.CanonicalizeContinuousData data
 			data
 		writeFile: (path, data) -> writePanel path, data
+		writeSession: (path, source) ->
+			writeRecoveryMetadata path, false, source
+			true
 		writeRecovery: (data, metadata) ->
-			ok, reason = writePanel Editor.SavePath, data
+			ok, reason = writePanel savePath, data
 			return false, reason unless ok
-			meta = {
-				path: metadata.path
-				dirty: metadata.dirty == true
-				timestamp: os.time!
-			}
-			file.Write Editor.RecoveryMetaPath, util.TableToJSON(meta)
-			true, meta.timestamp
+			true, writeRecoveryMetadata metadata.path, metadata.dirty, metadata.source
 		load: ->
 			data = nil
-			hadRecovery = file.Exists Editor.SavePath, "DATA"
-			if hadRecovery
-				contents = file.Read Editor.SavePath, "DATA"
-				data = Moonpanel.Canvas.DeserializeData contents if contents
-
 			metadata = readRecoveryMetadata!
-			metadata.saved = true if not hadRecovery or metadata.dirty == false
-			data or Editor.CurrentData or Moonpanel.Canvas.SampleData, metadata
+			hadRecovery = file.Exists savePath, "DATA"
+			useRecovery = hadRecovery and metadata.dirty ~= false
+			if useRecovery
+				contents = file.Read savePath, "DATA"
+				data = Moonpanel.Canvas.DeserializeData contents if contents
+			elseif metadata.path and file.Exists metadata.path, "DATA"
+				contents = file.Read metadata.path, "DATA"
+				data = Moonpanel.Canvas.DeserializeData contents if contents
+			elseif metadata.source and metadata.source.kind == "builtin"
+				data = Moonpanel.Editor\LoadBuiltInPanel metadata.source.id
+
+			metadata.saved = not useRecovery
+			data or fallbackData or Moonpanel.EditorDocument.FreshPanel!, metadata
 	}
 	@Document
-
-Editor.LoadStoredData = (force = false) =>
-	document = @EnsureDocument!
-	if force
-		document.loaded = false
-		document.history = {}
-		document.historyCursor = 0
-
-	data, loadedFromDisk, metadata = document\LoadOnDemand!
-	@CurrentData = data
-	@OpenedFile = document.currentPath
-	@StoredDataLoaded = true
-	data, loadedFromDisk, metadata
-
-Editor.EnsureStoredDataLoaded = =>
-	@LoadStoredData false
-	@CurrentData
 
 Editor.GetCurrentData = =>
 	document = @EnsureDocument!
 	document\LoadOnDemand!
-	@StoredDataLoaded = true
-	@CurrentData = document\GetData!
-	return @CurrentData
-
-Editor.WriteRecovery = =>
-	document = @EnsureDocument!
-	document\WriteRecovery!
-
-Editor.SaveDocument = (path) =>
-	document = @EnsureDocument!
-	ok, reason = document\Save path
-	if ok
-		@CurrentData = document\GetData!
-		@OpenedFile = document.currentPath
-	ok, reason
+	document\GetData!

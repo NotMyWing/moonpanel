@@ -97,7 +97,7 @@ Moonpanel.Canvas.GetHexagonSize = (canvas) ->
 	-- Use the resolved geometry width, not the authored percentage. Auto-sized
 	-- panels and manually-sized panels must produce the same dot proportions,
 	-- and both path/intersection hexagons must share this single measurement.
-	canvas\GetBarWidth! * 1.15
+	canvas\GetBarWidth! * 0.95
 
 Moonpanel.Canvas.RenderHexagonEntity = (entity, size, overlay = false) ->
 	return unless CLIENT
@@ -181,7 +181,7 @@ Moonpanel.Canvas.EntityRegistry = {
 	}
 	Invisible: {
 		[Moonpanel.Canvas.SocketType.Intersection]: Moonpanel.Canvas.Entities.IntersectionInvisible
-		[Moonpanel.Canvas.SocketType.Path]: Moonpanel.Canvas.Entities.PathInvisible
+		[Moonpanel.Canvas.SocketType.Path]: Moonpanel.Canvas.Entities.InvisiblePath
 		[Moonpanel.Canvas.SocketType.Cell]: Moonpanel.Canvas.Entities.CellInvisible
 	}
 }

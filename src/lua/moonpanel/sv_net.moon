@@ -6,18 +6,18 @@ Moonpanel.Net.PendingPlayerDataRequests or= {}
 -- Full panel snapshots are relatively expensive and should not be usable as
 -- an unbounded request/response loop. Keep this per recipient so a player
 -- who has already received a panel does not affect anyone else's sync.
-Moonpanel.Net.PanelDataSyncState or= setmetatable {}, __mode: "k"
-Moonpanel.Net.PanelDataRequestCooldown = 1
+panelDataSyncState = setmetatable {}, __mode: "k"
+panelDataRequestCooldown = 1
 Moonpanel.Net.PillarProofTimeout = 1.5
-Moonpanel.Net.EditorPayloadMaxCompressed = 128 * 1024
-Moonpanel.Net.EditorPayloadMaxDecompressed = 512 * 1024
-Moonpanel.Net.EditorPayloadMaxDepth = 16
-Moonpanel.Net.EditorPayloadMaxEntries = 20000
-Moonpanel.Net.EditorPayloadMaxString = 8192
-Moonpanel.Net.TraceMaxPacketBits = 32768
-Moonpanel.Net.TraceMaxPillarQueue = 8
+editorPayloadMaxCompressed = 128 * 1024
+editorPayloadMaxDecompressed = 512 * 1024
+editorPayloadMaxDepth = 16
+editorPayloadMaxEntries = 20000
+editorPayloadMaxString = 8192
+traceMaxPacketBits = 32768
+traceMaxPillarQueue = 8
 
-Moonpanel.Net.MarkMalformedPacket = (ply) ->
+markMalformedPacket = (ply) ->
 	return unless IsValid(ply) and ply\IsPlayer!
 	now = CurTime!
 	state = ply.__moonpanelMalformed or { count: 0, window: now, until: 0 }
@@ -28,11 +28,11 @@ Moonpanel.Net.MarkMalformedPacket = (ply) ->
 	state.until = now + 1 if state.count >= 3
 	ply.__moonpanelMalformed = state
 
-Moonpanel.Net.PacketCooling = (ply) ->
+packetCooling = (ply) ->
 	state = IsValid(ply) and ply.__moonpanelMalformed
 	state and CurTime! < (state.until or 0)
 
-Moonpanel.Net.GetPanelOwner = (panel) ->
+getPanelOwner = (panel) ->
 	return unless IsValid panel
 	if panel.CPPIGetOwner
 		owner = panel\CPPIGetOwner!
@@ -42,7 +42,7 @@ Moonpanel.Net.GetPanelOwner = (panel) ->
 		owner = panel\GetCreator!
 		return owner if IsValid(owner) and owner\IsPlayer!
 
-Moonpanel.Net.CanEditPanel = (ply, panel) ->
+canEditPanel = (ply, panel) ->
 	return false unless IsValid(ply) and ply\IsPlayer! and
 		IsValid(panel) and panel.Moonpanel
 	trace = {
@@ -54,28 +54,46 @@ Moonpanel.Net.CanEditPanel = (ply, panel) ->
 	return false if hook.Run("CanTool", ply, trace, "moonpanel") == false
 	return false if hook.Run("CanPlayerUse", ply, panel) == false
 	return true if ply\IsAdmin! or ply\IsSuperAdmin!
-	owner = Moonpanel.Net.GetPanelOwner panel
+	owner = getPanelOwner panel
 	IsValid(owner) and owner == ply
 
-Moonpanel.Net.ValidateEditorPayload = (value) ->
+validateEditorPayload = (value) ->
 	state = { entries: 0 }
 	visit = (current, depth) ->
 		typeName = type current
 		if typeName == "string"
-			return #current <= Moonpanel.Net.EditorPayloadMaxString
+			return #current <= editorPayloadMaxString
 		if typeName == "number"
 			return current == current and math.abs(current) <= 2147483647
 		return true if typeName == "boolean"
 		return false unless typeName == "table"
-		return false if depth > Moonpanel.Net.EditorPayloadMaxDepth
+		return false if depth > editorPayloadMaxDepth
 		state.entries += 1
-		return false if state.entries > Moonpanel.Net.EditorPayloadMaxEntries
+		return false if state.entries > editorPayloadMaxEntries
 		for key, child in pairs current
 			return false unless type(key) == "string" or type(key) == "number"
 			return false unless visit child, depth + 1
 		true
 	return false unless istable value
 	visit value, 0
+
+readEditorPayload = ->
+	compressedLength = net.ReadUInt 32
+	return unless compressedLength > 0 and
+		compressedLength <= editorPayloadMaxCompressed
+	compressed = net.ReadData compressedLength
+	json = compressed and util.Decompress compressed
+	return unless json and #json <= editorPayloadMaxDecompressed
+	data = util.JSONToTable json
+	return unless data and validateEditorPayload data
+	data = Moonpanel.Canvas.SanitizeData data
+	return data if data and istable data
+
+readValidEditorPayload = (ply) ->
+	data = readEditorPayload!
+	return data if data
+	markMalformedPacket ply
+
 
 Moonpanel.Net.SendControlGrant = (recipients, panel, omitController = false) ->
 	session = panel\GetTraceSession! or panel\GetEndingTraceSession!
@@ -87,7 +105,7 @@ Moonpanel.Net.SendControlGrant = (recipients, panel, omitController = false) ->
 	net.WriteUInt session.revision, 32
 	net.WriteUInt session.ruleRevision or 0, 32
 	net.WriteUInt session.lastSequence, 32
-	net.WriteTable panel\GetCanvas!\GetPathFinder!\snapshot!
+	net.WriteTable panel\GetCanvas!\GetTraceSnapshot!
 	hasOrbitSeed = panel.MoonpanelPillar == true and istable session.orbitSeed
 	net.WriteBool hasOrbitSeed
 	net.WriteTable session.orbitSeed if hasOrbitSeed
@@ -98,7 +116,7 @@ Moonpanel.Net.SendControlGrant = (recipients, panel, omitController = false) ->
 	else
 		net.Broadcast!
 
-Moonpanel.Net.SendTraceControlReject = (ply, panel, reason = "unknown") ->
+sendTraceControlReject = (ply, panel, reason = "unknown") ->
 	return unless IsValid(ply) and ply\IsPlayer! and IsValid(panel)
 	startFlow flowTypes.TraceControlReject
 	net.WriteEntity panel
@@ -106,41 +124,33 @@ Moonpanel.Net.SendTraceControlReject = (ply, panel, reason = "unknown") ->
 	net.WriteUInt reasons[reason] or reasons.unknown, 4
 	net.Send ply
 
-Moonpanel.Net.SendTraceAck = (ply, panel, session) ->
+sendTraceAck = (ply, panel, session) ->
 	startFlow flowTypes.TraceAck
 	net.WriteEntity panel
 	net.WriteUInt session.id, 32
 	net.WriteUInt session.lastSequence, 32
-	net.WriteUInt panel\GetCanvas!\GetPathFinder!\hash!, 32
+	net.WriteUInt panel\GetCanvas!\GetTraceHash!, 32
 	net.Send ply
 
-Moonpanel.Net.SendTraceResync = (ply, panel, session) ->
-	pathfinder = panel\GetCanvas!\GetPathFinder!
+sendTraceResync = (ply, panel, session) ->
+	canvas = panel\GetCanvas!
 	startFlow flowTypes.TraceResyncSnapshot
 	net.WriteEntity panel
 	net.WriteUInt session.id, 32
 	net.WriteUInt session.lastSequence, 32
-	net.WriteUInt pathfinder\hash!, 32
-	net.WriteTable pathfinder\snapshot!
+	net.WriteUInt canvas\GetTraceHash!, 32
+	net.WriteTable canvas\GetTraceSnapshot!
 	net.Send ply
 
 Moonpanel.Net.BroadcastObserverAdvance = (controller, panel, session, firstSequence, samples) ->
-	pathfinder = panel\GetCanvas!\GetPathFinder!
-	return unless pathfinder
+	canvas = panel\GetCanvas!
+	return unless canvas
 	startFlow flowTypes.TraceObserverAdvance
 	net.WriteEntity panel
 	net.WriteUInt session.id, 32
 	net.WriteUInt firstSequence, 32
-	net.WriteUInt #samples, 4
-	for sample in *samples
-		net.WriteInt sample.xQ, 16
-		net.WriteInt sample.yQ, 16
-		net.WriteBool sample.boost
-		net.WriteUInt sample.commandNumber or 0, 32
-		net.WriteUInt #sample.constraints, 2
-		for decision in *sample.constraints
-			net.WriteUInt decision, 32
-	net.WriteUInt pathfinder\hash!, 32
+	Moonpanel.Net.WriteTraceSamples samples
+	net.WriteUInt canvas\GetTraceHash!, 32
 	-- Controllers normally ignore this observer stream, but the
 	-- server-authoritative debug mode consumes it directly.
 	net.Broadcast!
@@ -152,6 +162,14 @@ Moonpanel.Net.BroadcastTraceResult = (panel, sessionId, aborted) ->
 	net.WriteBool aborted == true
 	net.Broadcast!
 
+hashPanelSyncData = (data) ->
+	return unless istable data
+	-- visualElapsed is presentation timing, not panel state. Hashing it would
+	-- turn every later request for an unchanged solved panel into a new sync.
+	hashData = table.Copy data
+	hashData.visualElapsed = nil
+	Moonpanel.Canvas.RuleEngine\HashValue hashData
+
 Moonpanel.Net.SendPanelData = (ply, panel, data) ->
 	return false unless IsValid(ply) and ply\IsPlayer! and IsValid(panel)
 	startFlow flowTypes.PanelRequestData
@@ -159,13 +177,13 @@ Moonpanel.Net.SendPanelData = (ply, panel, data) ->
 	net.WriteTable data
 	net.Send ply
 
-	state = Moonpanel.Net.PanelDataSyncState[ply]
+	state = panelDataSyncState[ply]
 	unless state
 		state = setmetatable {}, __mode: "k"
-		Moonpanel.Net.PanelDataSyncState[ply] = state
+		panelDataSyncState[ply] = state
 	state[panel] = {
-		hash: Moonpanel.Net.HashPanelSyncData data
-		nextRequest: CurTime! + Moonpanel.Net.PanelDataRequestCooldown
+		hash: hashPanelSyncData data
+		nextRequest: CurTime! + panelDataRequestCooldown
 	}
 	true
 
@@ -177,41 +195,29 @@ Moonpanel.Net.BroadcastPanelResetPresentation = (panel, snapshot, serial) ->
 	net.WriteTable snapshot
 	net.Broadcast!
 
-Moonpanel.Net.HashPanelSyncData = (data) ->
-	return unless istable data
-	-- visualElapsed is presentation timing, not panel state. Hashing it would
-	-- turn every later request for an unchanged solved panel into a new sync.
-	hashData = table.Copy data
-	hashData.visualElapsed = nil
-	return Moonpanel.Canvas.RuleEngine\HashValue hashData if Moonpanel.Canvas.RuleEngine
-	-- This fallback is only for load-order safety. Normal panel networking
-	-- loads the shared rule engine before this module is used.
-	json = util.TableToJSON hashData
-	tonumber(util.CRC(json or "")) or 0
-
-Moonpanel.Net.GetPanelSyncState = (ply, panel) ->
-	state = Moonpanel.Net.PanelDataSyncState[ply]
+getPanelSyncState = (ply, panel) ->
+	state = panelDataSyncState[ply]
 	state and state[panel]
 
 Moonpanel.Net.ClearPanelSyncState = (panel) ->
-	for ply, state in pairs Moonpanel.Net.PanelDataSyncState
+	for ply, state in pairs panelDataSyncState
 		state[panel] = nil if state
 
 Moonpanel.Net.BroadcastVisualResult = (panel, data) ->
 	return unless IsValid panel
 	session = panel\GetTraceSession! or panel\GetEndingTraceSession!
 	return unless session
-	pathfinder = panel\GetCanvas!\GetPathFinder!
-	return unless pathfinder
+	canvas = panel\GetCanvas!
+	return unless canvas
 	visualEventSerial = panel\NextVisualEventSerial!
 	envelope = {
 		sessionId: session.id
 		revision: session.revision
 		finalSequence: session.lastSequence
-		finalHash: pathfinder\hash!
+		finalHash: canvas\GetTraceHash!
 		ruleRevision: session.ruleRevision or 0
 		reportHash: data.reportHash or 0
-		snapshot: pathfinder\snapshot!
+		snapshot: canvas\GetTraceSnapshot!
 		aborted: data.aborted == true
 		success: data.success == true
 		outcome: if data.aborted
@@ -230,23 +236,29 @@ Moonpanel.Net.BroadcastVisualResult = (panel, data) ->
 		solved: data.success == true
 		eventSerial: visualEventSerial
 	}
-	if panel.ApplyTerminalResult
-		panel\ApplyTerminalResult envelope
-	else
-		panel\SetVisualResult envelope if panel.SetVisualResult
-		panel\SetSolvedState envelope.solved == true, envelope if panel.SetSolvedState
-	Moonpanel.Wire.HandleResult panel, envelope if Moonpanel.Wire and
-		Moonpanel.Wire.HandleResult
+	panel\ApplyTerminalResult envelope
 	startFlow flowTypes.TraceVisualResult
 	net.WriteEntity panel
 	net.WriteTable envelope
 	net.Broadcast!
-	panel\ClearEndingTraceSession session if panel.ClearEndingTraceSession
+	panel\ClearEndingTraceSession session
 
-Moonpanel.Net.SendEditorOpen = (ply, surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) ->
-	startFlow flowTypes.EditorOpen
-	net.WriteUInt surfaceKind, 1
-	net.Send ply
+relayEditorState = (ply, open, surfaceKind = Moonpanel.Canvas.SurfaceKind.Flat) ->
+	return unless IsValid(ply) and ply\IsPlayer!
+	startFlow open and flowTypes.EditorOpen or flowTypes.EditorStatus
+	net.WriteEntity ply
+	net.WriteUInt surfaceKind, 1 if open
+	net.Broadcast!
+	true
+
+Moonpanel.Net.SendEditorOpen = (ply, surfaceKind) ->
+	relayEditorState ply, true, surfaceKind
+
+receive flowTypes.EditorStatus, (_, ply) ->
+	relayEditorState ply, false
+
+receive flowTypes.EditorOpen, (_, ply) ->
+	relayEditorState ply, true, net.ReadUInt(1)
 
 Moonpanel.Net.SendPanelDataFromPlayerRequest = (ply, panel) ->
 	return false unless IsValid(ply) and ply\IsPlayer! and
@@ -257,7 +269,7 @@ Moonpanel.Net.SendPanelDataFromPlayerRequest = (ply, panel) ->
 	true
 
 Moonpanel.Net.PanelRequestDataFromPlayer = (ply, panel, callback) ->
-	return false unless Moonpanel.Net.CanEditPanel ply, panel
+	return false unless canEditPanel ply, panel
 	for current, data in pairs Moonpanel.Net.PendingPlayerDataRequests
 		if not IsValid(current) or not IsValid(data.ply) or
 				(data.deadline and CurTime! > data.deadline)
@@ -274,7 +286,7 @@ receive flowTypes.PanelRequestControl, (len, ply) ->
 	accepted, reason = Moonpanel\RequestControl ply, panel, net.ReadUInt(16), net.ReadUInt(16),
 		net.ReadUInt(14) / 1000, net.ReadUInt(14) / 1000,
 		net.ReadUInt(10) / 1000
-	Moonpanel.Net.SendTraceControlReject ply, panel, reason unless accepted
+	sendTraceControlReject ply, panel, reason unless accepted
 
 receive flowTypes.FocusExit, (len, ply) ->
 	Moonpanel\SetFocused ply, false if Moonpanel\IsFocused ply
@@ -284,9 +296,9 @@ hook.Add "PlayerDisconnected", "Moonpanel Multiplayer Safeguards", (ply) ->
 		Moonpanel.Net.PendingPlayerDataRequests[panel] = nil if request.ply == ply
 	state = Moonpanel.Canvas.VerifierState
 	canvas = state and state.activeByPlayer[ply]
-	canvas\CancelSolution("player_disconnect") if canvas and canvas.CancelSolution
+	canvas\CancelSolution "player_disconnect" if canvas
 	ply.__moonpanelMalformed = nil
-	Moonpanel.Net.PanelDataSyncState[ply] = nil
+	panelDataSyncState[ply] = nil
 
 queuedFinalSequence = (session) ->
 	sequence = session.lastSequence
@@ -317,8 +329,8 @@ processTraceBatch = (ply, panel, session, batch) ->
 			return "wait" unless session.pillarProofs and
 				session.pillarProofs[sample.commandNumber]
 
-	pathfinder = panel\GetCanvas!\GetPathFinder!
-	return "invalid" unless pathfinder
+	canvas = panel\GetCanvas!
+	return "invalid" unless canvas
 	pillarCorrection = false
 	proofRecords = {}
 	for sample in *batch.samples
@@ -328,7 +340,7 @@ processTraceBatch = (ply, panel, session, batch) ->
 			yQ: sample.yQ
 			commandNumber: sample.commandNumber
 		}
-		actualStart = pathfinder\hash!
+		actualStart = canvas\GetTraceHash!
 		if panel.MoonpanelPillar
 			proof = session.pillarProofs[sample.commandNumber]
 			session.pillarProofs[sample.commandNumber] = nil
@@ -338,7 +350,7 @@ processTraceBatch = (ply, panel, session, batch) ->
 				pillarCorrection = true
 		context = if panel.MoonpanelPillar and proof and
 			proof.motionAxis == "x" then nil else ply
-		panel\GetCanvas!\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
+		canvas\ApplyTraceSample sample.xQ, sample.yQ, sample.boost,
 			context, sample.constraints
 		session.lastSequence += 1
 		if proof
@@ -346,13 +358,13 @@ processTraceBatch = (ply, panel, session, batch) ->
 				sample: original
 				:proof
 				:actualStart
-				actualEnd: pathfinder\hash!
+				actualEnd: canvas\GetTraceHash!
 			}
 
-	serverHash = pathfinder\hash!
+	serverHash = canvas\GetTraceHash!
 	Moonpanel.Net.BroadcastObserverAdvance ply, panel, session,
 		batch.firstSequence, batch.samples
-	Moonpanel.Net.SendTraceAck ply, panel, session
+	sendTraceAck ply, panel, session
 	if pillarCorrection or batch.predictedHash ~= 0 and
 		serverHash ~= batch.predictedHash
 		for record in *proofRecords
@@ -362,10 +374,10 @@ processTraceBatch = (ply, panel, session, batch) ->
 			tostring(session.id), " sequence ", tostring(session.lastSequence),
 			" client ", tostring(batch.predictedHash), " server ",
 			tostring(serverHash), " revision ", tostring(session.revision), "\n"
-		Moonpanel.Net.SendTraceResync ply, panel, session
+		sendTraceResync ply, panel, session
 	"applied"
 
-Moonpanel.Net.ProcessPendingPillarBatches = (panel, session) ->
+processPendingPillarBatches = (panel, session) ->
 	queue = session and session.pendingPillarBatches
 	return true unless queue and queue[1]
 	while queue[1]
@@ -382,69 +394,53 @@ Moonpanel.Net.ProcessPendingPillarBatches = (panel, session) ->
 		table.remove queue, 1
 	true
 
-finishTraceAction = (panel, session, action) ->
-	if action == 1 and panel\GetCanvas!\GetPathFinder!\canSubmit!
+finishTraceAction = (panel, action) ->
+	if action == 1 and panel\GetCanvas!\CanSubmitTrace!
 		panel\EndTraceSession false
 	else
 		panel\EndTraceSession true
 
+validTraceSession = (panel, ply, sessionId, revision, ruleRevision) ->
+	return unless IsValid(panel) and panel.Moonpanel
+	session = panel\GetTraceSession!
+	return unless session and session.controller == ply and session.id == sessionId
+	return unless revision == session.revision and ruleRevision == session.ruleRevision
+	session
+
+activeTraceSession = (panel, ply, sessionId, revision, ruleRevision) ->
+	session = validTraceSession panel, ply, sessionId, revision, ruleRevision
+	return unless session and ply\Alive! and Moonpanel\IsFocused(ply) and
+		panel\GetPowered! and panel\GetController! == ply
+	return if ply\EyePos!\DistToSqr(panel\GetPos!) > 1024 * 1024
+	session
+
 Moonpanel.Net.ProcessPendingPillarSession = (panel, session) ->
-	return false unless Moonpanel.Net.ProcessPendingPillarBatches panel, session
+	return false unless processPendingPillarBatches panel, session
 	action = session.pendingPillarAction
 	return true unless action
 	if action.finalSequence == session.lastSequence
 		session.pendingPillarAction = nil
-		finishTraceAction panel, session, action.action
+		finishTraceAction panel, action.action
 		return true
 	return false if CurTime! > action.deadline
 	true
 
 receive flowTypes.TraceInputBatch, (len, ply) ->
-	return if len > Moonpanel.Net.TraceMaxPacketBits or
-		Moonpanel.Net.PacketCooling ply
+	return if len > traceMaxPacketBits or packetCooling ply
 	panel = net.ReadEntity!
 	sessionId = net.ReadUInt 32
 	revision = net.ReadUInt 32
 	ruleRevision = net.ReadUInt 32
 	firstSequence = net.ReadUInt 32
-	count = net.ReadUInt 4
-	samples = {}
-	invalidConstraints = false
-	invalidSample = false
-	for i = 1, count
-		xQ = net.ReadInt 16
-		yQ = net.ReadInt 16
-		invalidSample = true if math.abs(xQ) > 32767 or math.abs(yQ) > 32767
-		boost = net.ReadBool!
-		commandNumber = net.ReadUInt 32
-		constraintCount = net.ReadUInt 2
-		invalidConstraints = true if constraintCount > 2
-		constraints = {}
-		for decision = 1, constraintCount
-			table.insert constraints, net.ReadUInt 32
-		table.insert samples, {
-			:xQ
-			:yQ
-			:boost
-			:commandNumber
-			:constraints
-		}
+	samples, count, malformed = Moonpanel.Net.ReadTraceSamples!
 	predictedHash = net.ReadUInt 32
 
-	return unless IsValid(panel) and panel.Moonpanel and panel.GetCanvas
-	session = panel\GetTraceSession! if panel.GetTraceSession
-	return unless session and session.controller == ply and session.id == sessionId
-	return unless revision == session.revision
-	return unless ruleRevision == session.ruleRevision
-	return unless count > 0 and count <= 12
-	if invalidSample or invalidConstraints
-		Moonpanel.Net.MarkMalformedPacket ply
+	session = activeTraceSession panel, ply, sessionId, revision, ruleRevision
+	return unless session
+	if malformed
+		markMalformedPacket ply
 		return
 	return unless firstSequence == queuedFinalSequence(session) + 1
-	return unless ply\Alive! and Moonpanel\IsFocused(ply) and panel\GetPowered!
-	return unless panel\GetController! == ply
-	return if ply\EyePos!\DistToSqr(panel\GetPos!) > 1024 * 1024
-
 	now = CurTime!
 	if now - session.rateWindow >= 1
 		session.rateWindow = now
@@ -461,34 +457,29 @@ receive flowTypes.TraceInputBatch, (len, ply) ->
 		deadline: CurTime! + Moonpanel.Net.PillarProofTimeout
 	}
 	if panel.MoonpanelPillar
-		if #(session.pendingPillarBatches or {}) >= Moonpanel.Net.TraceMaxPillarQueue
-			Moonpanel.Net.MarkMalformedPacket ply
+		if #(session.pendingPillarBatches or {}) >= traceMaxPillarQueue
+			markMalformedPacket ply
 			return
 		session.pendingPillarBatches or= {}
 		table.insert session.pendingPillarBatches, batch
-		unless Moonpanel.Net.ProcessPendingPillarBatches panel, session
+		unless processPendingPillarBatches panel, session
 			panel\EndTraceSession true
 	else
 		unless processTraceBatch(ply, panel, session, batch) == "applied"
 			panel\EndTraceSession true
 
 receive flowTypes.TraceAction, (len, ply) ->
-	return if len > 1024 or Moonpanel.Net.PacketCooling ply
+	return if len > 1024 or packetCooling ply
 	panel = net.ReadEntity!
 	sessionId = net.ReadUInt 32
 	revision = net.ReadUInt 32
 	ruleRevision = net.ReadUInt 32
 	finalSequence = net.ReadUInt 32
 	action = net.ReadUInt 2
-	return unless IsValid(panel) and panel.GetTraceSession and panel\GetTraceSession!
-	session = panel\GetTraceSession!
-	return unless session.id == sessionId and session.controller == ply
-	return unless revision == session.revision and ruleRevision == session.ruleRevision
-	return unless ply\Alive! and Moonpanel\IsFocused(ply) and panel\GetPowered!
-	return unless panel\GetController! == ply
-	return if ply\EyePos!\DistToSqr(panel\GetPos!) > 1024 * 1024
+	session = activeTraceSession panel, ply, sessionId, revision, ruleRevision
+	return unless session
 	if panel.MoonpanelPillar
-		unless Moonpanel.Net.ProcessPendingPillarBatches panel, session
+		unless processPendingPillarBatches panel, session
 			panel\EndTraceSession true
 			return
 		if finalSequence ~= session.lastSequence
@@ -501,18 +492,18 @@ receive flowTypes.TraceAction, (len, ply) ->
 			return
 	else
 		return unless finalSequence == session.lastSequence
-	finishTraceAction panel, session, action
+	finishTraceAction panel, action
 
 receive flowTypes.PanelRequestData, (len, ply) ->
 	entity = net.ReadEntity!
-	return unless IsValid(entity) and entity.Moonpanel and entity.GetCanvas
+	return unless IsValid(entity) and entity.Moonpanel
 	now = CurTime!
-	syncState = Moonpanel.Net.GetPanelSyncState ply, entity
+	syncState = getPanelSyncState ply, entity
 	if syncState
 		return if syncState.nextRequest and now < syncState.nextRequest
-		currentData = entity\BuildPanelSyncData! if entity.BuildPanelSyncData
+		currentData = entity\BuildPanelSyncData!
 		return if currentData and
-			Moonpanel.Net.HashPanelSyncData(currentData) == syncState.hash
+			hashPanelSyncData(currentData) == syncState.hash
 	request = Moonpanel.Net.PendingPlayerDataRequests[entity]
 	if request and request.ply == ply
 		Moonpanel.Net.SendPanelDataFromPlayerRequest ply, entity
@@ -522,42 +513,14 @@ receive flowTypes.PanelRequestDataFromPlayer, (len, ply) ->
 	entity = net.ReadEntity!
 	request = Moonpanel.Net.PendingPlayerDataRequests[entity]
 	return unless request and request.ply == ply
-	return unless IsValid(entity) and entity.Moonpanel and entity.GetCanvas
-	unless Moonpanel.Net.CanEditPanel ply, entity
+	return unless IsValid(entity) and entity.Moonpanel
+	unless canEditPanel ply, entity
 		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
 		return
 	if request.deadline and CurTime! > request.deadline
 		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
 		return
-	compressedLength = net.ReadUInt 32
-	if compressedLength <= 0 or
-		compressedLength > Moonpanel.Net.EditorPayloadMaxCompressed
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
-	compressed = net.ReadData compressedLength
-	unless compressed
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
-	json = util.Decompress compressed
-	unless json
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
-	if #json > Moonpanel.Net.EditorPayloadMaxDecompressed
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
-	data = util.JSONToTable json
-	unless data and Moonpanel.Net.ValidateEditorPayload data
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
-	data = Moonpanel.Canvas.SanitizeData data
-	unless data and istable data
-		Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
-		Moonpanel.Net.MarkMalformedPacket ply
-		return
 	Moonpanel.Net.PendingPlayerDataRequests[entity] = nil
+	data = readValidEditorPayload ply
+	return unless data
 	request.callback data

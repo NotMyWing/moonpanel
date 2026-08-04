@@ -72,8 +72,10 @@ function normalizeRelativeFile(file) {
 	if (FORBIDDEN_EXTENSIONS.has(extension) || !ALLOWED_EXTENSIONS.has(extension)) {
 		throw new Error(`File type is not allowed in a GMA: ${normalized}`);
 	}
-	if (lower.endsWith('.txt') && !lower.startsWith('scripts/vehicles/')) {
-		throw new Error(`Only vehicle script text files are allowed in a GMA: ${normalized}`);
+	if (lower.endsWith('.txt') &&
+		!lower.startsWith('scripts/vehicles/') &&
+		!lower.startsWith('data_static/')) {
+		throw new Error(`Only vehicle scripts and static data text files are allowed in a GMA: ${normalized}`);
 	}
 	if (Buffer.byteLength(normalized, 'utf8') > MAX_FILE_NAME_BYTES) {
 		throw new Error(`Addon path exceeds ${MAX_FILE_NAME_BYTES} bytes: ${normalized}`);

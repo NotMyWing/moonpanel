@@ -65,8 +65,7 @@ Editor.ClueSupportsRuleColor = (typeName, data) ->
 	data.RuleColor ~= nil
 
 Editor.ClueSupportsTint = (typeName, data) ->
-	-- Invisible geometry is itself an appearance operation rather than a
-	-- normally rendered clue.
+	-- Geometry breaks are topology operations rather than rendered clues.
 	return false if typeName == "Invisible"
 	data = data or Editor.DefaultClueData typeName
 	data.RuleColor ~= nil or data.TintColor ~= nil or data.Color ~= nil
@@ -105,7 +104,7 @@ Editor.InitBrushes = =>
 			:family
 			data: deepCopy Editor.DefaultClueData typeName
 		}
-	-- Invisible geometry may target either family; retain separate presets.
+	-- Geometry breaks may target either family; retain separate presets.
 	@cluePresets[Editor.GetBrushKey("cell", "Invisible")] = {
 		family: "cell"
 		data: deepCopy Editor.DefaultClueData "Invisible"
@@ -202,7 +201,7 @@ Editor.BrushMatchesEntity = (brush, socket) =>
 Editor.SetActiveMode = (mode) =>
 	return unless mode == "place" or mode == "erase" or mode == "recolor"
 	@activeMode = mode
-	@Document.activeTool = mode if @Document
+	@Document\SetActiveTool mode if @Document
 	@RefreshBrushUI! if @RefreshBrushUI
 	message = switch mode
 		when "erase" then "Erase clues: click or drag to remove"

@@ -1,6 +1,7 @@
 AddCSLuaFile!
 
 local panelSensitivity, gamepadDeadzone, gamepadSensitivity, boostMultiplier
+CVars = Moonpanel.CVarNames
 
 if CLIENT
 	Moonpanel.PillarMouseSamples = {}
@@ -16,29 +17,25 @@ if CLIENT
 		@PillarMouseSamples[commandNumber] = nil
 		sample and sample.x or 0, sample and sample.y or 0
 
-	panelSensitivity = CreateClientConVar "moonpanel_trace_sensitivity", "1", true, false,
+	panelSensitivity = CreateClientConVar CVars.TraceSensitivity, "1", true, false,
 		"Relative panel trace sensitivity", 0.05, 8
-	gamepadDeadzone = CreateClientConVar "moonpanel_gamepad_deadzone", "0.16", true, false,
+	gamepadDeadzone = CreateClientConVar CVars.GamepadDeadzone, "0.16", true, false,
 		"Trace stick deadzone", 0, 0.95
-	gamepadSensitivity = CreateClientConVar "moonpanel_gamepad_sensitivity", "1", true, false,
+	gamepadSensitivity = CreateClientConVar CVars.GamepadSensitivity, "1", true, false,
 		"Trace controller sensitivity", 0.05, 8
-	boostMultiplier = CreateClientConVar "moonpanel_trace_speed_boost", "2", true, false,
+	boostMultiplier = CreateClientConVar CVars.TraceSpeedBoost, "2", true, false,
 		"Controller trace boost", 1, 4
 
 	Moonpanel.InitControl = =>
 		ply = LocalPlayer!
 		return false unless IsValid ply
 		gui.EnableScreenClicker false
-		if Moonpanel.Net and Moonpanel.Net.SyncClickerState
-			Moonpanel.Net.SyncClickerState!
+		Moonpanel.Net.SyncClickerState!
 		ply\SetNW2VarProxy "TheMP Control", (owner, _, old, new) ->
 			return if old == new
 			return unless IsValid owner
 			if Moonpanel\IsFocused owner
-				if Moonpanel.Net and Moonpanel.Net.SyncClickerState
-					Moonpanel.Net.SyncClickerState!
-				else
-					gui.EnableScreenClicker not (IsValid(new) and new.Moonpanel)
+				Moonpanel.Net.SyncClickerState!
 		true
 
 	Moonpanel.GetPredictedControl = (ply = LocalPlayer!) =>
@@ -63,8 +60,8 @@ if CLIENT
 		Moonpanel.Net.PanelRequestControl entity, x, y if x and y
 
 	Moonpanel.TraceAction = (entity) =>
-		pathfinder = entity\GetCanvas!\GetPathFinder!
-		action = pathfinder and pathfinder\canSubmit! and 1 or 0
+		canvas = entity\GetCanvas!
+		action = canvas and canvas\CanSubmitTrace! and 1 or 0
 		Moonpanel.Net.SendTraceAction entity, action
 
 	Moonpanel.ApplyControllerTrace = (ply, cmd) =>
@@ -112,13 +109,13 @@ else
 		gamepadSensitivity = 1, gamepadDeadzone = 0.16) =>
 		controlled = ply\GetNW2Entity "TheMP Control"
 		if IsEntity(controlled) and IsValid(controlled) and controlled.Moonpanel
-			session = controlled\GetTraceSession! if controlled.GetTraceSession
+			session = controlled\GetTraceSession!
 			if session and session.controller == ply
 				Moonpanel\StopControl ply
 				return
 			ply\SetNW2Entity "TheMP Control", game.GetWorld!
 		if IsEntity(entity) and IsValid(entity)
-			if entity.Moonpanel and entity.RequestControl
+			if entity.Moonpanel
 				accepted, reason = entity\RequestControl(ply, x, y, sensitivity,
 					gamepadSensitivity, gamepadDeadzone)
 				if accepted
@@ -138,18 +135,16 @@ Moonpanel.ApplyDeltas = (ply, dX = 0, dY = 0, boost = false) =>
 	return false unless IsValid ply
 	return false if CLIENT and not Moonpanel\IsFocused(ply)
 	controlled = ply\GetNW2Entity "TheMP Control"
-	controlled = Moonpanel\GetPredictedControl(ply) if CLIENT and Moonpanel.GetPredictedControl
+	controlled = Moonpanel\GetPredictedControl(ply) if CLIENT
 	return false unless IsEntity(controlled) and IsValid(controlled) and controlled.Moonpanel
 	return false unless controlled\GetController! == ply
 
 	if CLIENT
 		session = Moonpanel.Net.TraceSessions[controlled]
 		return false unless session and session.controller == ply
-		dX, dY = controlled\TransformInputDeltas(dX, dY) if controlled.TransformInputDeltas
+		dX, dY = controlled\TransformInputDeltas dX, dY
 		canvas = controlled\GetCanvas!
-		pathfinder = canvas\GetPathFinder!
-		return false unless pathfinder and
-			pathfinder.phase == Moonpanel.Canvas.TraceEngine.Phase.Tracing
+		return false unless canvas\GetTracePhase! == Moonpanel.Canvas.TraceEngine.Phase.Tracing
 		xQ, yQ = canvas\QuantizeDeltas dX, dY, panelSensitivity\GetFloat!
 		xQ = math.Clamp xQ, -32767, 32767
 		yQ = math.Clamp yQ, -32767, 32767
@@ -160,10 +155,10 @@ Moonpanel.ApplyDeltas = (ply, dX = 0, dY = 0, boost = false) =>
 			yQ = math.Round yQ * factor
 		xQ = math.Clamp xQ, -32767, 32767
 		yQ = math.Clamp yQ, -32767, 32767
-		unless CLIENT and Moonpanel\IsServerAuthoritativeTrace!
+		unless Moonpanel\IsServerAuthoritativeTrace!
 			canvas\ApplyTraceSample xQ, yQ, boost, ply
 		Moonpanel.Net.QueueTraceSample controlled, xQ, yQ, boost,
-			pathfinder\GetConstraintDecisions!
+			canvas\GetConstraintDecisions!
 		return true
 
 	false

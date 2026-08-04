@@ -1,120 +1,15 @@
 local test = dofile('tools/tests/harness.lua')
 
-Moonpanel.Color = {
-  Black = 1,
-  White = 2,
-  Cyan = 3,
-  Magenta = 4,
-  Yellow = 5,
-  Red = 6,
-  Green = 7,
-  Blue = 8,
-  Orange = 9,
-}
-Moonpanel.Canvas.SocketType = {
-  Intersection = 1,
-  Cell = 2,
-  Path = 3,
-}
-istable = function(value) return type(value) == 'table' end
-isstring = function(value) return type(value) == 'string' end
-table.Count = table.Count or function(value)
-  local count = 0
-  for _ in pairs(value or {}) do count = count + 1 end
-  return count
-end
-util = util or {
-  JSONToTable = function() return nil end,
-  TableToJSON = function() return '' end,
-}
-
+dofile('dest/lua/moonpanel/sh_colors.lua')
 dofile('dest/lua/moonpanel/canvas/sh_helpers.lua')
 dofile('dest/lua/moonpanel/canvas/sh_paneldata.lua')
-Moonpanel.Canvas.DLX = dofile('dest/lua/moonpanel/canvas/sh_dlx.lua')
-dofile('dest/lua/moonpanel/canvas/sh_polyomino.lua')
 local RuleEngine = dofile('dest/lua/moonpanel/canvas/sh_rule_engine.lua')
+local GridTopology = dofile('tools/grid_topology.lua')
 
 local fixtureModule = assert(arg[1], 'generated panel fixture module path is required')
 local fixtures = dofile(fixtureModule)
-
-local function flatIndex(width, gridX, gridY)
-  return 1 + (gridX - 1) + (gridY - 1) * (width * 2 + 1)
-end
-
-local function intersectionIndex(width, x, y)
-  return flatIndex(width, x * 2 + 1, y * 2 + 1)
-end
-
-local function hpathIndex(width, x, y)
-  return flatIndex(width, x * 2 + 2, y * 2 + 1)
-end
-
-local function vpathIndex(width, x, y)
-  return flatIndex(width, x * 2 + 1, y * 2 + 2)
-end
-
-local function pointKey(x, y)
-  return tostring(x) .. ':' .. tostring(y)
-end
-
-local function entityType(data, socketIndex)
-  local entity = data.Entities and data.Entities[socketIndex]
-  return type(entity) == 'table' and entity.Type or nil
-end
-
--- This adapter deliberately models canonical rule geometry, not input or
--- presentation behavior. Saved-panel fixtures describe terminal routes by
--- zero-based intersections, while the shared rule engine consumes stable node
--- and edge IDs enriched with their authored socket indices.
-local function buildGridTopology(data, revision)
-  local width = assert(data.Meta and data.Meta.Width, 'panel width is missing')
-  local height = assert(data.Meta and data.Meta.Height, 'panel height is missing')
-  local topology = { revision = revision, nodes = {}, edges = {} }
-  local nodeAt = {}
-
-  for y = 0, height do
-    for x = 0, width do
-      local socketIndex = intersectionIndex(width, x, y)
-      local node = {
-        id = #topology.nodes + 1,
-        x = x,
-        y = y,
-        socketIndex = socketIndex,
-        invisible = entityType(data, socketIndex) == 'Invisible',
-      }
-      topology.nodes[node.id] = node
-      topology.edges[node.id] = {}
-      nodeAt[pointKey(x, y)] = node.id
-    end
-  end
-
-  local function connect(fromId, toId, socketIndex)
-    if topology.nodes[fromId].invisible or topology.nodes[toId].invisible then return end
-    local kind = entityType(data, socketIndex)
-    if kind == 'Disjoint' or kind == 'Invisible' then return end
-    topology.edges[fromId][toId] = { socketIndex = socketIndex, lengthQ = 4096 }
-    topology.edges[toId][fromId] = { socketIndex = socketIndex, lengthQ = 4096 }
-  end
-
-  for y = 0, height do
-    for x = 0, width - 1 do
-      connect(nodeAt[pointKey(x, y)], nodeAt[pointKey(x + 1, y)],
-        hpathIndex(width, x, y))
-    end
-  end
-  for y = 0, height - 1 do
-    for x = 0, width do
-      connect(nodeAt[pointKey(x, y)], nodeAt[pointKey(x, y + 1)],
-        vpathIndex(width, x, y))
-    end
-  end
-
-  function topology:getEdge(fromId, toId)
-    return self.edges[fromId] and self.edges[fromId][toId]
-  end
-
-  return topology, nodeAt
-end
+local pointKey = GridTopology.key
+local buildGridTopology = GridTopology.build
 
 local function traceStacks(testCase, nodeAt, source, panel)
   local stacks = {}
@@ -181,6 +76,10 @@ local function allSimpleTraces(spec, topology, nodeAt, source)
 
   visit(start)
   assert(#traces > 0, source .. ': exhaustive trace fixture has no start-to-exit routes')
+  if spec.count then
+    assert(#traces == spec.count,
+      string.format('%s: expected %d simple routes, found %d', source, spec.count, #traces))
+  end
   return traces
 end
 
@@ -209,6 +108,38 @@ local function polyominoBackends(report)
   return backends
 end
 
+local function checkExpected(report, expected, source, name, definition)
+  local eraserTargets, nonEraserTargets = 0, 0
+  for _, erasure in ipairs(report.erasures or {}) do
+    local target = definition.clueById[erasure.targetIndex]
+    if target and target.kind == 'eraser' then
+      eraserTargets = eraserTargets + 1
+    else
+      nonEraserTargets = nonEraserTargets + 1
+    end
+  end
+  local actualByName = {
+    success = report.success,
+    status = report.status,
+    violations = report.violations,
+    erasures = report.erasures,
+    erasureCount = #(report.erasures or {}),
+    eraserTargetCount = eraserTargets,
+    nonEraserTargetCount = nonEraserTargets,
+    remaining = report.remaining,
+    remainingCount = #(report.remaining or {}),
+    constraintKinds = constraintKinds(report),
+    polyominoBackends = polyominoBackends(report),
+    reportHash = report.reportHash,
+    ruleRevision = report.ruleRevision,
+  }
+  for key, expectedValue in pairs(expected or {}) do
+    assert(actualByName[key] ~= nil, source .. ': unsupported expected field ' .. key)
+    assert(sameValue(actualByName[key], expectedValue),
+      source .. ': ' .. name .. ': report field ' .. key .. ' did not match the fixture')
+  end
+end
+
 for _, fixture in ipairs(fixtures) do
   local function normalizeLegacyKeys(value)
     if type(value) ~= 'table' then return value end
@@ -227,10 +158,36 @@ for _, fixture in ipairs(fixtures) do
   local topology, nodeAt = buildGridTopology(panel, fixture.topologyRevision)
   local definition = RuleEngine.Compile(panel, topology)
   for _, testCase in ipairs(fixture.tests or {}) do
+    local function evaluate(stacks)
+      return RuleEngine.Evaluate(definition, {
+        revision = topology.revision,
+        stacks = stacks,
+      })
+    end
+    local exhaustive = testCase.allSimpleTraces and
+      allSimpleTraces(testCase.allSimpleTraces, topology, nodeAt, fixture.source)
+    if exhaustive and testCase.allSimpleTraces.solutions ~= nil then
+      test.test(fixture.name .. ': ' .. testCase.name, function()
+        local solved, solution = 0
+        for _, stacks in ipairs(exhaustive) do
+          local report = evaluate(stacks)
+          if report.success then
+            solved = solved + 1
+            solution = report
+          end
+        end
+        assert(solved == testCase.allSimpleTraces.solutions,
+          string.format('%s: expected %d solutions, found %d',
+            fixture.source, testCase.allSimpleTraces.solutions, solved))
+        if solution then
+          checkExpected(solution, testCase.expected, fixture.source, testCase.name, definition)
+        end
+      end)
+    else
     local cases = { testCase }
-    if testCase.allSimpleTraces then
+    if exhaustive then
       cases = {}
-      for index, stacks in ipairs(allSimpleTraces(testCase.allSimpleTraces, topology, nodeAt, fixture.source)) do
+      for index, stacks in ipairs(exhaustive) do
         cases[index] = {
           name = testCase.name .. ' #' .. index,
           traces = {},
@@ -241,30 +198,11 @@ for _, fixture in ipairs(fixtures) do
     end
     for _, case in ipairs(cases) do
       test.test(fixture.name .. ': ' .. case.name, function()
-        local report = RuleEngine.Evaluate(definition, {
-          revision = topology.revision,
-          stacks = case._stacks or traceStacks(case, nodeAt, fixture.source, panel),
-        })
-
-      local expected = case.expected
-      local actualByName = {
-        success = report.success,
-        status = report.status,
-        violations = report.violations,
-        erasures = report.erasures,
-        remaining = report.remaining,
-        constraintKinds = constraintKinds(report),
-        polyominoBackends = polyominoBackends(report),
-        reportHash = report.reportHash,
-        ruleRevision = report.ruleRevision,
-      }
-      for key, expectedValue in pairs(expected) do
-        assert(actualByName[key] ~= nil, fixture.source .. ': unsupported expected field ' .. key)
-        assert(sameValue(actualByName[key], expectedValue),
-          fixture.source .. ': ' .. testCase.name .. ': report field ' .. key ..
-          ' did not match the fixture')
-      end
+        local report = evaluate(
+          case._stacks or traceStacks(case, nodeAt, fixture.source, panel))
+        checkExpected(report, case.expected, fixture.source, testCase.name, definition)
       end)
+    end
     end
   end
 end

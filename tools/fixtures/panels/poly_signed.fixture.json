@@ -1,11 +1,12 @@
 {
   "name": "poly signed",
   "panel": "poly_signed.txt",
+  "legacy": false,
   "topologyRevision": 1,
   "tests": [
     {
       "name": "negative singleton cancels the surplus positive piece",
-      "traces": [],
+      "traces": [[[0, 2], [0, 1], [0, 0]]],
       "expected": {
         "success": true,
         "status": "complete",
@@ -14,7 +15,7 @@
     },
     {
       "name": "partitioning the signed pieces leaves an impossible region",
-      "traces": [[[0, 2], [1, 2], [1, 1], [1, 0], [2, 0]]],
+      "traces": [[[0, 2], [1, 2], [1, 1], [1, 0], [0, 0]]],
       "expected": {
         "success": false,
         "status": "complete"

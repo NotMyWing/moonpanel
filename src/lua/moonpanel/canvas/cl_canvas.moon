@@ -14,17 +14,14 @@ import Rgb2Lch, Lch2Rgb from include "cl_colorutils.lua"
 makeBlinkColor = (color, pct = 0.15) ->
 	h, s, v = ColorToHSV color
 	v = v > (1 - pct / 2) and v - pct or math.min 1, v + pct
-
 	HSVToColor h, s, v
 
 lerpColor = (value, cA, cB) ->
 	alpha = (cA.a or 255) * (1 - value) + (cB.a or 255) * value
 	cA = { Rgb2Lch cA.r / 255, cA.g / 255, cA.b / 255 }
 	cB = { Rgb2Lch cB.r / 255, cB.g / 255, cB.b / 255 }
-
 	for i = 1, 3
 		cA[i] += value * (cB[i] - cA[i])
-
 	r, g, b = Lch2Rgb cA[1], cA[2], cA[3]
 	math.Round(r * 255), math.Round(g * 255), math.Round(b * 255), alpha
 
@@ -37,17 +34,11 @@ drawRingAt = (x, y, radius, thickness) ->
 	innerRadius = math.max 0.1, radius - thickness
 	for i = 0, RING_SEGMENTS
 		angle = math.pi * 2 * i / RING_SEGMENTS
-		cosAngle = math.cos angle
-		sinAngle = math.sin angle
-		outerVertex = ringOuter[i + 1]
-		outerVertex.x = x + cosAngle * radius
-		outerVertex.y = y + sinAngle * radius
-		innerVertex = ringInner[i + 1]
-		innerVertex.x = x + cosAngle * innerRadius
-		innerVertex.y = y + sinAngle * innerRadius
-
-	-- Use the stencil to subtract the inner disc without painting over the
-	-- trace or clue geometry underneath the expanding ring.
+		cosAngle, sinAngle = math.cos(angle), math.sin(angle)
+		ringOuter[i + 1].x = x + cosAngle * radius
+		ringOuter[i + 1].y = y + sinAngle * radius
+		ringInner[i + 1].x = x + cosAngle * innerRadius
+		ringInner[i + 1].y = y + sinAngle * innerRadius
 	draw.NoTexture!
 	render.ClearStencil!
 	render.SetStencilEnable true
@@ -72,8 +63,8 @@ getLocalFocusTarget = ->
 	focusTargetEntity = nil
 	return unless Moonpanel.IsFocused!
 
-	controlled = Moonpanel.GetPredictedControl! if Moonpanel.GetPredictedControl
-	if IsValid controlled
+	controlled = Moonpanel\GetPredictedControl!
+	if IsValid(controlled) and controlled.Moonpanel
 		focusTargetEntity = controlled
 		return focusTargetEntity
 
@@ -87,65 +78,45 @@ getLocalFocusTarget = ->
 		focusTargetEntity = trace.Entity if trace.Entity.Moonpanel
 	focusTargetEntity
 
-clearRT = (rt) ->
-	with render.PushRenderTarget rt
-		cam.Start2D!
-		render.Clear 0, 0, 0, 255, true, false
-		cam.End2D!
-
+drawToRT = (rt, callback, context) ->
+	render.PushRenderTarget rt
+	cam.Start2D!
+	ok, err = xpcall (-> callback context), debug.traceback
+	cam.End2D!
 	render.PopRenderTarget!
+	error err, 0 unless ok
 
-drawLine = (x1, y1, x2, y2, width, length) ->
+clearRT = (rt) ->
+	drawToRT rt, -> render.Clear 0, 0, 0, 255, true, false
+
+drawLine = (x1, y1, x2, y2, width) ->
 	dX = x2 - x1
 	dY = y2 - y1
-	-- Panel routes are orthogonal.  Draw those segments as filled geometry
-	-- instead of relying on DrawTexturedRectRotated's current material state.
-	-- This is especially important for restored terminal traces.
 	if (math.abs dY) < 0.001
-		x = math.min x1, x2
-		y = y1 - width * 0.5
-		rectWidth = math.max 1, math.ceil math.abs dX
-		rectHeight = math.max 1, math.ceil width
-		surface.DrawRect (math.floor x), (math.floor y), rectWidth, rectHeight
+		surface.DrawRect math.floor(math.min x1, x2),
+			math.floor(y1 - width * 0.5), math.max(1, math.ceil math.abs dX),
+			math.max(1, math.ceil width)
 		return
 	if (math.abs dX) < 0.001
-		x = x1 - width * 0.5
-		y = math.min y1, y2
-		rectWidth = math.max 1, math.ceil width
-		rectHeight = math.max 1, math.ceil math.abs dY
-		surface.DrawRect (math.floor x), (math.floor y), rectWidth, rectHeight
+		surface.DrawRect math.floor(x1 - width * 0.5), math.floor(math.min y1, y2),
+			math.max(1, math.ceil width), math.max(1, math.ceil math.abs dY)
 		return
-
-	angle = math.pi / 2 + math.atan2 dX, dY
-
-	local posX, posY
-	if not length
-		length = math.sqrt dX * dX + dY * dY
-
-		posX = 0.5 * (x1 + x2)
-		posY = 0.5 * (y1 + y2)
-
-	else
-		posX = x1 - 0.5 * length * math.cos angle
-		posY = y1 + 0.5 * length * math.sin angle
-
-	surface.DrawTexturedRectRotated (math.Round posX), (math.Round posY),
-		length, width, math.deg angle
+	length = math.sqrt dX * dX + dY * dY
+	surface.DrawTexturedRectRotated math.Round((x1 + x2) * 0.5),
+		math.Round((y1 + y2) * 0.5), length, width,
+		math.deg(math.pi / 2 + math.atan2 dX, dY)
 
 CANVAS.DeallocateRT = =>
-	if @__rtAlloc
-		return if not Moonpanel.Canvas\IsRTAllocated @__rtAlloc
-
-		Moonpanel.Canvas\DeallocateRT @__rtAlloc
-
-		true
+	return unless @__rtAlloc and Moonpanel.Canvas\IsRTAllocated @__rtAlloc
+	Moonpanel.Canvas\DeallocateRT @__rtAlloc
+	true
 
 CANVAS.CanRender = => @__rtAlloc and Moonpanel.Canvas\IsRTAllocated @__rtAlloc
 
-CANVAS.AllocateRT = =>
+CANVAS.AllocateRT = (forceEvict = false) =>
 	return if @__rtAlloc and Moonpanel.Canvas\IsRTAllocated @__rtAlloc
 
-	@__rtAlloc = Moonpanel.Canvas\AllocateRT!
+	@__rtAlloc = Moonpanel.Canvas\AllocateRT forceEvict, @
 
 	if @__rtAlloc
 		clearRT @__rtAlloc.rt.texture
@@ -156,8 +127,6 @@ CANVAS.AllocateRT = =>
 CANVAS.BakeImportedColors = =>
 	@__clientData = {
 		renderables: {}
-		renderablesBelowTrace: {}
-		renderablesOverTrace: {}
 	}
 
 	with @__clientData
@@ -180,40 +149,44 @@ CANVAS.BakeImportedColors = =>
 CANVAS.RecalculateClient = =>
 	return if not @__data
 
-	barLength = @GetBarLength!
 	barWidth = @GetBarWidth!
 	@__rtDirty = true
 
 	@__clientData.paths = {}
-	@__clientData.distances = {}
-	for node in *@__nodes
-		@__clientData.distances[node] = {}
-
+	@__clientData.cells = {}
 	seen = {}
+	meta = @__data.Meta or {}
+	width, height = tonumber(meta.Width) or 1, tonumber(meta.Height) or 1
+	barLength = @GetBarLength!
+	verticalLength = @GetVerticalBarLength!
+	resolution = Moonpanel.Canvas.Resolution
+	for y = 1, height
+		for x = 1, width
+			entityIndex = (y * 2 - 1) * (width * 2 + 1) + x * 2
+			entity = @__data.Entities and @__data.Entities[entityIndex]
+			continue if entity and entity.Type == "Invisible"
+			table.insert @__clientData.cells, {
+				x: resolution * 0.5 + (x - 0.5 - width * 0.5) * barLength - barLength * 0.5
+				y: resolution * 0.5 + (y - 0.5 - height * 0.5) * verticalLength - verticalLength * 0.5
+				width: math.max 1, barLength
+				height: math.max 1, verticalLength
+			}
 
 	-- Extract paths and calculate distances.
 	for nodeA in *@__nodes
-		isSeen = false
+		continue if seen[nodeA]
+		seen[nodeA] = true
 		for nodeB in *nodeA.neighbors
 			-- The duplicate right seam has no vertical geometry. Horizontal
 			-- routes still reach the edge and remain the authored wrap paths.
 			continue if @IsHiddenContinuousSocket(nodeA.socket) and
 				@IsHiddenContinuousSocket(nodeB.socket)
-			if not isSeen
-				seen[nodeA] = true
-				isSeen = true
-
 			if not seen[nodeB]
 				dx = nodeB.screenX - nodeA.screenX
 				dy = nodeB.screenY - nodeA.screenY
 				angle = math.atan2 dy, dx
 				rawDistance = math.sqrt dx * dx + dy * dy
-				dist = math.ceil rawDistance
-
-				@__clientData.distances[nodeA][nodeB] = dist
-				@__clientData.distances[nodeB][nodeA] = dist
-
-				renderDistance = dist
+				renderDistance = math.ceil rawDistance
 				centerX = math.floor (nodeB.screenX + nodeA.screenX) * 0.5
 				centerY = math.floor (nodeB.screenY + nodeA.screenY) * 0.5
 				if rawDistance > 0 and (nodeA.break or nodeB.break)
@@ -237,71 +210,14 @@ CANVAS.RecalculateClient = =>
 					screenY: centerY
 				}
 
-	-- Test occlusion.
+	-- A node needs a visible dot only at a branch, endpoint, gap, or start.
 	@__clientData.visibleNodes = {}
-
 	for node in *@__nodes
-		continue if @IsHiddenContinuousSocket node.socket
-		-- Gap lips are cuts through a rectangular bar, not junctions. Their
-		-- backing segments are already rendered, so adding node circles here
-		-- creates the rounded nubs absent from Witness panels.
-		continue if node.break
-		if node.clickable
+		continue if node.break or node.invisible or
+			@IsHiddenContinuousSocket node.socket
+		neighborCount = table.Count node.neighbors
+		if node.clickable or neighborCount > 0 and neighborCount < 4
 			table.insert @__clientData.visibleNodes, node
-			continue
-
-		continue if node.invisible
-		continue if 0 == table.Count node.neighbors
-
-		ranges = {}
-		for nodeB in *node.neighbors
-			angle = 180 + math.deg math.atan2 nodeB.screenY - node.screenY,
-				nodeB.screenX - node.screenX
-
-			lower = angle - 90
-			upper = angle + 90
-
-			if lower < 0
-				table.insert ranges, {
-					360 + lower, 360
-				}
-
-				table.insert ranges, {
-					0, upper
-				}
-			elseif upper > 360
-				table.insert ranges, {
-					0, upper - 360
-				}
-
-				table.insert ranges, {
-					lower, 360
-				}
-			else
-				table.insert ranges, {
-					lower, upper
-				}
-
-		table.sort ranges, (a, b) -> a[1] < b[1]
-
-		local lowerBound
-		local upperBound
-		for range in *ranges
-			lower = range[1]
-			upper = range[2]
-
-			if not lowerBound
-				lowerBound = lower
-
-			if not upperBound
-				upperBound = upper
-
-			elseif lower <= upperBound
-				upperBound = math.max upper, upperBound
-
-		if upperBound - lowerBound < 360
-			table.insert @__clientData.visibleNodes, node
-
 ----------------------------
 -- Paints the trace. Duh. --
 ----------------------------
@@ -320,16 +236,11 @@ CANVAS.PaintTrace = (w, h) =>
 	-- the beginning-of-attempt width interpolation while drawing its terminal
 	-- snapshot into the cached target.
 	if @__terminalSnapshot and @__terminalSnapshotRestored
-		frame = {
-			widthScale: 1
-			exitPulse: 0
-			traceAlpha: 1
-			traceError: 0
-			completion: @__playData and @__playData.visualResult and
-				@__playData.visualResult.success and 1 or 0
-			flash: 0
-			branchStyles: frame.branchStyles
-		}
+		frame = table.Copy frame
+		frame.widthScale, frame.exitPulse, frame.traceAlpha = 1, 0, 1
+		frame.traceError, frame.flash = 0, 0
+		frame.completion = @__playData and @__playData.visualResult and
+			@__playData.visualResult.success and 1 or 0
 	widthModifier = frame.widthScale or 1
 	regularRadius = widthModifier * @GetBarWidth! *
 		(w / Moonpanel.Canvas.Resolution)
@@ -337,11 +248,12 @@ CANVAS.PaintTrace = (w, h) =>
 	regularRadius = math.Round 0.5 * regularRadius
 
 	colors = @GetColors!
+	topology = @__pathFinder.topology
 	continuous = @IsContinuous!
 	periodPixels = continuous and @GetBarLength! * @__data.Meta.Width or 0
-	drawRouteSegment = (edge, fraction, width) ->
-		fromNode = @__pathFinder.topology.nodes[edge.fromId]
-		toNode = @__pathFinder.topology.nodes[edge.toId]
+	drawRouteSegment = (edge, fraction) ->
+		fromNode = topology.nodes[edge.fromId]
+		toNode = topology.nodes[edge.toId]
 		return unless fromNode and toNode
 		startX = edge.fromScreenX or fromNode.screenX
 		startY = edge.fromScreenY or fromNode.screenY
@@ -349,11 +261,12 @@ CANVAS.PaintTrace = (w, h) =>
 		endY = edge.toScreenY or toNode.screenY
 		headX = startX + (endX - startX) * fraction
 		headY = startY + (endY - startY) * fraction
+		width = regularRadius * 2
+		surface.SetMaterial MAT_TRACE
 		shifts = if continuous then { -periodPixels, 0, periodPixels } else { 0 }
 		for shift in *shifts
 			x1, x2 = startX + shift, headX + shift
 			continue if math.max(x1, x2) < -width or math.min(x1, x2) > w + width
-			surface.SetMaterial MAT_TRACE
 			drawLine x1, startY, x2, headY, width
 			circleAt x2, headY, width * 0.5
 	for stackId, route in ipairs state.routes
@@ -362,23 +275,26 @@ CANVAS.PaintTrace = (w, h) =>
 
 		traceColor = branchStyle and branchStyle.color or
 			colors.Trace[stackId] or colors.Trace[1]
+		blend = (amount, target) ->
+			traceColor = Color lerpColor math.min(1, amount), traceColor, target
 		if (frame.exitPulse or 0) > 0
-			traceColor = Color lerpColor math.min(1, frame.exitPulse), traceColor,
+			blend frame.exitPulse,
 				@__clientData.extraColors.blink[stackId] or
 				@__clientData.extraColors.blink[1]
 		if (frame.traceError or 0) > 0
-			traceColor = Color lerpColor math.min(1, frame.traceError), traceColor,
-				colors.Error
+			blend frame.traceError, colors.Error
 		if (frame.completion or 0) > 0
-			traceColor = Color lerpColor math.min(1, frame.completion), traceColor,
+			blend frame.completion,
 				branchStyle and branchStyle.completionColor or
 				colors.EndTrace[stackId] or colors.EndTrace[1]
-		if (frame.flash or 0) > 0
-			traceColor = Color lerpColor math.min(1, frame.flash * 0.65), traceColor,
-				Color 255, 255, 255
+		-- Completion should transition directly from the active trace color to
+		-- the terminal color; suppress the generic white success flash while the
+		-- terminal blend is active.
+		if (frame.flash or 0) > 0 and (frame.completion or 0) <= 0
+			blend frame.flash * 0.65, Color 255, 255, 255
 		surface.SetDrawColor traceColor.r, traceColor.g, traceColor.b, 255
 
-		first = @__pathFinder.topology.nodes[route.startId]
+		first = topology.nodes[route.startId]
 		continue unless first
 		circleAt first.screenX, first.screenY, firstNodeRadius
 		if continuous and not @GetEditorGeometryVisible! and
@@ -386,15 +302,15 @@ CANVAS.PaintTrace = (w, h) =>
 			circleAt first.screenX + periodPixels, first.screenY, firstNodeRadius
 
 		for segment in *route.segments
-			edge = @__pathFinder.topology\getEdge segment.fromId, segment.toId
+			edge = topology\getEdge segment.fromId, segment.toId
 			continue unless edge and segment.visibleLength > 0
 			fraction = segment.fullLength > 0 and
 				math.min(1, segment.visibleLength / segment.fullLength) or 0
-			drawRouteSegment edge, fraction, regularRadius * 2
+			drawRouteSegment edge, fraction
 
 CANVAS.GetEntityVisualStyle = (socket) =>
 	return unless socket and @__visualFrame and @__visualFrame.entityStyles
-	index = @GetSocketDataIndex socket
+	index = socket\GetDataIndex!
 	index and @__visualFrame.entityStyles[index] or nil
 
 CANVAS.HasDynamicEntityStyle = (socket) =>
@@ -411,19 +327,19 @@ CANVAS.ApplyEntityVisualColor = (color, socket) =>
 	return color.r, color.g, color.b, color.a or 255 unless style
 
 	r, g, b, a = color.r, color.g, color.b, color.a or 255
+	mix = (target, amount) ->
+		r += (target.r - r) * amount
+		g += (target.g - g) * amount
+		b += (target.b - b) * amount
 	if style.tint
 		amount = math.Clamp style.tintAmount or 1, 0, 1
-		r += (style.tint.r - r) * amount
-		g += (style.tint.g - g) * amount
-		b += (style.tint.b - b) * amount
+		mix style.tint, amount
 	error = math.Clamp style.error or 0, 0, 1
 	if error > 0
 		target = Color 255, 36, 36
 		if r > 150 and r > g * 1.45 and r > b * 1.45
 			target = Color 25, 8, 8
-		r += (target.r - r) * error
-		g += (target.g - g) * error
-		b += (target.b - b) * error
+		mix target, error
 
 	erased = math.Clamp style.erased or 0, 0, 1
 	if erased > 0
@@ -433,48 +349,61 @@ CANVAS.ApplyEntityVisualColor = (color, socket) =>
 		b += (gray - b) * erased
 
 	glow = math.Clamp style.glow or 0, 0, 1
-	r += (255 - r) * glow
-	g += (255 - g) * glow
-	b += (255 - b) * glow
+	mix Color(255, 255, 255), glow
 	a *= math.Clamp style.alpha or 1, 0, 1
 	math.Round(r), math.Round(g), math.Round(b), math.Round(a)
 
+drawRouteStarts = (topology, routes, radius, colors, branchStyles, alpha) ->
+	seen = {}
+	for routeIndex, route in ipairs routes
+		continue if seen[route.startId]
+		seen[route.startId] = true
+		if node = topology.nodes[route.startId]
+			if colors
+				color = branchStyles and branchStyles[routeIndex] and
+					branchStyles[routeIndex].color or colors.Trace[routeIndex] or colors.Trace[1]
+				surface.SetDrawColor color.r, color.g, color.b, alpha
+			circleAt node.screenX, node.screenY, radius
+	seen
+
 CANVAS.PaintPresentationEffects = =>
 	frame = @__visualFrame
-	return unless frame and @__pathFinder
-	barWidth = @GetBarWidth!
-	if (frame.startRipple or 0) > 0
-		surface.SetDrawColor 255, 255, 255, math.Round(frame.startRipple * 42)
-		state = @__renderTraceState or @GetTraceRenderState!
-		seen = {}
-		for route in *(state and state.routes or {})
-			continue if seen[route.startId]
-			seen[route.startId] = true
-			if node = @__pathFinder.topology.nodes[route.startId]
-				radius = barWidth * (1.5 + frame.startRipple * 1.8)
-				circleAt node.screenX, node.screenY, radius
+	return unless frame
 
-	if (frame.scintAlpha or 0) > 0
-		surface.SetDrawColor 255, 255, 255,
-			math.Round math.Clamp(frame.scintAlpha, 0, 1) * 255
-		radius = barWidth * (0.25 + (frame.scintProgress or 0) * 2.5)
-		thickness = math.max 1, barWidth * 0.12
-		seen = {}
-		if frame.scintStarts
-			state = @__renderTraceState or @GetTraceRenderState!
-			for route in *(state and state.routes or {})
-				if not seen[route.startId]
-					seen[route.startId] = true
-					if node = @__pathFinder.topology.nodes[route.startId]
-						drawRingAt node.screenX, node.screenY, radius, thickness
-			for nodeId in *@__pathFinder.topology.starts
-				continue if seen[nodeId]
-				if node = @__pathFinder.topology.nodes[nodeId]
-					drawRingAt node.screenX, node.screenY, radius, thickness
-		unless frame.scintStarts
-			for node in *@__pathFinder.topology.nodes
-				if node.exit and not seen[node.id]
-					drawRingAt node.screenX, node.screenY, radius, thickness
+	ripple = frame.startRipple or 0
+	scintAlpha = math.Clamp frame.scintAlpha or 0, 0, 1
+	return if ripple <= 0 and scintAlpha <= 0
+	return unless @__pathFinder
+
+	topology = @__pathFinder.topology
+	barWidth = @GetBarWidth!
+	local routes
+	colors = @GetColors! if ripple > 0
+	if ripple > 0 or frame.scintStarts
+		state = @__renderTraceState or @GetTraceRenderState!
+		routes = state and state.routes or {}
+
+	if ripple > 0
+		trace = colors.Trace[1] or colors.Trace[2]
+		surface.SetDrawColor trace.r, trace.g, trace.b, math.Round(ripple * 42)
+		drawRouteStarts topology, routes, barWidth * (1.5 + ripple * 1.8),
+			colors, frame.branchStyles, math.Round(ripple * 42)
+	return if scintAlpha <= 0
+
+	surface.SetDrawColor 255, 255, 255,
+		math.Round scintAlpha * 255 * 0.5
+	radius = barWidth * (0.25 + (frame.scintProgress or 0) * 2.5)
+	thickness = math.max 1, barWidth * 0.12
+	if frame.scintStarts
+		seen = drawRouteStarts topology, routes, radius
+		for nodeId in *topology.starts
+			continue if seen[nodeId]
+			if node = topology.nodes[nodeId]
+				drawRingAt node.screenX, node.screenY, radius, thickness
+	else
+		for node in *topology.nodes
+			if node.exit
+				drawRingAt node.screenX, node.screenY, radius, thickness
 
 -----------------------------
 -- Paints the canvas. Duh. --
@@ -484,16 +413,10 @@ CANVAS.Paint = (w, h) =>
 
 	surface.SetMaterial @__rtAlloc.rt.material
 
-	-- Determine whether the screen should be tinted black
-	-- based on the power state value.
-	if @__powerState ~= nil and @__powerStateBuffer
-		color = math.Round 255 * math.EaseInOut @__powerStateBuffer,
-			0.25, 0.25
-
-		surface.SetDrawColor color, color, color
-
-	else
-		surface.SetDrawColor 255, 255, 255
+	color = if @__powerState ~= nil and @__powerStateBuffer
+		math.Round 255 * math.EaseInOut @__powerStateBuffer, 0.25, 0.25
+	else 255
+	surface.SetDrawColor color, color, color
 
 	surface.DrawTexturedRect 0, 0, w, h
 
@@ -504,7 +427,18 @@ CANVAS.Paint = (w, h) =>
 CANVAS.RenderRT = =>
 	return if not @CanRender!
 
+	now = RealTime!
+	@__rtRateStartedAt or= now
+	elapsed = now - @__rtRateStartedAt
+	if elapsed >= 1
+		@__rtDrawRate = (@__rtDrawCount or 0) / elapsed
+		@__rtFrameRate = (@__rtFrameCount or 0) / elapsed
+		@__rtDrawCount, @__rtFrameCount = 0, 0
+		@__rtRateStartedAt = now
+	@__rtFrameCount = (@__rtFrameCount or 0) + 1
+	@__rtWasDirty = @__rtDirty == true
 	if @__rtDirty
+		@__rtDrawCount = (@__rtDrawCount or 0) + 1
 		w = Moonpanel.Canvas.Resolution
 		h = w
 
@@ -526,27 +460,30 @@ CANVAS.RenderRT = =>
 			-- Presentation alpha belongs to the whole trace image, never to
 			-- individual segments.
 			auxrt = Moonpanel.Canvas\GetAuxiliaryRT!
-			with render.PushRenderTarget auxrt.texture
-				cam.Start2D!
+			drawToRT auxrt.texture, (=>
 				render.Clear 0, 0, 0, 0, true, false
-				@PaintTrace w, h
-				cam.End2D!
-
-			render.PopRenderTarget!
+				@PaintTrace w, h), @
 
 		-- Draw the rest of the panel in a dedicated rendertarget.
 		-- "How do we get one?", you might ask. The answer is...
 		-- out of this function scope.
-		with render.PushRenderTarget @__rtAlloc.rt.texture
-			cam.Start2D!
+		drawToRT @__rtAlloc.rt.texture, (=>
 			render.Clear 0, 0, 0, 0, true, false
+			colors = @GetColors!
+			visible = (item) -> not @IsHiddenContinuousSocket item\GetSocket!
+			renderables = @__clientData.renderables
 
-			surface.SetDrawColor @GetColors!.Background
+			surface.SetDrawColor colors.Background
 			surface.DrawRect 0, 0, w, h
+			if colors.Cell
+				surface.SetDrawColor colors.Cell
+				for cell in *@__clientData.cells
+					surface.DrawRect cell.x, cell.y, cell.width, cell.height
 
 			barWidth = @GetBarWidth!
+			wrap = @IsContinuous! and not @GetEditorGeometryVisible!
 
-			surface.SetDrawColor @GetColors!.Grid
+			surface.SetDrawColor colors.Grid
 
 			-- Draw visible paths.
 			draw.NoTexture!
@@ -554,7 +491,7 @@ CANVAS.RenderRT = =>
 				-- they see me rounding, they hating
 				surface.DrawTexturedRectRotated math.Round(path.screenX), math.Round(path.screenY),
 					math.Round(path.distance), math.Round(barWidth), math.Round(path.angle)
-				if @IsContinuous! and not @GetEditorGeometryVisible! and
+				if wrap and
 						math.abs(path.screenX) < barWidth and math.abs(path.angle) == 90
 					surface.DrawTexturedRectRotated Moonpanel.Canvas.Resolution,
 						math.Round(path.screenY), math.Round(path.distance),
@@ -565,13 +502,13 @@ CANVAS.RenderRT = =>
 			for node in *@__clientData.visibleNodes
 				size = node.clickable and barWidth * 2.5 or barWidth
 				circleAt node.screenX, node.screenY, size / 2
-				if @IsContinuous! and not @GetEditorGeometryVisible! and
+				if wrap and
 						math.abs(node.screenX) < size * 0.5
 					circleAt Moonpanel.Canvas.Resolution, node.screenY, size / 2
 
-			for renderable in pairs @__clientData.renderablesBelowTrace
-				continue if @IsHiddenContinuousSocket renderable\GetSocket!
-				renderable\RenderBelowTrace!
+			for renderable, layers in pairs renderables
+				continue unless visible renderable
+				renderable\RenderBelowTrace! if layers.below
 
 			if hasPresentation
 				alpha = @__visualFrame and @__visualFrame.traceAlpha or 1
@@ -581,43 +518,35 @@ CANVAS.RenderRT = =>
 					surface.SetDrawColor 255, 255, 255, math.Round(alpha * 255)
 					surface.DrawTexturedRect 0, 0, w, h
 
-			for renderable in pairs @__clientData.renderables
-				continue if @IsHiddenContinuousSocket renderable\GetSocket!
-				renderable\Render!
+			for renderable, layers in pairs renderables
+				continue unless visible renderable
+				renderable\Render! if layers.main
 
-			for renderable in pairs @__clientData.renderablesOverTrace
-				continue if @IsHiddenContinuousSocket renderable\GetSocket!
-				renderable\RenderOverlay!
+			for renderable, layers in pairs renderables
+				continue unless visible renderable
+				renderable\RenderOverlay! if layers.over
 
 			@PaintPresentationEffects! unless @__terminalSnapshotRestored
 
-			vignette = @GetColors!.Vignette
+			vignette = colors.Vignette
 			surface.SetMaterial MAT_VIGNETTE
 			surface.SetDrawColor vignette.r, vignette.g, vignette.b, vignette.a or 80
-			surface.DrawTexturedRect 0, 0, w, h
-
-			cam.End2D!
-
-		render.PopRenderTarget!
+			surface.DrawTexturedRect 0, 0, w, h), @
 		@__renderTraceState = nil
 
 CANVAS.AddRenderable = (entity) =>
-	if entity.RenderBelowTrace
-		@__clientData.renderablesBelowTrace[entity] = true
-	if entity.Render
-		@__clientData.renderables[entity] = true
-	if entity.RenderOverlay
-		@__clientData.renderablesOverTrace[entity] = true
+	layers = @__clientData.renderables[entity] or {}
+	layers.below = entity.RenderBelowTrace
+	layers.main = entity.Render
+	layers.over = entity.RenderOverlay
+	@__clientData.renderables[entity] = layers
 
 CANVAS.RemoveRenderable = (entity) =>
 	@__clientData.renderables[entity] = nil
-	@__clientData.renderablesBelowTrace[entity] = nil
-	@__clientData.renderablesOverTrace[entity] = nil
 
 CANVAS.SetPowerState = (state) =>
 	@__powerState = state
-	if not @__powerStateBuffer
-		@__powerStateBuffer = state and 1 or 0
+	@__powerStateBuffer or= state and 1 or 0
 	if state
 		@SetLoop "PresenceLoop"
 	else
@@ -629,8 +558,7 @@ CANVAS.SetFocusHintOverride = (enabled) =>
 	return false if @__focusHintOverride == enabled
 	@__focusHintOverride = enabled
 	if @__presentation and @__presentation\setFocusHint enabled, CurTime!
-		@__visualFrame = nil
-		@__rtDirty = true
+		@__visualFrame, @__rtDirty = nil, true
 	true
 
 CANVAS.IsLocalFocusHintTarget = =>
@@ -638,6 +566,28 @@ CANVAS.IsLocalFocusHintTarget = =>
 	return true if @__focusHintOverride
 	return false unless IsValid @__worldEntity
 	getLocalFocusTarget! == @__worldEntity
+
+CANVAS.ImportTraceSession = (controller, sessionId, revision, snapshot,
+	lastSequence, lateJoin = false, observer = false, importedPlay = {},
+	startPresentation = true) =>
+	return false unless @__pathFinder and snapshot
+	if observer
+		@SetObserverFollower nil
+		return false unless @ApplyObserverSnapshot snapshot, lastSequence
+	else
+		return false unless @RestoreTraceSnapshot snapshot
+		@SetObserverFollower nil
+	playData = table.Copy importedPlay
+	playData.startTime = CurTime! unless lateJoin and playData.startTime
+	playData.endTime = nil unless lateJoin
+	playData.controller = controller
+	playData.touchingExit = snapshot.touchingExit == true
+	playData.sessionId = sessionId
+	@SetPlayData playData
+	if startPresentation
+		@BeginPresentation {sessionId: sessionId, revision: revision}, lateJoin
+	@SetPresentationExit @IsExitPath!, lateJoin
+	true
 
 CANVAS.ImportNetworkState = (panel, data = {}) =>
 	resetSerial = math.max 0, math.floor tonumber(data.resetSerial) or 0
@@ -655,33 +605,32 @@ CANVAS.ImportNetworkState = (panel, data = {}) =>
 			panel\SetController game.GetWorld! if IsValid panel
 			gui.EnableScreenClicker true if Moonpanel\IsFocused!
 	@ImportData data.panelData
+	pathfinder = @__pathFinder
 	if session = Moonpanel.Net.TraceSessions and Moonpanel.Net.TraceSessions[panel]
-		definition = @GetRuleDefinition!
-		pathfinder = @GetPathFinder!
-		if not pathfinder or session.revision ~= pathfinder.topology.revision or
-				not definition or session.ruleRevision ~= definition.ruleRevision
+		if not pathfinder or session.revision ~= @GetTraceRevision! or
+				session.ruleRevision ~= @GetRuleRevision!
 			Moonpanel.Net.TraceSessions[panel] = nil
 	@ImportPlayData data.playData
 	@SetSolvedState data.solved == true
 	visualResult = data.visualResult
-	definition = @GetRuleDefinition!
-	pathfinder = @GetPathFinder!
-	revisionMatches = visualResult and pathfinder and definition and
-		visualResult.revision == pathfinder.topology.revision and
-		visualResult.ruleRevision == definition.ruleRevision
+	ruleRevision = @GetRuleRevision!
+	revisionMatches = visualResult and pathfinder and ruleRevision and
+		visualResult.revision == @GetTraceRevision! and
+		visualResult.ruleRevision == ruleRevision
 	restoredSolvedSnapshot = data.solved == true and visualResult and
-		istable(visualResult.snapshot) and pathfinder and definition
+		istable(visualResult.snapshot) and pathfinder and ruleRevision
 	if revisionMatches or restoredSolvedSnapshot
 		if restoredSolvedSnapshot and not revisionMatches
 			visualResult = table.Copy visualResult
-			visualResult.revision = pathfinder.topology.revision
-			visualResult.ruleRevision = definition.ruleRevision
+			visualResult.revision = @GetTraceRevision!
+			visualResult.ruleRevision = ruleRevision
 		@__lastVisualSerial = visualResult.eventSerial or @__lastVisualSerial
 		@BeginPresentation {
 			sessionId: visualResult.sessionId
 			revision: visualResult.revision
 		}, true
-		@ApplyVisualResult visualResult, data.visualElapsed or 0, true
+		@ApplyVisualResult visualResult, data.visualElapsed or 0, true,
+			data.solved == true
 	elseif data.solved ~= true and not resetRequested
 		@ResetPresentation "network-state"
 	powered = if data.powered ~= nil
@@ -693,5 +642,3 @@ CANVAS.ImportNetworkState = (panel, data = {}) =>
 	@SetPowerState powered
 	@BeginResetPresentation resetSnapshot, resetSerial, true if resetRequested and
 		resetSnapshot and @BeginResetPresentation
-
-CANVAS.GetPowerStateBuffer = => @__powerStateBuffer or 1

@@ -4,11 +4,10 @@ const { streamToBuffer } = require('./util');
 
 const LUA_FILE_PREFIX =
 `-- !!! THIS FILE IS COMPILED !!!
--- This addon is written in Moonscript, and its source code is available
--- here: https://github.com/NotMyWing/moonpanel
--- The code you see here is the result of compiled code, and is probably not
--- something you want to edit directly. Please consider editing the original
--- addon source off GitHub instead.`;
+-- This addon is written in MoonScript. Its source code is available here:
+-- https://github.com/NotMyWing/moonpanel
+-- This file was generated from that source and is not intended for direct
+-- editing. Please edit the original addon source instead.`;
 
 /**
  * Discourage direct Lua file modification by notifying users where to find

@@ -118,7 +118,7 @@ function moon() {
 		.pipe(compileMoonscript())
 		.pipe(optimizeLua())
 		.pipe(discourageLuaMod())
-		// .pipe(minifyLua())
+		.pipe(minifyLua())
 		.pipe(atomicDest('dest'));
 }
 moon.description = "Compiles moonscript files.";

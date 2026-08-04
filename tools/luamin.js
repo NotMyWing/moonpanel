@@ -1,10 +1,30 @@
 const { Transform } = require('stream');
-const luamin = require('luamin');
+const luaFormat = require('lua-format');
+const { streamToBuffer } = require('./util');
+
+const FORMAT_OPTIONS = {
+	RenameVariables: false,
+	RenameGlobals: false,
+	// SolveMath folds GLua expressions unsafely (notably geometry bounds).
+	SolveMath: false,
+	Indentation: '',
+};
+
+const LUA_FORMAT_BANNER = /^--\[\[\n\tCode generated using github\.com\/Herrtt\/luamin\.js\n\tAn open source Lua beautifier and minifier\.\n--\]\]\n*/;
+
+function stripLuaFormatBanner(code) {
+	return code.replace(LUA_FORMAT_BANNER, '');
+}
+
+function formatLua(code) {
+	return stripLuaFormatBanner(luaFormat.Beautify(code, FORMAT_OPTIONS));
+}
 
 /**
- * Minifies lua files using luamin.
+ * Formats Lua files using lua-format's Luamin-compatible parser while
+ * retaining structural newlines for readable compiled output.
  */
-class LuaminTransform extends Transform {
+class LuaFormatTransform extends Transform {
 
 	constructor() {
 		super({ objectMode: true });
@@ -26,8 +46,8 @@ class LuaminTransform extends Transform {
 				if (err) this.emit('error', err);
 				else {
 					const code = contents.toString(encoding);
-					const minifiedCode = luamin.minify(code);
-					file.contents = Buffer.from(minifiedCode, encoding);
+					const formattedCode = formatLua(code);
+					file.contents = Buffer.from(formattedCode, encoding);
 					next(null, file);
 				}
 			});
@@ -35,13 +55,13 @@ class LuaminTransform extends Transform {
 
 		if (file.isBuffer()) {
 			const code = file.contents.toString(encoding);
-			const minifiedCode = luamin.minify(code);
-			file.contents = Buffer.from(minifiedCode, encoding);
+			const formattedCode = formatLua(code);
+			file.contents = Buffer.from(formattedCode, encoding);
 			next(null, file);
 		}
 
 	}
 }
 
-module.exports = () => new LuaminTransform();
-module.exports.LuaminTransform = LuaminTransform;
+module.exports = () => new LuaFormatTransform();
+module.exports.LuaFormatTransform = LuaFormatTransform;

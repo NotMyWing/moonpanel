@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { Transform } = require('stream');
 
 const { streamToBuffer } = require('./util');
@@ -11,6 +11,17 @@ class MoonscriptTransform extends Transform {
 	constructor(compilerPath = "moonc") {
 		super({ objectMode: true });
 		this.compilerPath = compilerPath;
+		this.stdinArgument = this.detectStdinArgument();
+	}
+
+	detectStdinArgument() {
+		const probe = spawnSync(this.compilerPath, ['--version'], {
+			encoding: 'utf8',
+			windowsHide: true,
+		});
+		const version = `${probe.stdout || ''}\n${probe.stderr || ''}`;
+		const match = version.match(/(\d+)\.(\d+)(?:\.\d+)?/);
+		return match && Number(match[1]) === 0 && Number(match[2]) <= 5 ? '--' : '-';
 	}
 
 	/**
@@ -49,7 +60,7 @@ class MoonscriptTransform extends Transform {
 	}
 
 	spawnMoonc() {
-		const moonc = spawn(this.compilerPath, ['-'], { windowsHide: true });
+		const moonc = spawn(this.compilerPath, [this.stdinArgument], { windowsHide: true });
 		moonc.on('error', this.emit.bind(this, 'error'));
 
 		streamToBuffer(moonc.stderr, (err, content) => {

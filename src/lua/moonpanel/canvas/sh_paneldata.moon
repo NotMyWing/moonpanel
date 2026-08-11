@@ -7,7 +7,7 @@ num = Helpers.num
 bool = Helpers.bool
 copyColor = Helpers.copyColor
 flatIndex = Helpers.flatIndex
-Canvas.SchemaVersion = 8
+Canvas.SchemaVersion = 9
 Canvas.DefaultDisjointLength = 0.4
 
 isDisabledCellColor = (value) ->
@@ -624,6 +624,12 @@ Canvas.SanitizeData = (data) ->
 		DisjointLength: math.Clamp num(dim.DisjointLength,
 			Canvas.DefaultDisjointLength), 0.01, 0.9
 	}
+
+	appearance = tableOrEmpty input.Appearance
+	appearanceOutput = {}
+	appearanceOutput.BunkerRelief = true if appearance.BunkerRelief == true
+	appearanceOutput.ColoredLighting = true if appearance.ColoredLighting == true
+	output.Appearance = appearanceOutput if next appearanceOutput
 
 	output.Colors = {
 		Untraced: copyColor colors.Untraced, Canvas.DefaultColors.Untraced

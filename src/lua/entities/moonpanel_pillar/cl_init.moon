@@ -1,7 +1,7 @@
 include "shared.lua"
 
-renderFunc = (canvas, meshObject) ->
-	canvas\PaintWorld meshObject
+renderFunc = (canvas, meshObjects, wallMeshes, lightingOrigin, viewPosition) ->
+	canvas\PaintWorld meshObjects, wallMeshes, lightingOrigin, viewPosition
 errorFunc = (err) ->
 	print "Rendering error: #{err}"
 	print debug.traceback!
@@ -41,9 +41,14 @@ ENT.DrawTranslucent = =>
 	matrix\SetTranslation @GetPos!
 	matrix\SetAngles @GetAngles!
 	matrix\Scale Vector radius, radius, height
-	meshObject = Moonpanel.Canvas.GetPillarMesh segments
+	base = Moonpanel.Canvas.GetPillarMesh segments
+	meshObjects = canvas\GetWorldMeshes base, true
+	wallMeshes = canvas\GetWorldWallMeshes base, true
+	inverse = matrix\GetInverse!
+	viewPosition = inverse and inverse * EyePos!
 	cam.PushModelMatrix matrix
-	xpcall renderFunc, errorFunc, canvas, meshObject
+	xpcall renderFunc, errorFunc, canvas, meshObjects, wallMeshes, @GetPos!,
+		viewPosition
 	cam.PopModelMatrix!
 
 ENT.GetCursorPos = =>

@@ -19,7 +19,6 @@ Moonpanel.Canvas.SocketType = {
 INTERSECTION_SOCKET = Moonpanel.Canvas.SocketType.Intersection
 
 Moonpanel.Canvas.Resolution = 512
-
 -- Shared screen-matrix construction helpers used by both client and server.
 -- The private model map feeds screen-matrix construction and tool selection.
 plateInfo = (rs, offsetZ) -> {
@@ -1360,8 +1359,10 @@ Moonpanel.Canvas.Canvas = Canvas
 
 -- Include partial class files.
 if CLIENT
+	include "cl_relief.lua"
 	include "cl_canvas.lua"
 else
+	AddCSLuaFile "cl_relief.lua"
 	AddCSLuaFile "cl_canvas.lua"
 	AddCSLuaFile "cl_presentation.lua"
 	AddCSLuaFile "sh_canvas_solution.lua"

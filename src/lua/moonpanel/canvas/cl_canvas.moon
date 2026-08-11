@@ -111,6 +111,63 @@ CANVAS.DeallocateRT = =>
 	Moonpanel.Canvas\DeallocateRT @__rtAlloc
 	true
 
+reliefTopology = (canvas) ->
+	hiddenNodes = {}
+	for node in *canvas.__nodes
+		hiddenNodes[node] = true if canvas\IsHiddenContinuousSocket node.socket
+	{
+		nodes: canvas.__nodes
+		paths: canvas.__clientData.paths
+		visibleNodes: canvas.__clientData.visibleNodes
+		:hiddenNodes
+		barWidth: canvas\GetBarWidth!
+		resolution: Moonpanel.Canvas.Resolution
+		wrap: canvas\IsContinuous! and not canvas\GetEditorGeometryVisible!
+	}
+
+CANVAS.DestroyWorldMeshes = =>
+	for meshes in *{ @__worldReliefMeshes, @__worldWallMeshes }
+		if meshes
+			for meshObject in *meshes
+				meshObject\Destroy! if meshObject.Destroy
+	@__worldMeshes, @__worldReliefMeshes, @__worldWallMeshes = nil, nil, nil
+	@__worldMeshesPillar, @__worldMeshBase, @__worldMeshVersion = nil, nil, nil
+
+CANVAS.HasBunkerRelief = => @__data and @__data.Appearance and
+	@__data.Appearance.BunkerRelief == true
+
+CANVAS.ReactsToColoredLight = => @__data and @__data.Appearance and
+	@__data.Appearance.ColoredLighting == true
+
+CANVAS.GetWorldMeshes = (fallback, pillar = false) =>
+	unless @HasBunkerRelief!
+		@DestroyWorldMeshes! if @__worldMeshes
+		return { fallback }
+	return { fallback } unless @__clientData and @__clientData.paths and
+		@__clientData.visibleNodes
+	if not @__worldMeshes or @__worldMeshesPillar ~= pillar or
+			@__worldMeshBase ~= fallback or
+			@__worldMeshVersion ~= Moonpanel.Canvas.ReliefMeshVersion
+		@DestroyWorldMeshes!
+		topology = reliefTopology @
+		buildMeshes = Moonpanel.Canvas.BuildReliefMeshes
+		@__worldReliefMeshes, @__worldWallMeshes = buildMeshes topology, pillar
+		@__worldMeshes = { fallback }
+		for meshObject in *@__worldReliefMeshes
+			@__worldMeshes[#@__worldMeshes + 1] = meshObject
+		@__worldMeshesPillar = pillar
+		@__worldMeshBase = fallback
+		@__worldMeshVersion = Moonpanel.Canvas.ReliefMeshVersion
+	@__worldMeshes
+
+CANVAS.GetWorldWallMeshes = (fallback, pillar = false) =>
+	@GetWorldMeshes fallback, pillar
+	@__worldWallMeshes
+
+CANVAS.GetWorldReliefMeshes = (fallback, pillar = false) =>
+	@GetWorldMeshes fallback, pillar
+	@__worldReliefMeshes
+
 CANVAS.CanRender = => @__rtAlloc and Moonpanel.Canvas\IsRTAllocated @__rtAlloc
 
 CANVAS.AllocateRT = (forceEvict = false) =>
@@ -149,6 +206,7 @@ CANVAS.BakeImportedColors = =>
 CANVAS.RecalculateClient = =>
 	return if not @__data
 
+	@DestroyWorldMeshes!
 	barWidth = @GetBarWidth!
 	@__rtDirty = true
 
@@ -205,6 +263,8 @@ CANVAS.RecalculateClient = =>
 				table.insert @__clientData.paths, {
 					angle: math.Round math.deg angle
 					distance: renderDistance
+					startBreak: nodeA.break == true
+					endBreak: nodeB.break == true
 
 					screenX: centerX
 					screenY: centerY
@@ -420,12 +480,25 @@ CANVAS.Paint = (w, h) =>
 
 	surface.DrawTexturedRect 0, 0, w, h
 
-CANVAS.PaintWorld = (meshObject) =>
-	return unless @CanRender! and meshObject
+CANVAS.PaintWorld = (meshObjects, wallMeshes, lightingOrigin, viewPosition) =>
+	return unless @CanRender! and meshObjects
 	power = if @__powerState ~= nil and @__powerStateBuffer
 		math.EaseInOut @__powerStateBuffer, 0.25, 0.25
 	else 1
-	Moonpanel.Canvas.DrawWorldRT @__rtAlloc.rt, meshObject, power
+	coloredLighting = @ReactsToColoredLight!
+	bunkerRelief = @HasBunkerRelief!
+	pillar = @GetSurfaceSpec!.kind == Moonpanel.Canvas.SurfaceKind.Pillar
+	if bunkerRelief
+		Moonpanel.Canvas.DrawWorldRT @__rtAlloc.rt, meshObjects[1], power,
+			coloredLighting, true, false, viewPosition, pillar
+		Moonpanel.Canvas.DrawWorldRT @__rtAlloc.rt, @__worldReliefMeshes, power,
+			coloredLighting, true, false, viewPosition, pillar
+	else
+		Moonpanel.Canvas.DrawWorldRT @__rtAlloc.rt, meshObjects, power,
+			coloredLighting, true, true, viewPosition, pillar
+	glassMeshes = if bunkerRelief then @__worldReliefMeshes else meshObjects
+	Moonpanel.Canvas.DrawWorldGlass glassMeshes, lightingOrigin
+	Moonpanel.Canvas.DrawWorldWalls wallMeshes, lightingOrigin if wallMeshes
 
 --------------------------------------------------
 -- Renders the RT. Decoupled from Paint so that --

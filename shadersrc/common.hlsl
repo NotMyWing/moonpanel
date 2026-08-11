@@ -17,6 +17,7 @@ struct PS_INPUT
 {
 	float2 uv : TEXCOORD0;
 	float4 projected : TEXCOORD1;
-	float2 texcoord2 : TEXCOORD2;
+	float3 localPosition : TEXCOORD2;
 	float4 color : TEXCOORD3;
+	float3 localNormal : TEXCOORD4;
 };

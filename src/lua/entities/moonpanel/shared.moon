@@ -131,6 +131,7 @@ ENT.OnRemove = =>
 
 	canvas = @GetCanvas!
 	canvas\DeallocateRT! if CLIENT
+	canvas\DestroyWorldMeshes! if CLIENT and canvas.DestroyWorldMeshes
 	canvas\StopSounds!
 
 ENT.Think = =>

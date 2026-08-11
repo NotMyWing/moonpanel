@@ -75,8 +75,8 @@ function run() {
 		'lua/entities/moonpanel/init.lua',
 		'lua/entities/moonpanel/cl_init.lua',
 		'materials/moonpanel/common/color.png',
-		'shaders/fxc/moonpanel_display_v3_ps20b.vcs',
-		'shaders/fxc/moonpanel_display_v3_vs20.vcs',
+		'shaders/fxc/moonpanel_display_v9_ps20b.vcs',
+		'shaders/fxc/moonpanel_display_v9_vs20.vcs',
 		'sound/moonpanel/presets/default/panel_scint_endpoint.wav',
 	];
 	for (const file of required) assert(paths.has(file), `Package is missing required runtime file: ${file}`);

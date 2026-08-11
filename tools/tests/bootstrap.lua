@@ -55,9 +55,28 @@ end
 _G.render.SetMaterial = _G.render.SetMaterial or function(material)
   _G.TEST_RENDER_STATE.material = material
 end
+_G.render.SetLightingOrigin = _G.render.SetLightingOrigin or function(origin)
+  _G.TEST_RENDER_STATE.lightingOrigin = origin
+end
+_G.render.OverrideBlend = _G.render.OverrideBlend or function(enabled, ...)
+  _G.TEST_RENDER_STATE.blendOverride = enabled and {...} or nil
+end
 _G.render.RenderFlashlights = _G.render.RenderFlashlights or function(callback)
   if _G.TEST_RENDER_STATE.flashlights then callback() end
 end
+_G.render.ClearStencil = _G.render.ClearStencil or function()
+  _G.TEST_RENDER_STATE.stencilClears = (_G.TEST_RENDER_STATE.stencilClears or 0) + 1
+end
+_G.render.SetStencilEnable = _G.render.SetStencilEnable or function(enabled)
+  _G.TEST_RENDER_STATE.stencilEnabled = enabled
+end
+_G.render.SetStencilReferenceValue = _G.render.SetStencilReferenceValue or function() end
+_G.render.SetStencilWriteMask = _G.render.SetStencilWriteMask or function() end
+_G.render.SetStencilTestMask = _G.render.SetStencilTestMask or function() end
+_G.render.SetStencilPassOperation = _G.render.SetStencilPassOperation or function() end
+_G.render.SetStencilFailOperation = _G.render.SetStencilFailOperation or function() end
+_G.render.SetStencilZFailOperation = _G.render.SetStencilZFailOperation or function() end
+_G.render.SetStencilCompareFunction = _G.render.SetStencilCompareFunction or function() end
 _G.hook = _G.hook or {Add = function() end, Remove = function() end}
 _G.cvars = _G.cvars or {AddChangeCallback = function() end}
 _G.concommand = _G.concommand or {Add = function() end}
@@ -66,6 +85,9 @@ _G.ents = _G.ents or {FindByClass = function() return {} end}
 _G.cam = _G.cam or {Start3D2D = function() end, End3D2D = function() end}
 _G.TEXT_ALIGN_LEFT = _G.TEXT_ALIGN_LEFT or 0
 _G.TEXT_ALIGN_TOP = _G.TEXT_ALIGN_TOP or 0
+_G.STENCIL_KEEP = _G.STENCIL_KEEP or 1
+_G.STENCIL_REPLACE = _G.STENCIL_REPLACE or 2
+_G.STENCIL_GREATER = _G.STENCIL_GREATER or 3
 _G.EyePos = _G.EyePos or function()
   return {DistToSqr = function() return 0 end}
 end
@@ -158,6 +180,11 @@ _G.MATERIAL_RT_DEPTH_SHARED = _G.MATERIAL_RT_DEPTH_SHARED or 2
 _G.MATERIAL_RT_DEPTH_SEPARATE = _G.MATERIAL_RT_DEPTH_SEPARATE or 3
 _G.CREATERENDERTARGETFLAGS_HDR = _G.CREATERENDERTARGETFLAGS_HDR or 4
 _G.IMAGE_FORMAT_RGBA8888 = _G.IMAGE_FORMAT_RGBA8888 or 5
+_G.BLEND_ZERO = _G.BLEND_ZERO or 0
+_G.BLEND_ONE = _G.BLEND_ONE or 1
+_G.BLEND_SRC_ALPHA = _G.BLEND_SRC_ALPHA or 4
+_G.BLEND_ONE_MINUS_SRC_ALPHA = _G.BLEND_ONE_MINUS_SRC_ALPHA or 5
+_G.BLENDFUNC_ADD = _G.BLENDFUNC_ADD or 0
 _G.TEST_PROXY_ID = _G.TEST_PROXY_ID or 0
 _G.newproxy = _G.newproxy or function()
   _G.TEST_PROXY_ID = _G.TEST_PROXY_ID + 1

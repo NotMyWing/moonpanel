@@ -324,6 +324,43 @@ Canvas.BuildFlatScreenVertices = (resolution = Canvas.Resolution,
 				table.insert triangles, item
 	triangles
 
+smoothStep = (value) -> value * value * (3 - value * 2)
+
+Canvas.GetTopologyReliefHeight = (x, y, paths, nodes, barWidth) ->
+	barWidth = math.max 1, tonumber(barWidth) or 1
+	coverage = -math.huge
+	halfWidth = barWidth * 0.5
+	for path in *(paths or {})
+		angle = math.rad(tonumber(path.angle) or 0)
+		cosine = path.cosine or math.cos angle
+		sine = path.sine or math.sin angle
+		dx, dy = x - path.screenX, y - path.screenY
+		along = math.abs(dx * cosine + dy * sine) -
+			(path.halfDistance or path.distance * 0.5)
+		across = math.abs(-dx * sine + dy * cosine) - halfWidth
+		local pathCoverage
+		if along <= 0 and across <= 0
+			pathCoverage = -math.max along, across
+		else
+			outsideX, outsideY = math.max(along, 0), math.max(across, 0)
+			pathCoverage = -math.sqrt(outsideX^2 + outsideY^2)
+		coverage = math.max coverage, pathCoverage
+
+	for node in *(nodes or {})
+		dx, dy = x - node.screenX, y - node.screenY
+		coverage = math.max coverage,
+			(node.radius or halfWidth) - math.sqrt(dx^2 + dy^2)
+
+	return 0 if coverage <= 0
+	topHeight = barWidth * 0.12
+	wallHeight = barWidth * 0.22
+	wallWidth = math.max 2, barWidth * 0.28
+	return topHeight if coverage >= wallWidth
+
+	rise = smoothStep math.Clamp coverage / (wallWidth * 0.24), 0, 1
+	fall = smoothStep math.Clamp((coverage / wallWidth - 0.42) / 0.58, 0, 1)
+	rise * (wallHeight + (topHeight - wallHeight) * fall)
+
 
 if CLIENT
 	Canvas.FlatScreenMesh\Destroy! if Canvas.FlatScreenMesh and

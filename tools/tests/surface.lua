@@ -29,6 +29,25 @@ test.test('flat world screen mesh preserves texture orientation and front face',
     'flat screen winding or normal exposes its rear face')
 end)
 
+test.test('topology relief forms a raised face with a castle-wall rim', function()
+  local height = Moonpanel.Canvas.GetTopologyReliefHeight
+  local paths = {{screenX = 50, screenY = 50, distance = 80, angle = 0}}
+  local outside = height(4, 50, paths, {}, 10)
+  local wall = height(11, 50, paths, {}, 10)
+  local face = height(50, 50, paths, {}, 10)
+  assert(outside == 0, 'topology relief raised the board outside its silhouette')
+  assert(face > 0 and wall > face,
+    'topology cross-section is not board/wall/raised-face/wall/board')
+
+  local nodes = {{screenX = 50, screenY = 50, radius = 12.5}}
+  assert(height(50, 50, {}, nodes, 10) == face,
+    'round topology face does not share the path elevation')
+  assert(height(61.5, 50, {}, nodes, 10) > face,
+    'round topology boundary lost its castle-wall rim')
+  assert(height(63, 50, {}, nodes, 10) == 0,
+    'round topology relief escaped its circular silhouette')
+end)
+
 local function continuousCanvasFixture(width, height, sourceData)
   local data = sourceData or {
     Meta = { Width = width, Height = height },

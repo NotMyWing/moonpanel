@@ -18,11 +18,11 @@ surface.CreateFont "TheMP",
 
 renderFunc = =>
 	if @__canvas
-		if Moonpanel.Canvas.IsWorldLightingEnabled!
-			@__canvas\PaintWorld Moonpanel.Canvas.GetFlatScreenMesh!
-		else
-			@__canvas\Paint Moonpanel.Canvas.Resolution,
-				Moonpanel.Canvas.Resolution
+		base = Moonpanel.Canvas.GetFlatScreenMesh!
+		inverse = @Transform\GetInverse!
+		viewPosition = inverse and inverse * EyePos!
+		@__canvas\PaintWorld @__canvas\GetWorldMeshes(base),
+			@__canvas\GetWorldWallMeshes(base), @GetPos!, viewPosition
 
 errorFunc = (err) ->
     print "Rendering error: #{err}"

@@ -10,7 +10,6 @@ activeDescriptors = nil
 probeMaterial = CreateMaterial "TheMP World Light Probe 2", "VertexLitGeneric",
 	["$basetexture"]: "color/white"
 	["$model"]: 1
-	["$vertexcolor"]: 1
 	["$translucent"]: 1
 	["$additive"]: 1
 
@@ -30,7 +29,7 @@ ensureTarget = ->
 		CREATERENDERTARGETFLAGS_HDR, IMAGE_FORMAT_RGBA8888
 	target
 
-flatDescriptor = (entity, record) ->
+flatDescriptor = (entity, record, canvas) ->
 	return unless entity.ScreenMatrix
 	entity\SetupBones! if entity.SetupBones
 	bone = entity\GetBoneMatrix 0
@@ -42,10 +41,10 @@ flatDescriptor = (entity, record) ->
 		:entity
 		:record
 		:matrix
-		mesh: Canvas.GetFlatScreenMesh!
+		meshes: { Canvas.GetFlatScreenMesh! }
 	}
 
-pillarDescriptor = (entity, record) ->
+pillarDescriptor = (entity, record, canvas) ->
 	radius = math.max 1, entity\GetPillarRadius! + PROBE_BIAS
 	height = math.max 1, entity\GetPillarHeight!
 	segments = if radius >= 128 then 128 elseif radius >= 48 then 64 else 32
@@ -57,7 +56,7 @@ pillarDescriptor = (entity, record) ->
 		:entity
 		:record
 		:matrix
-		mesh: Canvas.GetPillarMesh segments
+		meshes: { Canvas.GetPillarMesh segments }
 	}
 
 collectDescriptors = ->
@@ -66,10 +65,12 @@ collectDescriptors = ->
 		continue unless IsValid entity
 		canvas = entity\GetCanvas!
 		continue unless canvas and canvas\CanRender!
+		continue if canvas.ReactsToColoredLight and
+			not canvas\ReactsToColoredLight!
 		descriptor = if entity.MoonpanelPillar
-			pillarDescriptor entity, record
+			pillarDescriptor entity, record, canvas
 		else
-			flatDescriptor entity, record
+			flatDescriptor entity, record, canvas
 		descriptors[#descriptors + 1] = descriptor if descriptor
 	descriptors
 
@@ -181,7 +182,9 @@ drawDescriptors = (descriptors) ->
 	render.SetMaterial probeMaterial
 	for descriptor in *descriptors
 		cam.PushModelMatrix descriptor.matrix
-		ok, err = xpcall descriptor.mesh.Draw, debug.traceback, descriptor.mesh
+		ok, err = xpcall (->
+			for meshObject in *descriptor.meshes
+				meshObject\Draw!), debug.traceback
 		cam.PopModelMatrix!
 		error err, 0 unless ok
 

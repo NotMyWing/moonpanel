@@ -8,6 +8,7 @@ Moonpanel.CVarNames = Moonpanel.CVarNames or {
 	DebugRayLifetime: "moonpanel_debug_ray_lifetime"
 	DebugDistance: "moonpanel_debug_distance"
 	RTPoolMaxPages: "moonpanel_rt_pool_max_pages"
+	ScreenWorldLighting: "moonpanel_screen_world_lighting"
 	WindmillProxy: "moonpanel_windmill_proxy"
 	VerifierProfile: "moonpanel_verifier_profile"
 	VerifierSliceMs: "moonpanel_verifier_slice_ms"

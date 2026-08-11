@@ -27,6 +27,10 @@ const STATIC_DATA_GLOBS = [
 	'src/data_static/**/*',
 ];
 
+const SHADER_GLOBS = [
+	'src/shaders/fxc/*.vcs',
+];
+
 const METADATA_GLOBS = [
 	'src/addon.json',
 ];
@@ -182,6 +186,16 @@ function staticData() {
 staticData.description = "Copies immutable static data files.";
 
 /**
+ * Copies precompiled Source shaders. Shader compilation is deliberately a
+ * developer task so ordinary builds and CI do not require Wine or DirectX.
+ */
+function shaders() {
+	return gulp.src(SHADER_GLOBS, { base: 'src', since: gulp.lastRun(shaders) })
+		.pipe(atomicDest('dest'));
+}
+shaders.description = "Copies precompiled Source shaders.";
+
+/**
  * Copies metadata files.
  */
 function metadata() {
@@ -209,7 +223,7 @@ packageZip.description = "Packages the compiled addon as a zip.";
 /**
  * Generates and moves assets.
  */
-const assets = gulp.parallel(materials, sound, model, staticData, metadata);
+const assets = gulp.parallel(materials, sound, model, staticData, shaders, metadata);
 assets.description = "Generates and copies assets.";
 
 /**
@@ -222,6 +236,7 @@ function watchAssets() {
 			...SOUND_GLOBS,
 			...MODEL_GLOBS,
 			...STATIC_DATA_GLOBS,
+			...SHADER_GLOBS,
 			...METADATA_GLOBS,
 		]
 		, assets
@@ -253,6 +268,7 @@ rebuild.description = "Deletes the output tree, then performs a clean build.";
 exports.clean = clean;
 exports.materials = materials;
 exports.staticData = staticData;
+exports.shaders = shaders;
 exports.assets = assets;
 exports.watchAssets = watchAssets;
 exports.packageZip = packageZip;

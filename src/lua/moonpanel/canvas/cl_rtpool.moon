@@ -2,8 +2,9 @@ MAX_RT_PAGES = 256
 CVars = Moonpanel.CVarNames
 maxPagesConVar = CreateClientConVar CVars.RTPoolMaxPages, "32", true, false,
 	"Maximum number of Moonpanel canvas render targets", 1, MAX_RT_PAGES
-
-createRT = (name) ->
+worldLightingConVar = CreateClientConVar CVars.ScreenWorldLighting, "1", true,
+	false, "Light in-world Moonpanel screens using the surrounding world"
+createRT = (name, worldMaterial = false) ->
 	texture = GetRenderTargetEx name,
 			Moonpanel.Canvas.Resolution,
 			Moonpanel.Canvas.Resolution,
@@ -19,7 +20,18 @@ createRT = (name) ->
 		["$vertexcolor"]: 1
 		["$vertexalpha"]: 1
 
-	texture, material
+	displayMaterial = if worldMaterial
+		CreateMaterial "#{name} Display 4", "screenspace_general",
+			["$basetexture"]: texture\GetName!
+			["$texture1"]: "color/black"
+			["$pixshader"]: "moonpanel_display_v3_ps20"
+			["$vertexshader"]: "moonpanel_display_v3_vs20"
+			["$vertexcolor"]: 1
+			["$copyalpha"]: 1
+			["$cull"]: 1
+			["$depthtest"]: 1
+
+	texture, material, displayMaterial
 
 initializePool = (canvas) ->
 	return if canvas.__freeRTs
@@ -41,10 +53,11 @@ growPool = (canvas) ->
 
 	target = math.min limit, math.max 1, current * 2
 	for page = current + 1, target
-		texture, material = createRT "TheMP RT #{page}"
+		texture, material, displayMaterial = createRT "TheMP RT #{page}", true
 		canvas.__freeRTs\Push {
 			:texture
 			:material
+			:displayMaterial
 		}
 
 	canvas.__rtPageCount = target
@@ -113,3 +126,32 @@ Moonpanel.Canvas.DeallocateRT = (alloc) =>
 		@__freeRTs\Push alloc.rt
 
 Moonpanel.Canvas.IsRTAllocated = (alloc) => @__rtTokens[alloc.token] or false
+Moonpanel.Canvas.IsWorldLightingEnabled = -> worldLightingConVar\GetBool!
+drawWorldRT = (rt, meshObject, power, lit) ->
+	if not lit or not rt.displayMaterial
+		render.SetColorModulation power, power, power
+		render.SetMaterial rt.material
+		render.SetBlend 1
+		meshObject\Draw!
+		return
+
+	rt.displayMaterial\SetFloat "$c0_x", power
+	getLightTexture = Moonpanel.Canvas.GetWorldLightTexture
+	if lightTexture = getLightTexture and getLightTexture!
+		rt.displayMaterial\SetTexture "$texture1", lightTexture
+	render.SetColorModulation 1, 1, 1
+	render.SetMaterial rt.displayMaterial
+	render.SetBlend 1
+	meshObject\Draw!
+
+Moonpanel.Canvas.DrawWorldRT = (rt, meshObject, power = 1) ->
+	return unless rt and meshObject
+	power = math.Clamp tonumber(power) or 1, 0, 1
+	red, green, blue = render.GetColorModulation!
+	blend = render.GetBlend!
+	ok, err = xpcall drawWorldRT, debug.traceback, rt, meshObject, power,
+		Moonpanel.Canvas.IsWorldLightingEnabled!
+	render.SetColorModulation red, green, blue
+	render.SetBlend blend
+	error err, 0 unless ok
+	true

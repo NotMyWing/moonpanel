@@ -119,6 +119,8 @@ ENT.SetPowered = (value) =>
 ENT.GetPowered = => @GetPoweredNetworkState!
 
 ENT.OnRemove = =>
+	Moonpanel.Canvas.UnregisterWorldPanel @ if CLIENT and
+		Moonpanel.Canvas.UnregisterWorldPanel
 	if SERVER
 		WireLib.Remove @ if WireLib and WireLib.Remove
 		@GetCanvas!\CancelSolution "panel_removed"

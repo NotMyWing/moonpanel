@@ -18,6 +18,7 @@
     "rebuild": "gulp rebuild",
     "watch": "gulp watch",
     "clean": "gulp clean",
+	"compile:shaders": "node tools/shaders.js",
     "package:gma": "npm run rebuild && node tools/gma.js create --input dest --output artifacts/moonpanel.gma --manifest artifacts/moonpanel.manifest.json",
     "package:zip": "npm run rebuild && gulp packageZip",
     "verify:package": "node tools/package_smoke.js --require-gma --gma artifacts/moonpanel.gma --manifest artifacts/moonpanel.manifest.json",

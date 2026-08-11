@@ -420,6 +420,13 @@ CANVAS.Paint = (w, h) =>
 
 	surface.DrawTexturedRect 0, 0, w, h
 
+CANVAS.PaintWorld = (meshObject) =>
+	return unless @CanRender! and meshObject
+	power = if @__powerState ~= nil and @__powerStateBuffer
+		math.EaseInOut @__powerStateBuffer, 0.25, 0.25
+	else 1
+	Moonpanel.Canvas.DrawWorldRT @__rtAlloc.rt, meshObject, power
+
 --------------------------------------------------
 -- Renders the RT. Decoupled from Paint so that --
 -- HDR has no effect on this.                   --

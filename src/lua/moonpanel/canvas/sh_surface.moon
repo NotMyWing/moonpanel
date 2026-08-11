@@ -302,16 +302,50 @@ Canvas.CylinderClearsBox = (offsetX, offsetY, radius, halfWidth,
 	required = math.max 0, radius - math.max(0, tolerance)
 	nearestX * nearestX + nearestY * nearestY >= required * required - 0.000001
 
+Canvas.BuildFlatScreenVertices = (resolution = Canvas.Resolution,
+	subdivisions = 32) ->
+	resolution = math.max 1, tonumber(resolution) or 1
+	subdivisions = math.Clamp math.floor(tonumber(subdivisions) or 32), 1, 64
+	normal = Vector 0, 0, -1
+	vertex = (x, y, u, v) -> { pos: Vector(x, y, 0), :normal, :u, :v }
+	triangles = {}
+	for row = 0, subdivisions - 1
+		v0, v1 = row / subdivisions, (row + 1) / subdivisions
+		y0, y1 = resolution * v0, resolution * v1
+		for column = 0, subdivisions - 1
+			u0, u1 = column / subdivisions, (column + 1) / subdivisions
+			x0, x1 = resolution * u0, resolution * u1
+			topLeft = vertex x0, y0, u0, v0
+			bottomLeft = vertex x0, y1, u0, v1
+			bottomRight = vertex x1, y1, u1, v1
+			topRight = vertex x1, y0, u1, v0
+			for item in *{ topLeft, bottomRight, bottomLeft, topLeft,
+					topRight, bottomRight }
+				table.insert triangles, item
+	triangles
+
 
 if CLIENT
+	Canvas.FlatScreenMesh\Destroy! if Canvas.FlatScreenMesh and
+		Canvas.FlatScreenMesh.Destroy
+	Canvas.FlatScreenMesh = nil
 	if Canvas.PillarMeshes
 		for _, meshObject in pairs Canvas.PillarMeshes
 			meshObject\Destroy! if meshObject.Destroy
 	Canvas.PillarMeshes = {}
 
-	Canvas.GetPillarMesh = (segments) ->
+	Canvas.GetFlatScreenMesh = ->
+		return Canvas.FlatScreenMesh if Canvas.FlatScreenMesh
+		Canvas.FlatScreenMesh = Mesh!
+		Canvas.FlatScreenMesh\BuildFromTriangles Canvas.BuildFlatScreenVertices(
+			Canvas.Resolution)
+		Canvas.FlatScreenMesh
+
+	Canvas.GetPillarMesh = (segments, rows = 16) ->
 		segments = math.Clamp math.floor(tonumber(segments) or 32), 3, 128
-		return Canvas.PillarMeshes[segments] if Canvas.PillarMeshes[segments]
+		rows = math.Clamp math.floor(tonumber(rows) or 16), 1, 32
+		key = "#{segments}:#{rows}"
+		return Canvas.PillarMeshes[key] if Canvas.PillarMeshes[key]
 		triangles = {}
 		vertex = (angle, z, u, v) -> {
 			pos: Vector math.cos(angle), math.sin(angle), z
@@ -322,17 +356,24 @@ if CLIENT
 			a0 = math.pi * 2 * index / segments
 			a1 = math.pi * 2 * (index + 1) / segments
 			u0, u1 = index / segments, (index + 1) / segments
-			bottom0, bottom1 = vertex(a0, 0, u0, 1), vertex(a1, 0, u1, 1)
-			top0, top1 = vertex(a0, 1, u0, 0), vertex(a1, 1, u1, 0)
-			-- Source considers this winding front-facing from outside the pillar.
-			for item in *{ bottom0, top0, top1, bottom0, top1, bottom1 }
-				table.insert triangles, item
+			for row = 0, rows - 1
+				z0, z1 = row / rows, (row + 1) / rows
+				v0, v1 = 1 - z0, 1 - z1
+				bottom0 = vertex a0, z0, u0, v0
+				bottom1 = vertex a1, z0, u1, v0
+				top0 = vertex a0, z1, u0, v1
+				top1 = vertex a1, z1, u1, v1
+				for item in *{ bottom0, top0, top1, bottom0, top1, bottom1 }
+					table.insert triangles, item
 		meshObject = Mesh!
 		meshObject\BuildFromTriangles triangles
-		Canvas.PillarMeshes[segments] = meshObject
+		Canvas.PillarMeshes[key] = meshObject
 		meshObject
 
 	hook.Add "ShutDown", "Moonpanel Pillar Mesh Cleanup", ->
+		Canvas.FlatScreenMesh\Destroy! if Canvas.FlatScreenMesh and
+			Canvas.FlatScreenMesh.Destroy
+		Canvas.FlatScreenMesh = nil
 		for _, meshObject in pairs Canvas.PillarMeshes
 			meshObject\Destroy! if meshObject.Destroy
 		Canvas.PillarMeshes = {}

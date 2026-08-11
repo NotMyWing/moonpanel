@@ -8,6 +8,27 @@ local function panel(width)
   return { Meta = { Width = width, Height = 2 }, Entities = {} }
 end
 
+test.test('flat world screen mesh preserves texture orientation and front face', function()
+  local vertices = Moonpanel.Canvas.BuildFlatScreenVertices(1024, 2)
+  assert(#vertices == 24, 'flat screen did not tessellate into four quads')
+  local topLeft, bottomRight, bottomLeft = vertices[1], vertices[2], vertices[3]
+  assert(topLeft.pos.x == 0 and topLeft.pos.y == 0 and
+    topLeft.u == 0 and topLeft.v == 0,
+    'flat screen moved or flipped the render-target origin')
+  assert(bottomRight.pos.x == 512 and bottomRight.pos.y == 512 and
+    bottomRight.u == 0.5 and bottomRight.v == 0.5,
+    'first lighting tile has incorrect position or UVs')
+  local final = vertices[#vertices]
+  assert(final.pos.x == 1024 and final.pos.y == 1024 and
+    final.u == 1 and final.v == 1,
+    'tessellated screen no longer covers the complete render target')
+  local signedArea = (bottomRight.pos.x - topLeft.pos.x) *
+    (bottomLeft.pos.y - topLeft.pos.y) -
+    (bottomRight.pos.y - topLeft.pos.y) * (bottomLeft.pos.x - topLeft.pos.x)
+  assert(signedArea > 0 and topLeft.normal.z == -1,
+    'flat screen winding or normal exposes its rear face')
+end)
+
 local function continuousCanvasFixture(width, height, sourceData)
   local data = sourceData or {
     Meta = { Width = width, Height = height },

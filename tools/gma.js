@@ -10,6 +10,7 @@ const ALLOWED_EXTENSIONS = new Set([
 	'.lua', '.json', '.png', '.jpg', '.jpeg', '.gif', '.vtf', '.vmt',
 	'.wav', '.ogg', '.mp3', '.mp4', '.mdl', '.vvd', '.dx90.vtx', '.vtx',
 	'.phy', '.ani', '.pcf', '.ttf', '.otf', '.properties', '.res', '.txt',
+	'.vcs',
 ]);
 
 const FORBIDDEN_EXTENSIONS = new Set([
@@ -76,6 +77,9 @@ function normalizeRelativeFile(file) {
 		!lower.startsWith('scripts/vehicles/') &&
 		!lower.startsWith('data_static/')) {
 		throw new Error(`Only vehicle scripts and static data text files are allowed in a GMA: ${normalized}`);
+	}
+	if (extension === '.vcs' && !lower.startsWith('shaders/fxc/')) {
+		throw new Error(`Compiled shaders must be stored under shaders/fxc: ${normalized}`);
 	}
 	if (Buffer.byteLength(normalized, 'utf8') > MAX_FILE_NAME_BYTES) {
 		throw new Error(`Addon path exceeds ${MAX_FILE_NAME_BYTES} bytes: ${normalized}`);

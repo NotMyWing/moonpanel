@@ -139,6 +139,7 @@ AddCSLuaFile!
 AddCSLuaFile "cl_dcanvas.lua"
 AddCSLuaFile "editor/cl_dcanvas_editor.lua"
 AddCSLuaFile "cl_rtpool.lua"
+AddCSLuaFile "cl_worldlighting.lua"
 AddCSLuaFile "cl_colorutils.lua"
 AddCSLuaFile "cl_presentation.lua"
 AddCSLuaFile "sh_rule_engine.lua"
@@ -162,6 +163,7 @@ if CLIENT
 	include "cl_dcanvas.lua"
 	include "editor/cl_dcanvas_editor.lua"
 	include "cl_rtpool.lua"
+	include "cl_worldlighting.lua"
 	include "cl_presentation.lua"
 	include "editor/cl_builtins.lua"
 	include "editor/cl_store.lua"
@@ -938,7 +940,6 @@ class Canvas
 			follower\setTarget snapshot, sequence
 		true
 
-	GetRenderMaterial: => @__rtAlloc and @__rtAlloc.rt and @__rtAlloc.rt.material
 	GetSoundStatus: =>
 		return "off" unless @__soundEnabled
 		return "enabled/uninitialized" unless @__sounds

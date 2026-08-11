@@ -34,6 +34,30 @@ _G.Color = _G.Color or function(r, g, b, a) return {r = r, g = g, b = b, a = a o
 _G.Vector = _G.Vector or function(x, y, z) return {x = x, y = y, z = z} end
 _G.draw = _G.draw or {RoundedBox = function() end, SimpleText = function() end}
 _G.render = _G.render or {DrawLine = function() end}
+_G.TEST_RENDER_STATE = _G.TEST_RENDER_STATE or {
+  blend = 1,
+  modulation = {1, 1, 1},
+  material = nil,
+}
+_G.render.GetColorModulation = _G.render.GetColorModulation or function()
+  local value = _G.TEST_RENDER_STATE.modulation
+  return value[1], value[2], value[3]
+end
+_G.render.SetColorModulation = _G.render.SetColorModulation or function(red, green, blue)
+  _G.TEST_RENDER_STATE.modulation = {red, green, blue}
+end
+_G.render.GetBlend = _G.render.GetBlend or function()
+  return _G.TEST_RENDER_STATE.blend
+end
+_G.render.SetBlend = _G.render.SetBlend or function(value)
+  _G.TEST_RENDER_STATE.blend = value
+end
+_G.render.SetMaterial = _G.render.SetMaterial or function(material)
+  _G.TEST_RENDER_STATE.material = material
+end
+_G.render.RenderFlashlights = _G.render.RenderFlashlights or function(callback)
+  if _G.TEST_RENDER_STATE.flashlights then callback() end
+end
 _G.hook = _G.hook or {Add = function() end, Remove = function() end}
 _G.cvars = _G.cvars or {AddChangeCallback = function() end}
 _G.concommand = _G.concommand or {Add = function() end}
@@ -48,7 +72,7 @@ end
 _G.TEST_CONVAR_INTS = _G.TEST_CONVAR_INTS or {}
 local function testConVar(name)
   return {
-    GetBool = function() return false end,
+    GetBool = function() return (_G.TEST_CONVAR_INTS[name] or 0) ~= 0 end,
     GetFloat = function() return 4096 end,
     GetInt = function() return _G.TEST_CONVAR_INTS[name] or 1 end,
   }
@@ -121,9 +145,17 @@ _G.GetRenderTargetEx = _G.GetRenderTargetEx or function(name)
   _G.TEST_RT_CREATED = _G.TEST_RT_CREATED + 1
   return {GetName = function() return name end}
 end
-_G.CreateMaterial = _G.CreateMaterial or function() return {} end
+_G.TEST_CREATED_MATERIALS = _G.TEST_CREATED_MATERIALS or {}
+_G.CreateMaterial = _G.CreateMaterial or function(name, shader, parameters)
+  local material = {name = name, shader = shader, parameters = parameters or {}}
+  function material:SetFloat(key, value) self.parameters[key] = value end
+  function material:SetTexture(key, value) self.parameters[key] = value end
+  table.insert(_G.TEST_CREATED_MATERIALS, material)
+  return material
+end
 _G.RT_SIZE_OFFSCREEN = _G.RT_SIZE_OFFSCREEN or 1
 _G.MATERIAL_RT_DEPTH_SHARED = _G.MATERIAL_RT_DEPTH_SHARED or 2
+_G.MATERIAL_RT_DEPTH_SEPARATE = _G.MATERIAL_RT_DEPTH_SEPARATE or 3
 _G.CREATERENDERTARGETFLAGS_HDR = _G.CREATERENDERTARGETFLAGS_HDR or 4
 _G.IMAGE_FORMAT_RGBA8888 = _G.IMAGE_FORMAT_RGBA8888 or 5
 _G.TEST_PROXY_ID = _G.TEST_PROXY_ID or 0

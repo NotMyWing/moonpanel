@@ -6,6 +6,7 @@ float4 main(PS_INPUT input) : COLOR
 	float3 view = normalize(Constants1.xyz - input.localPosition);
 	float facing = abs(dot(normal, view));
 	float grazing = 1.0 - smoothstep(0.08, 0.55, facing);
+	// pillars drive me mad
 	float pillar = step(0.5, Constants2.y);
 	float radialLength = max(length(normal.xy), 0.0001);
 	float3 pillarTangentU = float3(-normal.y / radialLength,
@@ -40,24 +41,27 @@ float4 main(PS_INPUT input) : COLOR
 		matrixAngle * 0.2);
 	screenColor = lerp(screenColor, float3(0.17, 0.18, 0.2),
 		matrixAngle * 0.12);
+	float3 modulation = input.color.rgb * Constants0.x;
+
+	// if backlit, return early. if not backlit, leave hope here
+	if (Constants0.y < 0.5)
+		return float4(screenColor * modulation, albedo.a);
 
 	float inverseW = 1.0 / max(abs(input.projected.w), 0.0001);
 	float2 lightUV = float2(
 		input.projected.x * inverseW * 0.5 + 0.5,
 		-input.projected.y * inverseW * 0.5 + 0.5
 	);
-	float3 light = lerp(float3(1.0, 1.0, 1.0),
-		saturate(tex2D(Tex1, lightUV).rgb), Constants0.w);
+	float3 light = saturate(tex2D(Tex1, lightUV).rgb);
 	float lightMaximum = max(light.r, max(light.g, light.b));
 	float lightMinimum = min(light.r, min(light.g, light.b));
-	float lightRange = lightMaximum - lightMinimum;
-	float lightSaturation = lightRange / max(lightMaximum, 0.0001);
-	float lightEnergy = smoothstep(0.0005, 0.004, lightMaximum);
-	float coloredLight = smoothstep(0.12, 0.58, lightSaturation) *
-		lightEnergy * Constants0.w;
+	float lightSaturation = 1.0 - lightMinimum / max(lightMaximum, 0.0001);
+	float spectralMix = smoothstep(0.12, 0.58, lightSaturation) *
+		smoothstep(0.0005, 0.004, lightMaximum);
 
-	// The sampled Witness response preserves tiny non-zero lamp values and
-	// approaches a square-root curve before its highlight shoulder.
+	// this took an unreasonable amount of staring at witness panels
+	// (like 580 screenshots from the game, ask me about them)
+	// what do they mean mason
 	float3 curvedLight = pow(light, float3(0.45, 0.45, 0.45));
 	curvedLight = saturate(curvedLight * (2.4 - 1.4 * curvedLight));
 
@@ -66,29 +70,27 @@ float4 main(PS_INPUT input) : COLOR
 
 	float sourceMaximum = max(screenColor.r,
 		max(screenColor.g, screenColor.b));
-	float stark = smoothstep(0.58, 0.82, sourceMaximum);
-	float3 membership = step(sourceMaximum * 0.38, screenColor);
+	float clueWeight = smoothstep(0.58, 0.82, sourceMaximum);
+	float3 spectralMask = step(sourceMaximum * 0.38, screenColor);
 	float3 normalizedColor = screenColor / max(sourceMaximum, 0.0001);
-	float3 clueReflectance = normalizedColor * membership;
+	float3 clueReflectance = normalizedColor * spectralMask;
 	float3 clueLit = curvedLight * clueReflectance;
 	float3 neutralClueLit = screenColor * neutralLight;
-	float3 drivenClueLit = lerp(neutralClueLit, clueLit, coloredLight);
+	float3 drivenClueLit = lerp(neutralClueLit, clueLit, spectralMix);
 
-	// Dark panel materials use a much straighter response than clue pixels.
+	// clue special case doohickery
 	float surfaceGamma = lerp(0.95, 0.62,
 		smoothstep(0.12, 0.72, sourceMaximum));
 	float3 surfaceLight = pow(light,
 		float3(surfaceGamma, surfaceGamma, surfaceGamma));
 	float3 surfaceLit = screenColor * surfaceLight;
-	float3 lightDrivenResult = lerp(surfaceLit, drivenClueLit, stark);
-	float3 reflected = lerp(screenColor, lightDrivenResult, Constants0.y);
-	reflected *= input.color.rgb * Constants0.x;
+	float3 lightDrivenResult = lerp(surfaceLit, drivenClueLit, clueWeight);
+	float3 reflected = lightDrivenResult * modulation;
 
-	// HDR overbright values feed Source's normal bloom pass. Backlit panels
-	// keep their authored emission in gamut; their glare is a separate pass.
+	// the source bloom/hdr just turns this into soup
 	float visibleMaximum = max(reflected.r, max(reflected.g, reflected.b));
 	float bloom = smoothstep(0.72, 0.96, sourceMaximum) *
-		smoothstep(0.58, 0.92, visibleMaximum) * Constants0.z * Constants0.y;
+		smoothstep(0.58, 0.92, visibleMaximum) * Constants0.z;
 	reflected *= 1.0 + bloom;
 
 	return float4(reflected, albedo.a);

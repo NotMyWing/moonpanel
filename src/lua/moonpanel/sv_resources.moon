@@ -14,5 +14,5 @@ if SERVER
 
 	add "materials/moonpanel"
 	add "sound/moonpanel"
-	resource.AddSingleFile "shaders/fxc/moonpanel_display_v21_ps20b.vcs"
-	resource.AddSingleFile "shaders/fxc/moonpanel_display_v21_vs20.vcs"
+	resource.AddSingleFile "shaders/fxc/moonpanel_display_ps20b.vcs"
+	resource.AddSingleFile "shaders/fxc/moonpanel_display_vs20.vcs"

@@ -1,6 +1,5 @@
 RELIEF_CIRCLE_SEGMENTS = 48
 RELIEF_MESH_VERTICES = 60000
-Moonpanel.Canvas.ReliefMeshVersion = 8
 
 reliefPrimitives = (topology) ->
 	paths, nodes = {}, {}

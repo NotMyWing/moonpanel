@@ -131,7 +131,7 @@ CANVAS.DestroyWorldMeshes = =>
 			for meshObject in *meshes
 				meshObject\Destroy! if meshObject.Destroy
 	@__worldMeshes, @__worldReliefMeshes, @__worldWallMeshes = nil, nil, nil
-	@__worldMeshesPillar, @__worldMeshBase, @__worldMeshVersion = nil, nil, nil
+	@__worldMeshesPillar, @__worldMeshBase = nil, nil
 
 CANVAS.HasBunkerRelief = => @__data and @__data.Appearance and
 	@__data.Appearance.BunkerRelief == true
@@ -146,8 +146,7 @@ CANVAS.GetWorldMeshes = (fallback, pillar = false) =>
 	return { fallback } unless @__clientData and @__clientData.paths and
 		@__clientData.visibleNodes
 	if not @__worldMeshes or @__worldMeshesPillar ~= pillar or
-			@__worldMeshBase ~= fallback or
-			@__worldMeshVersion ~= Moonpanel.Canvas.ReliefMeshVersion
+			@__worldMeshBase ~= fallback
 		@DestroyWorldMeshes!
 		topology = reliefTopology @
 		buildMeshes = Moonpanel.Canvas.BuildReliefMeshes
@@ -157,7 +156,6 @@ CANVAS.GetWorldMeshes = (fallback, pillar = false) =>
 			@__worldMeshes[#@__worldMeshes + 1] = meshObject
 		@__worldMeshesPillar = pillar
 		@__worldMeshBase = fallback
-		@__worldMeshVersion = Moonpanel.Canvas.ReliefMeshVersion
 	@__worldMeshes
 
 CANVAS.GetWorldWallMeshes = (fallback, pillar = false) =>

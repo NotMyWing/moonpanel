@@ -8,8 +8,8 @@ const path = require('path');
 const projectRoot = path.resolve(__dirname, '..');
 const compiler = process.env.MOONPANEL_SHADER_COMPILER;
 const sources = [
-	['moonpanel_display_v21_vs20.hlsl', 'moonpanel_display_v21_vs20.vcs'],
-	['moonpanel_display_v21_ps2x.hlsl', 'moonpanel_display_v21_ps20b.vcs'],
+	['moonpanel_display_vs20.hlsl', 'moonpanel_display_vs20.vcs'],
+	['moonpanel_display_ps2x.hlsl', 'moonpanel_display_ps20b.vcs'],
 ];
 
 if (!compiler) {

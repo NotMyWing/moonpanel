@@ -1,5 +1,4 @@
 MAX_RT_PAGES = 256
-DISPLAY_MATERIAL_VERSION = 23
 DISPLAY_SHEAR = 0.012
 DISPLAY_BLOOM = 1.1
 WALL_UNLIT_BRIGHTNESS = 0.42
@@ -13,8 +12,8 @@ createDisplayMaterial = (name, texture) ->
 	parameters =
 		["$basetexture"]: texture\GetName!
 		["$texture1"]: "color/black"
-		["$pixshader"]: "moonpanel_display_v21_ps20"
-		["$vertexshader"]: "moonpanel_display_v21_vs20"
+		["$pixshader"]: "moonpanel_display_ps20"
+		["$vertexshader"]: "moonpanel_display_vs20"
 		["$vertexcolor"]: 1
 		["$vertexalpha"]: 1
 		["$translucent"]: 1
@@ -24,17 +23,16 @@ createDisplayMaterial = (name, texture) ->
 		["$c0_x"]: 1
 		["$c0_y"]: 0
 		["$c0_z"]: DISPLAY_BLOOM
-		["$c0_w"]: 0
 		["$c1_x"]: 0
 		["$c1_y"]: 0
 		["$c1_z"]: 0
 		["$c2_x"]: 0
 		["$c2_y"]: 0
 		["$c2_z"]: 0
-	CreateMaterial "#{name} Display #{DISPLAY_MATERIAL_VERSION}",
+	CreateMaterial "#{name} Display",
 		"screenspace_general", parameters
 
-wallMaterial = CreateMaterial "TheMP Relief Wall Metal 2", "VertexLitGeneric",
+wallMaterial = CreateMaterial "TheMP Relief Wall Metal", "VertexLitGeneric",
 	["$basetexture"]: "color/white"
 	["$color2"]: "[0.42 0.44 0.46]"
 	["$envmap"]: "env_cubemap"
@@ -51,12 +49,12 @@ wallMaterial = CreateMaterial "TheMP Relief Wall Metal 2", "VertexLitGeneric",
 	["$vertexcolor"]: 1
 Moonpanel.Canvas.ReliefWallMaterial = wallMaterial
 
-wallUnlitMaterial = CreateMaterial "TheMP Relief Wall Gray 1", "UnlitGeneric",
+wallUnlitMaterial = CreateMaterial "TheMP Relief Wall Gray", "UnlitGeneric",
 	["$basetexture"]: "color/white"
 	["$model"]: 1
 	["$vertexcolor"]: 1
 
-screenGlassMaterial = CreateMaterial "TheMP Screen Glass 5", "VertexLitGeneric",
+screenGlassMaterial = CreateMaterial "TheMP Screen Glass", "VertexLitGeneric",
 	["$basetexture"]: "color/white"
 	["$color2"]: "[0.015 0.017 0.02]"
 	["$envmap"]: "env_cubemap"
@@ -98,11 +96,9 @@ createRT = (name, worldMaterial = false) ->
 	texture, material, displayMaterial
 
 ensureDisplayMaterial = (rt) ->
-	return rt.displayMaterial if rt.displayMaterial and
-		rt.displayMaterialVersion == DISPLAY_MATERIAL_VERSION
+	return rt.displayMaterial if rt.displayMaterial
 	name = rt.texture\GetName!
 	rt.displayMaterial = createDisplayMaterial name, rt.texture
-	rt.displayMaterialVersion = DISPLAY_MATERIAL_VERSION
 	rt.displayMaterial
 
 initializePool = (canvas) ->
@@ -130,7 +126,6 @@ growPool = (canvas) ->
 			:texture
 			:material
 			:displayMaterial
-			displayMaterialVersion: DISPLAY_MATERIAL_VERSION
 		}
 
 	canvas.__rtPageCount = target
@@ -223,7 +218,6 @@ drawWorldRT = (rt, meshObjects, power, worldLighting, strongColorResponse,
 		strongColorResponse and 1 or 0
 	else
 		0
-	displayMaterial\SetFloat "$c0_w", worldLighting and 1 or 0
 	displayMaterial\SetFloat "$c2_x", shear and DISPLAY_SHEAR or 0
 	displayMaterial\SetFloat "$c2_y", pillar and 1 or 0
 	displayMaterial\SetFloat "$c2_z", matrixResponse and 1 or 0
@@ -231,7 +225,7 @@ drawWorldRT = (rt, meshObjects, power, worldLighting, strongColorResponse,
 		displayMaterial\SetFloat "$c1_x", viewPosition.x
 		displayMaterial\SetFloat "$c1_y", viewPosition.y
 		displayMaterial\SetFloat "$c1_z", viewPosition.z
-	if worldLighting
+	if worldLighting and strongColorResponse
 		getLightTexture = Moonpanel.Canvas.GetWorldLightTexture
 		if lightTexture = getLightTexture and getLightTexture!
 			displayMaterial\SetTexture "$texture1", lightTexture

@@ -7,13 +7,13 @@ target, targetWidth, targetHeight, renderedFrame = nil, 0, 0, -1
 targetPushed = false
 activeDescriptors = nil
 
-probeMaterial = CreateMaterial "TheMP World Light Probe 2", "VertexLitGeneric",
+probeMaterial = CreateMaterial "TheMP World Light Probe", "VertexLitGeneric",
 	["$basetexture"]: "color/white"
 	["$model"]: 1
 	["$translucent"]: 1
 	["$additive"]: 1
 
-dynamicMaterial = CreateMaterial "TheMP Dynamic Light Probe 1", "UnlitGeneric",
+dynamicMaterial = CreateMaterial "TheMP Dynamic Light Probe", "UnlitGeneric",
 	["$basetexture"]: "color/white"
 	["$model"]: 1
 	["$vertexcolor"]: 1
@@ -29,7 +29,7 @@ ensureTarget = ->
 		CREATERENDERTARGETFLAGS_HDR, IMAGE_FORMAT_RGBA8888
 	target
 
-flatDescriptor = (entity, record, canvas) ->
+flatDescriptor = (entity, record) ->
 	return unless entity.ScreenMatrix
 	entity\SetupBones! if entity.SetupBones
 	bone = entity\GetBoneMatrix 0
@@ -44,7 +44,7 @@ flatDescriptor = (entity, record, canvas) ->
 		meshes: { Canvas.GetFlatScreenMesh! }
 	}
 
-pillarDescriptor = (entity, record, canvas) ->
+pillarDescriptor = (entity, record) ->
 	radius = math.max 1, entity\GetPillarRadius! + PROBE_BIAS
 	height = math.max 1, entity\GetPillarHeight!
 	segments = if radius >= 128 then 128 elseif radius >= 48 then 64 else 32
@@ -65,10 +65,11 @@ collectDescriptors = ->
 		continue unless IsValid entity
 		canvas = entity\GetCanvas!
 		continue unless canvas and canvas\CanRender!
+		continue unless canvas\HasStrongColorResponse!
 		descriptor = if entity.MoonpanelPillar
-			pillarDescriptor entity, record, canvas
+			pillarDescriptor entity, record
 		else
-			flatDescriptor entity, record, canvas
+			flatDescriptor entity, record
 		descriptors[#descriptors + 1] = descriptor if descriptor
 	descriptors
 

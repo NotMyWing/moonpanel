@@ -1,6 +1,7 @@
 MAX_RT_PAGES = 256
-DISPLAY_MATERIAL_VERSION = 11
+DISPLAY_MATERIAL_VERSION = 15
 DISPLAY_SHEAR = 0.012
+DISPLAY_BLOOM = 1.1
 WALL_UNLIT_BRIGHTNESS = 0.42
 CVars = Moonpanel.CVarNames
 maxPagesConVar = CreateClientConVar CVars.RTPoolMaxPages, "32", true, false,
@@ -12,8 +13,8 @@ createDisplayMaterial = (name, texture) ->
 	parameters =
 		["$basetexture"]: texture\GetName!
 		["$texture1"]: "color/black"
-		["$pixshader"]: "moonpanel_display_v9_ps20"
-		["$vertexshader"]: "moonpanel_display_v9_vs20"
+		["$pixshader"]: "moonpanel_display_v13_ps20"
+		["$vertexshader"]: "moonpanel_display_v13_vs20"
 		["$vertexcolor"]: 1
 		["$vertexalpha"]: 1
 		["$translucent"]: 1
@@ -22,6 +23,7 @@ createDisplayMaterial = (name, texture) ->
 		["$depthtest"]: 1
 		["$c0_x"]: 1
 		["$c0_y"]: 0
+		["$c0_z"]: DISPLAY_BLOOM
 		["$c1_x"]: 0
 		["$c1_y"]: 0
 		["$c1_z"]: 0
@@ -53,8 +55,9 @@ wallUnlitMaterial = CreateMaterial "TheMP Relief Wall Gray 1", "UnlitGeneric",
 	["$model"]: 1
 	["$vertexcolor"]: 1
 
-screenGlassMaterial = CreateMaterial "TheMP Screen Glass 3", "VertexLitGeneric",
-	["$basetexture"]: "color/black"
+screenGlassMaterial = CreateMaterial "TheMP Screen Glass 4", "VertexLitGeneric",
+	["$basetexture"]: "color/white"
+	["$color2"]: "[0.14 0.14 0.14]"
 	["$envmap"]: "env_cubemap"
 	["$envmaptint"]: "[0.26 0.3 0.36]"
 	["$envmapcontrast"]: 0.5
@@ -201,9 +204,10 @@ drawMeshes = (meshObjects) ->
 		for meshObject in *meshObjects
 			meshObject\Draw!
 
-drawWorldRT = (rt, meshObjects, power, lit, matrixResponse, shear,
-	viewPosition, pillar) ->
-	displayMaterial = ensureDisplayMaterial(rt) if lit or matrixResponse or shear
+drawWorldRT = (rt, meshObjects, power, worldLighting, strongColorResponse,
+	matrixResponse, shear, viewPosition, pillar) ->
+	displayMaterial = ensureDisplayMaterial(rt) if worldLighting or
+		matrixResponse or shear
 	if not displayMaterial
 		render.SetColorModulation power, power, power
 		render.SetMaterial rt.material
@@ -212,7 +216,10 @@ drawWorldRT = (rt, meshObjects, power, lit, matrixResponse, shear,
 		return
 
 	displayMaterial\SetFloat "$c0_x", power
-	displayMaterial\SetFloat "$c0_y", lit and 1 or 0
+	displayMaterial\SetFloat "$c0_y", if worldLighting
+		strongColorResponse and 1 or 0
+	else
+		0
 	displayMaterial\SetFloat "$c2_x", shear and DISPLAY_SHEAR or 0
 	displayMaterial\SetFloat "$c2_y", pillar and 1 or 0
 	displayMaterial\SetFloat "$c2_z", matrixResponse and 1 or 0
@@ -220,9 +227,10 @@ drawWorldRT = (rt, meshObjects, power, lit, matrixResponse, shear,
 		displayMaterial\SetFloat "$c1_x", viewPosition.x
 		displayMaterial\SetFloat "$c1_y", viewPosition.y
 		displayMaterial\SetFloat "$c1_z", viewPosition.z
-	getLightTexture = Moonpanel.Canvas.GetWorldLightTexture
-	if lightTexture = getLightTexture and getLightTexture!
-		displayMaterial\SetTexture "$texture1", lightTexture
+	if worldLighting
+		getLightTexture = Moonpanel.Canvas.GetWorldLightTexture
+		if lightTexture = getLightTexture and getLightTexture!
+			displayMaterial\SetTexture "$texture1", lightTexture
 	render.SetColorModulation 1, 1, 1
 	render.SetMaterial displayMaterial
 	render.SetBlend 1
@@ -231,7 +239,7 @@ drawWorldRT = (rt, meshObjects, power, lit, matrixResponse, shear,
 	drawMeshes meshObjects
 
 Moonpanel.Canvas.DrawWorldRT = (rt, meshObjects, power = 1,
-	coloredLighting = true, matrixResponse = false, shear = false,
+	strongColorResponse = false, matrixResponse = false, shear = false,
 	viewPosition, pillar = false) ->
 	return unless rt and meshObjects
 	power = math.Clamp tonumber(power) or 1, 0, 1
@@ -239,7 +247,7 @@ Moonpanel.Canvas.DrawWorldRT = (rt, meshObjects, power = 1,
 	blend = render.GetBlend!
 	worldEffects = Moonpanel.Canvas.IsWorldLightingEnabled!
 	ok, err = xpcall drawWorldRT, debug.traceback, rt, meshObjects, power,
-		coloredLighting and worldEffects,
+		worldEffects, strongColorResponse,
 		matrixResponse and worldEffects and viewPosition ~= nil,
 		shear and worldEffects and viewPosition ~= nil, viewPosition, pillar
 	render.OverrideBlend false

@@ -136,7 +136,7 @@ CANVAS.DestroyWorldMeshes = =>
 CANVAS.HasBunkerRelief = => @__data and @__data.Appearance and
 	@__data.Appearance.BunkerRelief == true
 
-CANVAS.ReactsToColoredLight = => @__data and @__data.Appearance and
+CANVAS.HasStrongColorResponse = => @__data and @__data.Appearance and
 	@__data.Appearance.ColoredLighting == true
 
 CANVAS.GetWorldMeshes = (fallback, pillar = false) =>
@@ -485,17 +485,17 @@ CANVAS.PaintWorld = (meshObjects, wallMeshes, lightingOrigin, viewPosition) =>
 	power = if @__powerState ~= nil and @__powerStateBuffer
 		math.EaseInOut @__powerStateBuffer, 0.25, 0.25
 	else 1
-	coloredLighting = @ReactsToColoredLight!
+	strongColorResponse = @HasStrongColorResponse!
 	bunkerRelief = @HasBunkerRelief!
 	pillar = @GetSurfaceSpec!.kind == Moonpanel.Canvas.SurfaceKind.Pillar
 	if bunkerRelief
 		Moonpanel.Canvas.DrawWorldRT @__rtAlloc.rt, meshObjects[1], power,
-			coloredLighting, true, false, viewPosition, pillar
+			strongColorResponse, true, false, viewPosition, pillar
 		Moonpanel.Canvas.DrawWorldRT @__rtAlloc.rt, @__worldReliefMeshes, power,
-			coloredLighting, true, false, viewPosition, pillar
+			strongColorResponse, true, false, viewPosition, pillar
 	else
 		Moonpanel.Canvas.DrawWorldRT @__rtAlloc.rt, meshObjects, power,
-			coloredLighting, true, true, viewPosition, pillar
+			strongColorResponse, true, true, viewPosition, pillar
 	glassMeshes = if bunkerRelief then @__worldReliefMeshes else meshObjects
 	Moonpanel.Canvas.DrawWorldGlass glassMeshes, lightingOrigin
 	Moonpanel.Canvas.DrawWorldWalls wallMeshes, lightingOrigin if wallMeshes

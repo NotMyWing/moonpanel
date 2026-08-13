@@ -65,8 +65,6 @@ collectDescriptors = ->
 		continue unless IsValid entity
 		canvas = entity\GetCanvas!
 		continue unless canvas and canvas\CanRender!
-		continue if canvas.ReactsToColoredLight and
-			not canvas\ReactsToColoredLight!
 		descriptor = if entity.MoonpanelPillar
 			pillarDescriptor entity, record, canvas
 		else

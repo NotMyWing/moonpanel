@@ -45,20 +45,20 @@ test.test('panel appearance uses the canonical defaults', function()
 		'missing bunker-like relief was synthesized')
 end)
 
-test.test('colored lighting is an optional serialized appearance', function()
+test.test('strong color response is an optional serialized appearance', function()
   local default = Moonpanel.Canvas.SanitizeData(base(Moonpanel.Canvas.SchemaVersion))
   assert(default.Appearance == nil,
-    'missing colored-light reaction was synthesized')
+    'missing strong color response was synthesized')
 
   local enabled = base(Moonpanel.Canvas.SchemaVersion)
   enabled.Appearance = {ColoredLighting = true}
   local clean = Moonpanel.Canvas.SanitizeData(enabled)
   assert(clean.Appearance and clean.Appearance.ColoredLighting == true,
-    'authored colored-light reaction was discarded')
+    'authored strong color response was discarded')
 
   enabled.Appearance.ColoredLighting = false
   assert(Moonpanel.Canvas.SanitizeData(enabled).Appearance == nil,
-    'disabled colored-light reaction remained authored')
+    'disabled strong color response remained authored')
 end)
 
 test.test('bunker-like relief is an optional serialized appearance', function()

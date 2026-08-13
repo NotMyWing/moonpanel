@@ -8,8 +8,8 @@ const path = require('path');
 const projectRoot = path.resolve(__dirname, '..');
 const compiler = process.env.MOONPANEL_SHADER_COMPILER;
 const sources = [
-	['moonpanel_display_v9_vs20.hlsl', 'moonpanel_display_v9_vs20.vcs'],
-	['moonpanel_display_v9_ps2x.hlsl', 'moonpanel_display_v9_ps20b.vcs'],
+	['moonpanel_display_v13_vs20.hlsl', 'moonpanel_display_v13_vs20.vcs'],
+	['moonpanel_display_v13_ps2x.hlsl', 'moonpanel_display_v13_ps20b.vcs'],
 ];
 
 if (!compiler) {
@@ -40,13 +40,16 @@ function validateVCS(file) {
 
 	const firstBlock = data.readUInt32LE(32);
 	const blockSize = data.readUInt32LE(firstBlock);
-	const compression = blockSize & 0xc0000000;
+	const compression = blockSize >>> 30;
 	const payloadSize = blockSize & 0x3fffffff;
+	if (compression > 1) {
+		throw new Error(`Unsupported VCS compression: ${file}`);
+	}
 	if (firstBlock + 4 + payloadSize + 4 > data.length ||
 		data.readUInt32LE(firstBlock + 4 + payloadSize) !== 0xffffffff) {
 		throw new Error(`Invalid VCS shader block: ${file}`);
 	}
-	if (compression === 0x40000000 && data.toString('ascii', firstBlock + 4,
+	if (compression === 1 && data.toString('ascii', firstBlock + 4,
 		firstBlock + 8) !== 'LZMA') {
 		throw new Error(`Invalid VCS LZMA payload: ${file}`);
 	}

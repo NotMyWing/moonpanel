@@ -1158,7 +1158,7 @@ Editor.BuildAppearanceSettings = (parent) =>
 			Editor\RefreshAppearanceControls!,
 		"bunker_relief"
 	@AppearanceLightingToggle = makeCheck parent,
-		"React to colored light",
+		"Strong color response",
 		appearance.ColoredLighting == true,
 		(enabled) ->
 			return if Editor.AppearanceToggleUpdating
@@ -1166,7 +1166,7 @@ Editor.BuildAppearanceSettings = (parent) =>
 			nextData.Appearance or= {}
 			nextData.Appearance.ColoredLighting = enabled and true or nil
 			nextData.Appearance = nil unless next nextData.Appearance
-			Editor\CommitData "Toggle colored light reaction", nextData,
+			Editor\CommitData "Toggle strong color response", nextData,
 				"appearance-colored-lighting", false
 			Editor\RefreshAppearanceControls!,
 		"colored_lighting"

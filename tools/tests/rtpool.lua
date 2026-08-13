@@ -25,9 +25,10 @@ test.test('main page exposes unlit and shader-composited views of one RT', funct
     'world and VGUI material roles use the wrong Source shaders')
   assert(rt.material.parameters['$basetexture'] == rt.texture:GetName() and
     rt.displayMaterial.parameters['$basetexture'] == rt.texture:GetName() and
-		rt.displayMaterial.parameters['$pixshader'] == 'moonpanel_display_v13_ps20' and
-		rt.displayMaterial.parameters['$vertexshader'] == 'moonpanel_display_v13_vs20' and
+		rt.displayMaterial.parameters['$pixshader'] == 'moonpanel_display_v21_ps20' and
+		rt.displayMaterial.parameters['$vertexshader'] == 'moonpanel_display_v21_vs20' and
 		rt.displayMaterial.parameters['$c0_z'] == 1.1 and
+		rt.displayMaterial.parameters['$c0_w'] == 0 and
     rt.displayMaterial.parameters['$translucent'] == 1 and
     rt.displayMaterial.parameters['$vertexalpha'] == 1 and
     rt.displayMaterial.parameters['$vertextransform'] == nil,
@@ -124,7 +125,7 @@ test.test('world renderer uses the identity compositor with exact fallback', fun
 	draws = {}
 	_G.TEST_CONVAR_INTS[Moonpanel.CVarNames.ScreenWorldLighting] = 0
 	Moonpanel.Canvas.DrawWorldRT(rt, mesh, 0.75)
-  assert(#draws == 1 and draws[1].material == rt.material and
+	assert(#draws == 1 and draws[1].material == rt.material and
     draws[1].blend == 1,
 		'disabled world lighting did not restore the exact unlit pass')
 
@@ -133,8 +134,16 @@ test.test('world renderer uses the identity compositor with exact fallback', fun
 	Moonpanel.Canvas.DrawWorldRT(rt, mesh, 0.75, false)
 	assert(#draws == 1 and draws[1].material == rt.displayMaterial and
 		rt.displayMaterial.parameters['$c0_y'] == 0 and
+		rt.displayMaterial.parameters['$c0_w'] == 1 and
 		rt.displayMaterial.parameters['$texture1'] ~= nil,
 		'disabled strong color response also disabled native world lighting')
+
+	draws = {}
+	Moonpanel.Canvas.DrawWorldRT(rt, mesh, 0.75, true)
+	assert(#draws == 1 and draws[1].material == rt.displayMaterial and
+		rt.displayMaterial.parameters['$c0_y'] == 1 and
+		rt.displayMaterial.parameters['$c0_w'] == 1,
+		'strong color response did not select the fully light-driven display')
 
 	draws = {}
 	local eye = Vector(100, 200, -20)
@@ -153,7 +162,8 @@ test.test('world renderer uses the identity compositor with exact fallback', fun
 	Moonpanel.Canvas.DrawWorldRT(rt, mesh, 0.75, false, true, false, eye, false)
 	assert(#draws == 1 and draws[1].material == rt.displayMaterial and
 		rt.displayMaterial.parameters['$c2_x'] == 0 and
-		rt.displayMaterial.parameters['$c2_z'] == 1,
+		rt.displayMaterial.parameters['$c2_z'] == 1 and
+		rt.displayMaterial.parameters['$c0_w'] == 1,
 		'matrix response could not be enabled without displacing relief UVs')
 end)
 
@@ -169,8 +179,8 @@ test.test('world renderer upgrades stale materials and draws every relief mesh',
     {Draw = function() draws = draws + 1 end},
   }, 1)
   assert(draws == 2, 'world renderer skipped part of the relief surface')
-	assert(rt.displayMaterial and rt.displayMaterialVersion == 15 and
-		rt.displayMaterial.parameters['$pixshader'] == 'moonpanel_display_v13_ps20',
+	assert(rt.displayMaterial and rt.displayMaterialVersion == 23 and
+		rt.displayMaterial.parameters['$pixshader'] == 'moonpanel_display_v21_ps20',
     'stale pooled page did not receive the current display material')
 end)
 
@@ -237,11 +247,13 @@ test.test('screen surfaces receive a grazing glass pass', function()
     {Draw = function()
       draws = draws + 1
       local material = _G.TEST_RENDER_STATE.material
-      assert(material.name == 'TheMP Screen Glass 4' and
+      assert(material.name == 'TheMP Screen Glass 5' and
         material.shader == 'VertexLitGeneric' and
         material.parameters['$basetexture'] == 'color/white' and
-		material.parameters['$color2'] == '[0.14 0.14 0.14]' and
+		material.parameters['$color2'] == '[0.015 0.017 0.02]' and
         material.parameters['$envmap'] == 'env_cubemap' and
+		material.parameters['$envmapfresnel'] == 1 and
+		material.parameters['$envmapfresnelminmaxexp'] == '[0.005 1 5]' and
         material.parameters['$rimlight'] == 1,
         'screen glass pass lost its grazing reflection material')
     end},

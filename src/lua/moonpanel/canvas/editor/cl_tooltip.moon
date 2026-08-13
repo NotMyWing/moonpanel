@@ -61,7 +61,7 @@ CONTROL_TOOLTIPS = {
 	rule_color: "The color this clue counts as when the puzzle checks the rules."
 	cell_field: "Adds a colored backdrop inside each cell. Cell holes remain empty."
 	bunker_relief: "Raises the grid and traced line above the panel, with metal edging and a glassy finish. Turn this off for a flat display."
-	colored_lighting: "Makes the entire panel react more vividly to strong colored light. Normal map lighting, lamps, projected textures, and flashlights still affect it when this is off."
+	colored_lighting: "Turns off the panel's own glow. Its colors then come entirely from surrounding light, so colored lights can recolor it and darkness can make it go black."
 	primary_trace_color: "Changes the drawn primary line's color. This affects its appearance, not which dots it satisfies."
 	secondary_trace_color: "Changes the drawn second line's color. This affects its appearance, not which dots it satisfies."
 	primary_trace_rule_color: "Assigns this color to the primary line for puzzle rules. In a symmetric puzzle, dots of this color must be crossed by the primary line."

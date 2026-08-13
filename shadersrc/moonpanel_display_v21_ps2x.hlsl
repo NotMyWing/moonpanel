@@ -46,13 +46,15 @@ float4 main(PS_INPUT input) : COLOR
 		input.projected.x * inverseW * 0.5 + 0.5,
 		-input.projected.y * inverseW * 0.5 + 0.5
 	);
-	float3 light = saturate(tex2D(Tex1, lightUV).rgb);
+	float3 light = lerp(float3(1.0, 1.0, 1.0),
+		saturate(tex2D(Tex1, lightUV).rgb), Constants0.w);
 	float lightMaximum = max(light.r, max(light.g, light.b));
 	float lightMinimum = min(light.r, min(light.g, light.b));
 	float lightRange = lightMaximum - lightMinimum;
 	float lightSaturation = lightRange / max(lightMaximum, 0.0001);
-	float coloredLight = smoothstep(0.12, 0.58, lightSaturation);
-	float surfaceStrength = coloredLight * lerp(0.65, 1.0, Constants0.y);
+	float lightEnergy = smoothstep(0.0005, 0.004, lightMaximum);
+	float coloredLight = smoothstep(0.12, 0.58, lightSaturation) *
+		lightEnergy * Constants0.w;
 
 	// The sampled Witness response preserves tiny non-zero lamp values and
 	// approaches a square-root curve before its highlight shoulder.
@@ -61,37 +63,32 @@ float4 main(PS_INPUT input) : COLOR
 
 	float neutralLight = pow(saturate(dot(light,
 		float3(0.3333, 0.3333, 0.3333))), 0.65);
-	float neutralGain = lerp(0.62, 1.15, neutralLight);
-	float3 selfLit = screenColor * neutralGain;
 
 	float sourceMaximum = max(screenColor.r,
 		max(screenColor.g, screenColor.b));
 	float stark = smoothstep(0.58, 0.82, sourceMaximum);
 	float3 membership = step(sourceMaximum * 0.38, screenColor);
 	float3 normalizedColor = screenColor / max(sourceMaximum, 0.0001);
-	float3 blackReflectance = float3(0.18, 0.14, 0.11);
-	float3 clueReflectance = lerp(blackReflectance,
-		normalizedColor, membership);
+	float3 clueReflectance = normalizedColor * membership;
 	float3 clueLit = curvedLight * clueReflectance;
+	float3 neutralClueLit = screenColor * neutralLight;
+	float3 drivenClueLit = lerp(neutralClueLit, clueLit, coloredLight);
 
 	// Dark panel materials use a much straighter response than clue pixels.
 	float surfaceGamma = lerp(0.95, 0.62,
 		smoothstep(0.12, 0.72, sourceMaximum));
 	float3 surfaceLight = pow(light,
 		float3(surfaceGamma, surfaceGamma, surfaceGamma));
-	float3 surfaceAlbedo = lerp(blackReflectance, screenColor,
-		smoothstep(0.02, 0.2, sourceMaximum));
-	float3 surfaceLit = surfaceAlbedo * surfaceLight * 1.18;
-	float3 surfaceResult = lerp(selfLit, surfaceLit, surfaceStrength);
-	float3 clueResult = lerp(selfLit, clueLit, coloredLight);
-	float3 reflected = lerp(surfaceResult, clueResult, stark);
+	float3 surfaceLit = screenColor * surfaceLight;
+	float3 lightDrivenResult = lerp(surfaceLit, drivenClueLit, stark);
+	float3 reflected = lerp(screenColor, lightDrivenResult, Constants0.y);
 	reflected *= input.color.rgb * Constants0.x;
 
-	// HDR overbright values feed Source's normal bloom pass. Only pixels that
-	// are stark in the authored RT and remain bright after lighting contribute.
+	// HDR overbright values feed Source's normal bloom pass. Backlit panels
+	// keep their authored emission in gamut; their glare is a separate pass.
 	float visibleMaximum = max(reflected.r, max(reflected.g, reflected.b));
 	float bloom = smoothstep(0.72, 0.96, sourceMaximum) *
-		smoothstep(0.58, 0.92, visibleMaximum) * Constants0.z;
+		smoothstep(0.58, 0.92, visibleMaximum) * Constants0.z * Constants0.y;
 	reflected *= 1.0 + bloom;
 
 	return float4(reflected, albedo.a);

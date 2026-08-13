@@ -156,7 +156,7 @@ prepareDynamicMesh = (descriptor) ->
 			descriptor.entity\LocalToWorldVector(sample.normal)\GetNormalized!
 		else
 			-descriptor.matrix\GetUp!\GetNormalized!
-		light = render.ComputeDynamicLighting position, normal
+		light = render.ComputeLighting position, normal
 		colors[index] = Color math.Clamp(light.x * 255, 0, 255),
 			math.Clamp(light.y * 255, 0, 255),
 			math.Clamp(light.z * 255, 0, 255), 255
@@ -167,7 +167,7 @@ prepareDynamicMesh = (descriptor) ->
 	record.dynamicMesh
 
 drawDynamicDescriptors = (descriptors) ->
-	return unless render.ComputeDynamicLighting
+	return unless render.ComputeLighting
 	render.SetMaterial dynamicMaterial
 	for descriptor in *descriptors
 		meshObject = prepareDynamicMesh descriptor

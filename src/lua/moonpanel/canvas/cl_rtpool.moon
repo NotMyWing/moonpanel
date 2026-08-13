@@ -1,5 +1,5 @@
 MAX_RT_PAGES = 256
-DISPLAY_MATERIAL_VERSION = 15
+DISPLAY_MATERIAL_VERSION = 23
 DISPLAY_SHEAR = 0.012
 DISPLAY_BLOOM = 1.1
 WALL_UNLIT_BRIGHTNESS = 0.42
@@ -13,8 +13,8 @@ createDisplayMaterial = (name, texture) ->
 	parameters =
 		["$basetexture"]: texture\GetName!
 		["$texture1"]: "color/black"
-		["$pixshader"]: "moonpanel_display_v13_ps20"
-		["$vertexshader"]: "moonpanel_display_v13_vs20"
+		["$pixshader"]: "moonpanel_display_v21_ps20"
+		["$vertexshader"]: "moonpanel_display_v21_vs20"
 		["$vertexcolor"]: 1
 		["$vertexalpha"]: 1
 		["$translucent"]: 1
@@ -24,6 +24,7 @@ createDisplayMaterial = (name, texture) ->
 		["$c0_x"]: 1
 		["$c0_y"]: 0
 		["$c0_z"]: DISPLAY_BLOOM
+		["$c0_w"]: 0
 		["$c1_x"]: 0
 		["$c1_y"]: 0
 		["$c1_z"]: 0
@@ -55,21 +56,23 @@ wallUnlitMaterial = CreateMaterial "TheMP Relief Wall Gray 1", "UnlitGeneric",
 	["$model"]: 1
 	["$vertexcolor"]: 1
 
-screenGlassMaterial = CreateMaterial "TheMP Screen Glass 4", "VertexLitGeneric",
+screenGlassMaterial = CreateMaterial "TheMP Screen Glass 5", "VertexLitGeneric",
 	["$basetexture"]: "color/white"
-	["$color2"]: "[0.14 0.14 0.14]"
+	["$color2"]: "[0.015 0.017 0.02]"
 	["$envmap"]: "env_cubemap"
-	["$envmaptint"]: "[0.26 0.3 0.36]"
-	["$envmapcontrast"]: 0.5
+	["$envmaptint"]: "[0.18 0.21 0.25]"
+	["$envmapcontrast"]: 0.35
 	["$envmapsaturation"]: 1
+	["$envmapfresnel"]: 1
+	["$envmapfresnelminmaxexp"]: "[0.005 1 5]"
 	["$phong"]: 1
 	["$phongexponent"]: 96
-	["$phongboost"]: 0.5
-	["$phongfresnelranges"]: "[0.04 0.2 1]"
+	["$phongboost"]: 0.25
+	["$phongfresnelranges"]: "[0.01 0.08 1]"
 	["$phongtint"]: "[0.8 0.9 1]"
 	["$rimlight"]: 1
 	["$rimlightexponent"]: 5
-	["$rimlightboost"]: 0.4
+	["$rimlightboost"]: 0.15
 	["$additive"]: 1
 	["$translucent"]: 1
 	["$model"]: 1
@@ -220,6 +223,7 @@ drawWorldRT = (rt, meshObjects, power, worldLighting, strongColorResponse,
 		strongColorResponse and 1 or 0
 	else
 		0
+	displayMaterial\SetFloat "$c0_w", worldLighting and 1 or 0
 	displayMaterial\SetFloat "$c2_x", shear and DISPLAY_SHEAR or 0
 	displayMaterial\SetFloat "$c2_y", pillar and 1 or 0
 	displayMaterial\SetFloat "$c2_z", matrixResponse and 1 or 0

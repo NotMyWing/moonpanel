@@ -8,8 +8,8 @@ const path = require('path');
 const projectRoot = path.resolve(__dirname, '..');
 const compiler = process.env.MOONPANEL_SHADER_COMPILER;
 const sources = [
-	['moonpanel_display_v13_vs20.hlsl', 'moonpanel_display_v13_vs20.vcs'],
-	['moonpanel_display_v13_ps2x.hlsl', 'moonpanel_display_v13_ps20b.vcs'],
+	['moonpanel_display_v21_vs20.hlsl', 'moonpanel_display_v21_vs20.vcs'],
+	['moonpanel_display_v21_ps2x.hlsl', 'moonpanel_display_v21_ps20b.vcs'],
 ];
 
 if (!compiler) {
@@ -36,6 +36,15 @@ function validateVCS(file) {
 	if (data.readUInt32LE(sentinel) !== 0xffffffff ||
 		data.readUInt32LE(sentinel + 4) !== data.length) {
 		throw new Error(`Invalid VCS end sentinel: ${file}`);
+	}
+
+	let previousOffset = 0;
+	for (let offset = 28; offset < dictionaryEnd; offset += 8) {
+		const blockOffset = data.readUInt32LE(offset + 4);
+		if (blockOffset < previousOffset || blockOffset > data.length) {
+			throw new Error(`Out-of-range VCS combo dictionary: ${file}`);
+		}
+		previousOffset = blockOffset;
 	}
 
 	const firstBlock = data.readUInt32LE(32);

@@ -22,7 +22,7 @@ float4 main(PS_INPUT input) : COLOR
 	float3 pillarU = float3(-normal.y, normal.x, 0.0) / radialLength;
 
 	float3 tangentU = lerp(float3(1.0, 0.0, 0.0), pillarU, pillar);
-	float3 tangentV = lerp(float3(0.0, 1.0, 0.0),
+	float3 tangentV = lerp(float3(0.0, -normal.z, 0.0),
 		float3(0.0, 0.0, -1.0), pillar);
 
 	float grazing = 1.0 - smoothstep(0.08, 0.55, facing);

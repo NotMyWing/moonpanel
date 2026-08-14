@@ -5,7 +5,7 @@ TOOL.ConfigName		= ""
 
 -- ------------------------------- Sending / Receiving ------------------------------- --
 
-TOOL.ClientConVar.model = "models/hunter/plates/plate2x2.mdl"
+TOOL.ClientConVar.model = "models/moonpanel/witness_panel.mdl"
 TOOL.ClientConVar.type = 1
 TOOL.Reload = () =>
 TOOL.DrawHUD = () =>
@@ -131,9 +131,15 @@ else
             icon.Model = model
             icon\SetSize(64, 64)
             icon\SetTooltip(model)
+			if model == Moonpanel.Canvas.DefaultMonitorModel
+				icon\SetTooltip "★ Native Moonpanel (default)\n#{model}"
+				with star = vgui.Create "DImage", icon
+				    \SetImage "icon16/star.png"
+				    \SetSize 16, 16
+				    \SetPos 4, 4
+				    \SetMouseInputEnabled false
             modelPanel\AddPanel(icon, { ["moonpanel_model"]: model })
 
-        modelPanel\SortByMember("Model", false)
         panel\AddPanel(modelPanel)
 
         panel\AddControl("Label", { Text: "" })

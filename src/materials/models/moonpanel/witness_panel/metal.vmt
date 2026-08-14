@@ -1,0 +1,10 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/moonpanel/witness_panel/metal"
+	"$surfaceprop" "metal"
+	"$phong" "1"
+	"$phongexponent" "14"
+	"$phongboost" "0.35"
+	"$basemapalphaphongmask" "1"
+	"$phongfresnelranges" "[0.05 0.5 1]"
+}

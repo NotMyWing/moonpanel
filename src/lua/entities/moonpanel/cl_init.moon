@@ -5,6 +5,14 @@ ENT.InitializeSided = () =>
     @Aspect = info.RatioX
     @Scale = info.RS
     @Origin = info.offset
+	@NativeSurfaceMaterialIndex = nil
+	if nativeMaterial = info.NativeSurfaceMaterial
+		target = string.lower(nativeMaterial)\gsub "%.vmt$", ""
+		for index, materialName in ipairs @GetMaterials!
+			candidate = string.lower(materialName)\gsub "%.vmt$", ""
+			if candidate == target
+				@NativeSurfaceMaterialIndex = index - 1
+				break
 
 	@__lastFrameNumber = 0
 	Moonpanel.Canvas.RegisterWorldPanel @
@@ -28,12 +36,20 @@ errorFunc = (err) ->
     print "Rendering error: #{err}"
     print debug.traceback!
 
+drawNativeModel = (entity, materialIndex, material) ->
+	render.MaterialOverrideByIndex materialIndex, material
+	render.OverrideDepthEnable true, true
+	ok, err = xpcall entity.DrawModel, debug.traceback, entity
+	render.OverrideDepthEnable false, false
+	render.MaterialOverrideByIndex!
+	error err, 0 unless ok
+
 ENT.Draw = () =>
 
 ENT.DrawTranslucent = =>
-    @DrawModel!
-
-    return if not @ScreenMatrix
+	unless @ScreenMatrix
+		@DrawModel!
+		return
 
     @Transform = @GetBoneMatrix(0) * @ScreenMatrix
 
@@ -43,9 +59,19 @@ ENT.DrawTranslucent = =>
     if not @__rendering and @__canvas\AllocateRT!
         @__rendering = true
 
-    return if not @__rendering
+	unless @__rendering
+		@DrawModel!
+		return
 
     @__lastFrameNumber = FrameNumber!
+	if @NativeSurfaceMaterialIndex ~= nil and not @__canvas\HasBunkerRelief!
+		viewPosition = @WorldToLocal EyePos!
+		material = @__canvas\GetNativeSurfaceMaterial viewPosition
+		if material
+			drawNativeModel @, @NativeSurfaceMaterialIndex, material
+			return
+
+	@DrawModel!
 
     cam.PushModelMatrix @Transform
     xpcall renderFunc, errorFunc, @

@@ -1,0 +1,5 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/moonpanel/witness_panel/plastic_matte"
+	"$surfaceprop" "plastic"
+}

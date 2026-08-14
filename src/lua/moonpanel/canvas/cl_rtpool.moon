@@ -1,4 +1,5 @@
 MAX_RT_PAGES = 256
+DISPLAY_MATERIAL_VERSION = 2
 DISPLAY_SHEAR = 0.012
 DISPLAY_BLOOM = 1.1
 WALL_UNLIT_BRIGHTNESS = 0.42
@@ -16,6 +17,9 @@ createDisplayMaterial = (name, texture) ->
 		["$vertexshader"]: "moonpanel_display_vs20"
 		["$vertexcolor"]: 1
 		["$vertexalpha"]: 1
+		["$model"]: 1
+		["$softwareskin"]: 1
+		["$vertexnormal"]: 1
 		["$translucent"]: 1
 		["$copyalpha"]: 1
 		["$cull"]: 1
@@ -29,7 +33,7 @@ createDisplayMaterial = (name, texture) ->
 		["$c2_x"]: 0
 		["$c2_y"]: 0
 		["$c2_z"]: 0
-	CreateMaterial "#{name} Display",
+	CreateMaterial "#{name} Display v#{DISPLAY_MATERIAL_VERSION}",
 		"screenspace_general", parameters
 
 wallMaterial = CreateMaterial "TheMP Relief Wall Metal", "VertexLitGeneric",
@@ -195,6 +199,48 @@ Moonpanel.Canvas.DeallocateRT = (alloc) =>
 
 Moonpanel.Canvas.IsRTAllocated = (alloc) => @__rtTokens[alloc.token] or false
 Moonpanel.Canvas.IsWorldLightingEnabled = -> worldLightingConVar\GetBool!
+
+prepareWorldDisplayMaterial = (rt, power, worldLighting, strongColorResponse,
+	matrixResponse, shear, viewPosition, pillar) ->
+	displayMaterial = ensureDisplayMaterial rt
+	displayMaterial\SetFloat "$c0_x", power
+	displayMaterial\SetFloat "$c0_y", if worldLighting
+		strongColorResponse and 1 or 0
+	else
+		0
+	displayMaterial\SetFloat "$c2_x", if shear and worldLighting and viewPosition
+		DISPLAY_SHEAR
+	else
+		0
+	displayMaterial\SetFloat "$c2_y", pillar and 1 or 0
+	displayMaterial\SetFloat "$c2_z", if matrixResponse and worldLighting and
+		viewPosition
+		1
+	else
+		0
+	if viewPosition
+		displayMaterial\SetFloat "$c1_x", viewPosition.x
+		displayMaterial\SetFloat "$c1_y", viewPosition.y
+		displayMaterial\SetFloat "$c1_z", viewPosition.z
+	else
+		displayMaterial\SetFloat "$c1_x", 0
+		displayMaterial\SetFloat "$c1_y", 0
+		displayMaterial\SetFloat "$c1_z", 0
+	if worldLighting and strongColorResponse
+		getLightTexture = Moonpanel.Canvas.GetWorldLightTexture
+		if lightTexture = getLightTexture and getLightTexture!
+			displayMaterial\SetTexture "$texture1", lightTexture
+	displayMaterial
+
+Moonpanel.Canvas.PrepareWorldDisplayMaterial = (rt, power = 1,
+	strongColorResponse = false, matrixResponse = false, shear = false,
+	viewPosition, pillar = false) ->
+	return unless rt
+	power = math.Clamp tonumber(power) or 1, 0, 1
+	prepareWorldDisplayMaterial rt, power,
+		Moonpanel.Canvas.IsWorldLightingEnabled!, strongColorResponse,
+		matrixResponse, shear, viewPosition, pillar
+
 drawMeshes = (meshObjects) ->
 	if meshObjects.Draw
 		meshObjects\Draw!
@@ -204,8 +250,10 @@ drawMeshes = (meshObjects) ->
 
 drawWorldRT = (rt, meshObjects, power, worldLighting, strongColorResponse,
 	matrixResponse, shear, viewPosition, pillar) ->
-	displayMaterial = ensureDisplayMaterial(rt) if worldLighting or
-		matrixResponse or shear
+	displayMaterial = nil
+	if worldLighting or matrixResponse or shear
+		displayMaterial = prepareWorldDisplayMaterial rt, power, worldLighting,
+			strongColorResponse, matrixResponse, shear, viewPosition, pillar
 	if not displayMaterial
 		render.SetColorModulation power, power, power
 		render.SetMaterial rt.material
@@ -213,22 +261,6 @@ drawWorldRT = (rt, meshObjects, power, worldLighting, strongColorResponse,
 		drawMeshes meshObjects
 		return
 
-	displayMaterial\SetFloat "$c0_x", power
-	displayMaterial\SetFloat "$c0_y", if worldLighting
-		strongColorResponse and 1 or 0
-	else
-		0
-	displayMaterial\SetFloat "$c2_x", shear and DISPLAY_SHEAR or 0
-	displayMaterial\SetFloat "$c2_y", pillar and 1 or 0
-	displayMaterial\SetFloat "$c2_z", matrixResponse and 1 or 0
-	if viewPosition
-		displayMaterial\SetFloat "$c1_x", viewPosition.x
-		displayMaterial\SetFloat "$c1_y", viewPosition.y
-		displayMaterial\SetFloat "$c1_z", viewPosition.z
-	if worldLighting and strongColorResponse
-		getLightTexture = Moonpanel.Canvas.GetWorldLightTexture
-		if lightTexture = getLightTexture and getLightTexture!
-			displayMaterial\SetTexture "$texture1", lightTexture
 	render.SetColorModulation 1, 1, 1
 	render.SetMaterial displayMaterial
 	render.SetBlend 1

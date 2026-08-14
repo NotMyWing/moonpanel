@@ -75,6 +75,17 @@ function run() {
 		'lua/entities/moonpanel/init.lua',
 		'lua/entities/moonpanel/cl_init.lua',
 		'materials/moonpanel/common/color.png',
+		'materials/models/moonpanel/witness_panel/metal.vmt',
+		'materials/models/moonpanel/witness_panel/metal.vtf',
+		'materials/models/moonpanel/witness_panel/metal_dark.vmt',
+		'materials/models/moonpanel/witness_panel/metal_dark.vtf',
+		'materials/models/moonpanel/witness_panel/panel_face.vmt',
+		'materials/models/moonpanel/witness_panel/plastic_matte.vmt',
+		'materials/models/moonpanel/witness_panel/plastic_matte.vtf',
+		'models/moonpanel/witness_panel.dx90.vtx',
+		'models/moonpanel/witness_panel.mdl',
+		'models/moonpanel/witness_panel.phy',
+		'models/moonpanel/witness_panel.vvd',
 		'shaders/fxc/moonpanel_display_ps20b.vcs',
 		'shaders/fxc/moonpanel_display_vs20.vcs',
 		'sound/moonpanel/presets/default/panel_scint_endpoint.wav',
@@ -101,7 +112,11 @@ function run() {
 	assert(/file\.Find/.test(autorun), 'Autorun does not recursively register Moonpanel Lua files');
 	const resources = read('lua/moonpanel/sv_resources.lua');
 	assert(/resource\.AddSingleFile/.test(resources), 'Server resource registration is missing');
-	assert(/materials\/moonpanel/.test(resources) && /sound\/moonpanel/.test(resources), 'Material or sound resources are not registered');
+	assert(/materials\/moonpanel/.test(resources) &&
+		/materials\/models\/moonpanel/.test(resources) &&
+		/models\/moonpanel/.test(resources) &&
+		/sound\/moonpanel/.test(resources),
+		'Moonpanel runtime resources are not registered');
 	const wire = read('lua/moonpanel/sv_wire.lua');
 	assert(/CreateInputs/.test(wire) && /TurnOff/.test(wire) && /Reset/.test(wire), 'Wire inputs are missing');
 	assert(/SolvedPulse/.test(wire) && /FailedPulse/.test(wire) && /Path/.test(wire), 'Wire outputs are missing');
@@ -113,6 +128,11 @@ function run() {
 	assert(/RegisterExtension\("moonpanel"/.test(e2) &&
 		/moonpanelPowered/.test(e2) && /moonpanelReset/.test(e2),
 		'Moonpanel E2 extension is missing its typed API');
+	const tool = read('lua/weapons/gmod_tool/stools/moonpanel.lua');
+	assert(tool.includes('TOOL.ClientConVar.model = "models/moonpanel/witness_panel.mdl"'),
+		'Moonpanel tool does not default to the native model');
+	assert(tool.includes('icon16/star.png'),
+		'Moonpanel tool does not mark the preferred native model');
 
 	const configuredGma = args.temporary ? null : (args.gma || process.env.MOONPANEL_GMA);
 	const configuredManifest = args.temporary ? null : (args.manifest || process.env.MOONPANEL_MANIFEST);

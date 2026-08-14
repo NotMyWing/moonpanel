@@ -1,0 +1,7 @@
+"UnlitGeneric"
+{
+	"$basetexture" "moonpanel/panel/translucent"
+	"$translucent" "1"
+	"$alpha" "0"
+	"$nolod" "1"
+}

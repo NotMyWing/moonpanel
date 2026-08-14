@@ -19,6 +19,7 @@ Moonpanel.Canvas.SocketType = {
 INTERSECTION_SOCKET = Moonpanel.Canvas.SocketType.Intersection
 
 Moonpanel.Canvas.Resolution = 512
+Moonpanel.Canvas.DefaultMonitorModel = "models/moonpanel/witness_panel.mdl"
 -- Shared screen-matrix construction helpers used by both client and server.
 -- The private model map feeds screen-matrix construction and tool selection.
 plateInfo = (rs, offsetZ) -> {
@@ -26,6 +27,12 @@ plateInfo = (rs, offsetZ) -> {
     offset: Vector(0, 0, offsetZ), rot: Angle(0, 90, 180)
 }
 monitorOffsets = {
+	[Moonpanel.Canvas.DefaultMonitorModel]: {
+		RS: 0.04359118, RatioX: 1.00259067,
+		offset: Vector(0, 0.02883551, 0.21281205),
+		rot: Angle(0, 0, 180),
+		NativeSurfaceMaterial: "models/moonpanel/witness_panel/panel_face",
+	},
     ["models//cheeze/pcb/pcb4.mdl"]: {
         RS: 0.0625, RatioX: 1,
         offset: Vector(0, 0, 0.5), rot: Angle(0, 0, 180),
@@ -108,6 +115,12 @@ Moonpanel.Canvas.GetMonitorModels = =>
 	models = {}
 	for model in pairs monitorOffsets
 		models[#models + 1] = model
+	table.sort models
+	for index, model in ipairs models
+		if model == Moonpanel.Canvas.DefaultMonitorModel
+			table.remove models, index
+			table.insert models, 1, model
+			break
 	models
 
 Moonpanel.Canvas.BuildScreenMatrix = (ent, modelName) ->

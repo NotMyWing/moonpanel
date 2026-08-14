@@ -168,6 +168,14 @@ CANVAS.GetWorldReliefMeshes = (fallback, pillar = false) =>
 
 CANVAS.CanRender = => @__rtAlloc and Moonpanel.Canvas\IsRTAllocated @__rtAlloc
 
+CANVAS.GetNativeSurfaceMaterial = (viewPosition) =>
+	return unless @CanRender!
+	power = if @__powerState ~= nil and @__powerStateBuffer
+		math.EaseInOut @__powerStateBuffer, 0.25, 0.25
+	else 1
+	Moonpanel.Canvas.PrepareWorldDisplayMaterial @__rtAlloc.rt, power,
+		@HasStrongColorResponse!, true, true, viewPosition, false
+
 CANVAS.AllocateRT = (forceEvict = false) =>
 	return if @__rtAlloc and Moonpanel.Canvas\IsRTAllocated @__rtAlloc
 

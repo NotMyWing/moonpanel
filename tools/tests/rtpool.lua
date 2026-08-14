@@ -28,6 +28,9 @@ test.test('main page exposes unlit and shader-composited views of one RT', funct
 		rt.displayMaterial.parameters['$pixshader'] == 'moonpanel_display_ps20' and
 		rt.displayMaterial.parameters['$vertexshader'] == 'moonpanel_display_vs20' and
 		rt.displayMaterial.parameters['$c0_z'] == 1.1 and
+    rt.displayMaterial.parameters['$model'] == 1 and
+    rt.displayMaterial.parameters['$softwareskin'] == 1 and
+    rt.displayMaterial.parameters['$vertexnormal'] == 1 and
     rt.displayMaterial.parameters['$translucent'] == 1 and
     rt.displayMaterial.parameters['$vertexalpha'] == 1 and
     rt.displayMaterial.parameters['$vertextransform'] == nil,
@@ -180,6 +183,24 @@ test.test('world renderer recreates missing materials and draws every relief mes
 	assert(rt.displayMaterial and
 		rt.displayMaterial.parameters['$pixshader'] == 'moonpanel_display_ps20',
 		'pooled page did not recreate its missing display material')
+end)
+
+test.test('native model surfaces can bind the RT compositor directly', function()
+  reset(1)
+  local rt = assert(Moonpanel.Canvas:AllocateRT()).rt
+  local eye = Vector(5, 6, 7)
+  _G.TEST_CONVAR_INTS[Moonpanel.CVarNames.ScreenWorldLighting] = 1
+  local material = Moonpanel.Canvas.PrepareWorldDisplayMaterial(
+    rt, 0.4, false, true, true, eye, false)
+  assert(material == rt.displayMaterial and
+    material.parameters['$model'] == 1 and
+    material.parameters['$c0_x'] == 0.4 and
+    material.parameters['$c2_x'] == 0.012 and
+    material.parameters['$c2_z'] == 1 and
+    material.parameters['$c1_x'] == eye.x and
+    material.parameters['$c1_y'] == eye.y and
+    material.parameters['$c1_z'] == eye.z,
+    'native model surface did not receive the display material state')
 end)
 
 test.test('relief walls use a fixed gray material independent of panel state', function()

@@ -1,9 +1,16 @@
 include "shared.lua"
 
+renderFunc = (canvas, meshObjects, wallMeshes, lightingOrigin, viewPosition) ->
+	canvas\PaintWorld meshObjects, wallMeshes, lightingOrigin, viewPosition
+errorFunc = (err) ->
+	print "Rendering error: #{err}"
+	print debug.traceback!
+
 ENT.InitializeSided = =>
 	@SetCustomCollisionCheck true
 	@GetCanvas!\SetSurfaceSpec @GetSurfaceSpec!
 	@__lastFrameNumber = 0
+	Moonpanel.Canvas.RegisterWorldPanel @
 	@OnPillarDimensionsChanged!
 	Moonpanel.Net.PanelRequestData @
 
@@ -23,7 +30,7 @@ ENT.DrawTranslucent = =>
 		@__rendering = false
 	if not @__rendering and canvas\AllocateRT!
 		@__rendering = true
-	return unless @__rendering and canvas\GetRenderMaterial!
+	return unless @__rendering
 	@__lastFrameNumber = FrameNumber!
 	radius = math.max 1, @GetPillarRadius!
 	height = math.max 1, @GetPillarHeight!
@@ -34,9 +41,14 @@ ENT.DrawTranslucent = =>
 	matrix\SetTranslation @GetPos!
 	matrix\SetAngles @GetAngles!
 	matrix\Scale Vector radius, radius, height
-	render.SetMaterial canvas\GetRenderMaterial!
+	base = Moonpanel.Canvas.GetPillarMesh segments
+	meshObjects = canvas\GetWorldMeshes base, true
+	wallMeshes = canvas\GetWorldWallMeshes base, true
+	inverse = matrix\GetInverse!
+	viewPosition = inverse and inverse * EyePos!
 	cam.PushModelMatrix matrix
-	Moonpanel.Canvas.GetPillarMesh(segments)\Draw!
+	xpcall renderFunc, errorFunc, canvas, meshObjects, wallMeshes, @GetPos!,
+		viewPosition
 	cam.PopModelMatrix!
 
 ENT.GetCursorPos = =>

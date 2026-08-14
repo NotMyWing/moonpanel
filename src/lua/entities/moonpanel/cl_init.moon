@@ -6,15 +6,8 @@ ENT.InitializeSided = () =>
     @Scale = info.RS
     @Origin = info.offset
 
-	w, h = @GetResolution!
-	self.ScreenQuad = {
-        Vector(0, 0, 0)
-        Vector(w, 0, 0)
-        Vector(w, h, 0)
-        Vector(0, h, 0)
-    }
-
 	@__lastFrameNumber = 0
+	Moonpanel.Canvas.RegisterWorldPanel @
 
     Moonpanel.Net.PanelRequestData @
 
@@ -24,9 +17,12 @@ surface.CreateFont "TheMP",
 	size: 160
 
 renderFunc = =>
-    if @__canvas
-		@__canvas\Paint Moonpanel.Canvas.Resolution,
-			Moonpanel.Canvas.Resolution
+	if @__canvas
+		base = Moonpanel.Canvas.GetFlatScreenMesh!
+		inverse = @Transform\GetInverse!
+		viewPosition = inverse and inverse * EyePos!
+		@__canvas\PaintWorld @__canvas\GetWorldMeshes(base),
+			@__canvas\GetWorldWallMeshes(base), @GetPos!, viewPosition
 
 errorFunc = (err) ->
     print "Rendering error: #{err}"
@@ -51,16 +47,9 @@ ENT.DrawTranslucent = =>
 
     @__lastFrameNumber = FrameNumber!
 
-    -- Tone down HDR
-    old = render.GetToneMappingScaleLinear!
-    render.SetToneMappingScaleLinear old * 0.75
-
     cam.PushModelMatrix @Transform
     xpcall renderFunc, errorFunc, @
     cam.PopModelMatrix!
-
-    -- Restore HDR
-    render.SetToneMappingScaleLinear old
 
 ENT.GetCursorPos = () =>
     ply = LocalPlayer()

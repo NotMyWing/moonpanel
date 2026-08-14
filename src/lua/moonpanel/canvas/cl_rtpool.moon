@@ -1,9 +1,81 @@
-MAX_RT_PAGES = 32
+MAX_RT_PAGES = 256
+DISPLAY_SHEAR = 0.012
+DISPLAY_BLOOM = 1.1
+WALL_UNLIT_BRIGHTNESS = 0.42
 CVars = Moonpanel.CVarNames
-maxPagesConVar = CreateClientConVar CVars.RTPoolMaxPages, "16", true, false,
+maxPagesConVar = CreateClientConVar CVars.RTPoolMaxPages, "32", true, false,
 	"Maximum number of Moonpanel canvas render targets", 1, MAX_RT_PAGES
+worldLightingConVar = CreateClientConVar CVars.ScreenWorldLighting, "1", true,
+	false, "Light in-world Moonpanel screens using the surrounding world"
 
-createRT = (name) ->
+createDisplayMaterial = (name, texture) ->
+	parameters =
+		["$basetexture"]: texture\GetName!
+		["$texture1"]: "color/black"
+		["$pixshader"]: "moonpanel_display_ps20"
+		["$vertexshader"]: "moonpanel_display_vs20"
+		["$vertexcolor"]: 1
+		["$vertexalpha"]: 1
+		["$translucent"]: 1
+		["$copyalpha"]: 1
+		["$cull"]: 1
+		["$depthtest"]: 1
+		["$c0_x"]: 1
+		["$c0_y"]: 0
+		["$c0_z"]: DISPLAY_BLOOM
+		["$c1_x"]: 0
+		["$c1_y"]: 0
+		["$c1_z"]: 0
+		["$c2_x"]: 0
+		["$c2_y"]: 0
+		["$c2_z"]: 0
+	CreateMaterial "#{name} Display",
+		"screenspace_general", parameters
+
+wallMaterial = CreateMaterial "TheMP Relief Wall Metal", "VertexLitGeneric",
+	["$basetexture"]: "color/white"
+	["$color2"]: "[0.42 0.44 0.46]"
+	["$envmap"]: "env_cubemap"
+	["$envmaptint"]: "[0.055 0.06 0.065]"
+	["$envmapcontrast"]: 0.2
+	["$envmapsaturation"]: 0.35
+	["$phong"]: 1
+	["$phongexponent"]: 48
+	["$phongboost"]: 0.22
+	["$phongfresnelranges"]: "[0.15 0.5 1]"
+	["$phongtint"]: "[0.18 0.19 0.2]"
+	["$halflambert"]: 1
+	["$model"]: 1
+	["$vertexcolor"]: 1
+Moonpanel.Canvas.ReliefWallMaterial = wallMaterial
+
+wallUnlitMaterial = CreateMaterial "TheMP Relief Wall Gray", "UnlitGeneric",
+	["$basetexture"]: "color/white"
+	["$model"]: 1
+	["$vertexcolor"]: 1
+
+screenGlassMaterial = CreateMaterial "TheMP Screen Glass", "VertexLitGeneric",
+	["$basetexture"]: "color/white"
+	["$color2"]: "[0.015 0.017 0.02]"
+	["$envmap"]: "env_cubemap"
+	["$envmaptint"]: "[0.18 0.21 0.25]"
+	["$envmapcontrast"]: 0.35
+	["$envmapsaturation"]: 1
+	["$envmapfresnel"]: 1
+	["$envmapfresnelminmaxexp"]: "[0.005 1 5]"
+	["$phong"]: 1
+	["$phongexponent"]: 96
+	["$phongboost"]: 0.25
+	["$phongfresnelranges"]: "[0.01 0.08 1]"
+	["$phongtint"]: "[0.8 0.9 1]"
+	["$rimlight"]: 1
+	["$rimlightexponent"]: 5
+	["$rimlightboost"]: 0.15
+	["$additive"]: 1
+	["$translucent"]: 1
+	["$model"]: 1
+
+createRT = (name, worldMaterial = false) ->
 	texture = GetRenderTargetEx name,
 			Moonpanel.Canvas.Resolution,
 			Moonpanel.Canvas.Resolution,
@@ -19,7 +91,15 @@ createRT = (name) ->
 		["$vertexcolor"]: 1
 		["$vertexalpha"]: 1
 
-	texture, material
+	displayMaterial = createDisplayMaterial(name, texture) if worldMaterial
+
+	texture, material, displayMaterial
+
+ensureDisplayMaterial = (rt) ->
+	return rt.displayMaterial if rt.displayMaterial
+	name = rt.texture\GetName!
+	rt.displayMaterial = createDisplayMaterial name, rt.texture
+	rt.displayMaterial
 
 initializePool = (canvas) ->
 	return if canvas.__freeRTs
@@ -41,10 +121,11 @@ growPool = (canvas) ->
 
 	target = math.min limit, math.max 1, current * 2
 	for page = current + 1, target
-		texture, material = createRT "TheMP RT #{page}"
+		texture, material, displayMaterial = createRT "TheMP RT #{page}", true
 		canvas.__freeRTs\Push {
 			:texture
 			:material
+			:displayMaterial
 		}
 
 	canvas.__rtPageCount = target
@@ -113,3 +194,126 @@ Moonpanel.Canvas.DeallocateRT = (alloc) =>
 		@__freeRTs\Push alloc.rt
 
 Moonpanel.Canvas.IsRTAllocated = (alloc) => @__rtTokens[alloc.token] or false
+Moonpanel.Canvas.IsWorldLightingEnabled = -> worldLightingConVar\GetBool!
+drawMeshes = (meshObjects) ->
+	if meshObjects.Draw
+		meshObjects\Draw!
+	else
+		for meshObject in *meshObjects
+			meshObject\Draw!
+
+drawWorldRT = (rt, meshObjects, power, worldLighting, strongColorResponse,
+	matrixResponse, shear, viewPosition, pillar) ->
+	displayMaterial = ensureDisplayMaterial(rt) if worldLighting or
+		matrixResponse or shear
+	if not displayMaterial
+		render.SetColorModulation power, power, power
+		render.SetMaterial rt.material
+		render.SetBlend 1
+		drawMeshes meshObjects
+		return
+
+	displayMaterial\SetFloat "$c0_x", power
+	displayMaterial\SetFloat "$c0_y", if worldLighting
+		strongColorResponse and 1 or 0
+	else
+		0
+	displayMaterial\SetFloat "$c2_x", shear and DISPLAY_SHEAR or 0
+	displayMaterial\SetFloat "$c2_y", pillar and 1 or 0
+	displayMaterial\SetFloat "$c2_z", matrixResponse and 1 or 0
+	if viewPosition
+		displayMaterial\SetFloat "$c1_x", viewPosition.x
+		displayMaterial\SetFloat "$c1_y", viewPosition.y
+		displayMaterial\SetFloat "$c1_z", viewPosition.z
+	if worldLighting and strongColorResponse
+		getLightTexture = Moonpanel.Canvas.GetWorldLightTexture
+		if lightTexture = getLightTexture and getLightTexture!
+			displayMaterial\SetTexture "$texture1", lightTexture
+	render.SetColorModulation 1, 1, 1
+	render.SetMaterial displayMaterial
+	render.SetBlend 1
+	render.OverrideBlend true, BLEND_SRC_ALPHA, BLEND_ONE_MINUS_SRC_ALPHA,
+		BLENDFUNC_ADD, BLEND_ONE, BLEND_ONE_MINUS_SRC_ALPHA, BLENDFUNC_ADD
+	drawMeshes meshObjects
+
+Moonpanel.Canvas.DrawWorldRT = (rt, meshObjects, power = 1,
+	strongColorResponse = false, matrixResponse = false, shear = false,
+	viewPosition, pillar = false) ->
+	return unless rt and meshObjects
+	power = math.Clamp tonumber(power) or 1, 0, 1
+	red, green, blue = render.GetColorModulation!
+	blend = render.GetBlend!
+	worldEffects = Moonpanel.Canvas.IsWorldLightingEnabled!
+	ok, err = xpcall drawWorldRT, debug.traceback, rt, meshObjects, power,
+		worldEffects, strongColorResponse,
+		matrixResponse and worldEffects and viewPosition ~= nil,
+		shear and worldEffects and viewPosition ~= nil, viewPosition, pillar
+	render.OverrideBlend false
+	render.SetColorModulation red, green, blue
+	render.SetBlend blend
+	error err, 0 unless ok
+	true
+
+drawUniqueMeshes = (meshObjects) ->
+	render.ClearStencil!
+	render.SetStencilEnable true
+	render.SetStencilReferenceValue 1
+	render.SetStencilWriteMask 1
+	render.SetStencilTestMask 1
+	render.SetStencilPassOperation STENCIL_REPLACE
+	render.SetStencilFailOperation STENCIL_KEEP
+	render.SetStencilZFailOperation STENCIL_KEEP
+	render.SetStencilCompareFunction STENCIL_GREATER
+	drawMeshes meshObjects
+	render.SetStencilEnable false
+
+drawWorldGlass = (meshObjects, lightingOrigin) ->
+	render.SetLightingOrigin lightingOrigin if lightingOrigin
+	render.SetColorModulation 1, 1, 1
+	render.SetBlend 1
+	render.SetMaterial screenGlassMaterial
+	drawUniqueMeshes meshObjects
+	if render.RenderFlashlights
+		render.RenderFlashlights ->
+			render.SetMaterial screenGlassMaterial
+			drawUniqueMeshes meshObjects
+
+Moonpanel.Canvas.DrawWorldGlass = (meshObjects, lightingOrigin) ->
+	return unless Moonpanel.Canvas.IsWorldLightingEnabled! and meshObjects and
+		meshObjects[1]
+	red, green, blue = render.GetColorModulation!
+	blend = render.GetBlend!
+	ok, err = xpcall drawWorldGlass, debug.traceback, meshObjects,
+		lightingOrigin
+	render.SetStencilEnable false
+	render.SetColorModulation red, green, blue
+	render.SetBlend blend
+	error err, 0 unless ok
+	true
+
+drawWorldWalls = (meshObjects, lit, lightingOrigin) ->
+	render.SetLightingOrigin lightingOrigin if lightingOrigin
+	if lit
+		render.SetColorModulation 1, 1, 1
+		render.SetMaterial wallMaterial
+	else
+		render.SetColorModulation WALL_UNLIT_BRIGHTNESS, WALL_UNLIT_BRIGHTNESS,
+			WALL_UNLIT_BRIGHTNESS
+		render.SetMaterial wallUnlitMaterial
+	render.SetBlend 1
+	drawMeshes meshObjects
+	if lit and render.RenderFlashlights
+		render.RenderFlashlights ->
+			render.SetMaterial wallMaterial
+			drawMeshes meshObjects
+
+Moonpanel.Canvas.DrawWorldWalls = (meshObjects, lightingOrigin) ->
+	return unless meshObjects and meshObjects[1]
+	red, green, blue = render.GetColorModulation!
+	blend = render.GetBlend!
+	ok, err = xpcall drawWorldWalls, debug.traceback, meshObjects,
+		Moonpanel.Canvas.IsWorldLightingEnabled!, lightingOrigin
+	render.SetColorModulation red, green, blue
+	render.SetBlend blend
+	error err, 0 unless ok
+	true

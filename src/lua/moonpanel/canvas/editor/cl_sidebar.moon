@@ -1108,6 +1108,16 @@ Editor.RefreshAppearanceControls = =>
 	data = @Document\GetData!
 	if IsValid @AppearancePresetState
 		@AppearancePresetState\Refresh!
+	if IsValid @AppearanceReliefToggle
+		@AppearanceToggleUpdating = true
+		appearance = data.Appearance or {}
+		@AppearanceReliefToggle\SetValue appearance.BunkerRelief == true
+		@AppearanceToggleUpdating = nil
+	if IsValid @AppearanceLightingToggle
+		@AppearanceToggleUpdating = true
+		appearance = data.Appearance or {}
+		@AppearanceLightingToggle\SetValue appearance.ColoredLighting == true
+		@AppearanceToggleUpdating = nil
 	if IsValid(@AppearanceMixer)
 		current = appearanceValue data, @appearanceRole
 		if current
@@ -1131,6 +1141,35 @@ Editor.BuildAppearanceSettings = (parent) =>
 	addLabel parent, "Panel-wide display colors", "MoonpanelEditorSmall", C.muted, 18
 	presetNames = getColorPresetNames!
 	@AppearancePresetNames = presetNames
+
+	addSection parent, "SURFACE", 10
+	appearance = data.Appearance or {}
+	@AppearanceReliefToggle = makeCheck parent,
+		"Bunker-like relief",
+		appearance.BunkerRelief == true,
+		(enabled) ->
+			return if Editor.AppearanceToggleUpdating
+			nextData = Editor.Document\GetData!
+			nextData.Appearance or= {}
+			nextData.Appearance.BunkerRelief = enabled and true or nil
+			nextData.Appearance = nil unless next nextData.Appearance
+			Editor\CommitData "Toggle bunker-like relief", nextData,
+				"appearance-bunker-relief", false
+			Editor\RefreshAppearanceControls!,
+		"bunker_relief"
+	@AppearanceLightingToggle = makeCheck parent,
+		"No backlight",
+		appearance.ColoredLighting == true,
+		(enabled) ->
+			return if Editor.AppearanceToggleUpdating
+			nextData = Editor.Document\GetData!
+			nextData.Appearance or= {}
+			nextData.Appearance.ColoredLighting = enabled and true or nil
+			nextData.Appearance = nil unless next nextData.Appearance
+			Editor\CommitData "Toggle panel backlight", nextData,
+				"appearance-colored-lighting", false
+			Editor\RefreshAppearanceControls!,
+		"colored_lighting"
 
 	addSection parent, "COLOR PRESETS", 10
 	colorCurrent = -> getActiveColorPreset Editor.Document\GetData!.Colors, presetNames

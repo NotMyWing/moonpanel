@@ -34,13 +34,43 @@ local function base(version)
 end
 
 test.test('panel appearance uses the canonical defaults', function()
-  local clean = Moonpanel.Canvas.SanitizeData(base(Moonpanel.Canvas.SchemaVersion))
+	local clean = Moonpanel.Canvas.SanitizeData(base(Moonpanel.Canvas.SchemaVersion))
   local colors = clean.Colors
   assert(colors.Untraced.r == 31 and colors.Untraced.g == 7 and colors.Untraced.b == 159,
     'canonical grid default was not applied')
   assert(colors.Background.r == 80 and colors.Vignette.a == 80,
     'canonical appearance defaults were not applied')
-  assert(colors.Cell == nil, 'missing authored Cell color was synthesized')
+	assert(colors.Cell == nil, 'missing authored Cell color was synthesized')
+	assert(clean.Appearance == nil,
+		'missing bunker-like relief was synthesized')
+end)
+
+test.test('strong color response is an optional serialized appearance', function()
+  local default = Moonpanel.Canvas.SanitizeData(base(Moonpanel.Canvas.SchemaVersion))
+  assert(default.Appearance == nil,
+    'missing strong color response was synthesized')
+
+  local enabled = base(Moonpanel.Canvas.SchemaVersion)
+  enabled.Appearance = {ColoredLighting = true}
+  local clean = Moonpanel.Canvas.SanitizeData(enabled)
+  assert(clean.Appearance and clean.Appearance.ColoredLighting == true,
+    'authored strong color response was discarded')
+
+  enabled.Appearance.ColoredLighting = false
+  assert(Moonpanel.Canvas.SanitizeData(enabled).Appearance == nil,
+    'disabled strong color response remained authored')
+end)
+
+test.test('bunker-like relief is an optional serialized appearance', function()
+  local authored = base(Moonpanel.Canvas.SchemaVersion)
+  authored.Appearance = {BunkerRelief = true}
+  local clean = Moonpanel.Canvas.SanitizeData(authored)
+  assert(clean.Appearance and clean.Appearance.BunkerRelief == true,
+    'authored bunker-like relief was discarded')
+
+  authored.Appearance.BunkerRelief = false
+  assert(Moonpanel.Canvas.SanitizeData(authored).Appearance == nil,
+    'disabled bunker-like relief remained authored')
 end)
 
 test.test('authored Cell color is preserved and optional presets stay optional', function()

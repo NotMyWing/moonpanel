@@ -19,7 +19,6 @@ Moonpanel.Canvas.SocketType = {
 INTERSECTION_SOCKET = Moonpanel.Canvas.SocketType.Intersection
 
 Moonpanel.Canvas.Resolution = 512
-
 -- Shared screen-matrix construction helpers used by both client and server.
 -- The private model map feeds screen-matrix construction and tool selection.
 plateInfo = (rs, offsetZ) -> {
@@ -139,6 +138,7 @@ AddCSLuaFile!
 AddCSLuaFile "cl_dcanvas.lua"
 AddCSLuaFile "editor/cl_dcanvas_editor.lua"
 AddCSLuaFile "cl_rtpool.lua"
+AddCSLuaFile "cl_worldlighting.lua"
 AddCSLuaFile "cl_colorutils.lua"
 AddCSLuaFile "cl_presentation.lua"
 AddCSLuaFile "sh_rule_engine.lua"
@@ -162,6 +162,7 @@ if CLIENT
 	include "cl_dcanvas.lua"
 	include "editor/cl_dcanvas_editor.lua"
 	include "cl_rtpool.lua"
+	include "cl_worldlighting.lua"
 	include "cl_presentation.lua"
 	include "editor/cl_builtins.lua"
 	include "editor/cl_store.lua"
@@ -938,7 +939,6 @@ class Canvas
 			follower\setTarget snapshot, sequence
 		true
 
-	GetRenderMaterial: => @__rtAlloc and @__rtAlloc.rt and @__rtAlloc.rt.material
 	GetSoundStatus: =>
 		return "off" unless @__soundEnabled
 		return "enabled/uninitialized" unless @__sounds
@@ -1359,8 +1359,10 @@ Moonpanel.Canvas.Canvas = Canvas
 
 -- Include partial class files.
 if CLIENT
+	include "cl_relief.lua"
 	include "cl_canvas.lua"
 else
+	AddCSLuaFile "cl_relief.lua"
 	AddCSLuaFile "cl_canvas.lua"
 	AddCSLuaFile "cl_presentation.lua"
 	AddCSLuaFile "sh_canvas_solution.lua"
